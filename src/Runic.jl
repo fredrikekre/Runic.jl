@@ -146,7 +146,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
         @assert span > 2 # 0x prefix
         target_spans = 2 .+ (2, 4, 8, 16, 32) # 0x + expected chars
         if span < 34 && !(span in target_spans)
-            i::Int = findfirst(x -> x > span, target_spans)
+            i = findfirst(x -> x > span, target_spans)::Int
             bytes = node_bytes(ctx, node)
             while length(bytes) < target_spans[i]
                 insert!(bytes, 3, '0')
@@ -157,7 +157,42 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
             node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
             return node′
         else
-            # Do nothing: correctly formatted or a BigInt literal
+            # Do nothing: correctly formatted or a BigInt hex literal
+        end
+    end
+
+    # Oct literals
+    if node_kind === K"OctInt"
+        @assert JuliaSyntax.flags(node) == 0
+        @assert !JuliaSyntax.haschildren(node)
+        span = JuliaSyntax.span(node)
+        # Padding depends on the value of the literal
+        str = String(node_bytes(ctx, node))
+        n = tryparse(UInt128, str)
+        if n !== nothing
+            target_span_from_value =
+                n <= typemax(UInt8) ? 5 : n <= typemax(UInt16) ? 8 :
+                n <= typemax(UInt32) ? 13 : n <= typemax(UInt64) ? 24 :
+                n <= typemax(UInt128) ? 45 : error("unreachable")
+            target_spans = (5, 8, 13, 24, 45)
+            i = findfirst(x -> x >= span, target_spans)::Int
+            target_span_from_source = target_spans[i]
+            target_span = max(target_span_from_value, target_span_from_source)
+            if span != target_span
+                bytes = node_bytes(ctx, node)
+                while length(bytes) < target_span
+                    insert!(bytes, 3, '0')
+                end
+                nb = write_and_reset(ctx, bytes)
+                @assert nb == length(bytes) == target_span
+                # Create new node and return it
+                node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
+                return node′
+            else
+                # Do nothing: correctly formatted oct literal
+            end
+        else
+            # Do nothing: BigInt oct literal
         end
     end
 
