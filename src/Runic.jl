@@ -41,6 +41,15 @@ function accept_node!(ctx::Context, node::JuliaSyntax.GreenNode)
     return
 end
 
+# Write formatted thing and reset the output stream
+function write_and_reset(ctx::Context, bytes::Union{String, SubString{String}, Vector{UInt8}})
+    fmt_pos = position(ctx.fmt_io)
+    nb = write(ctx.fmt_io, bytes)
+    seek(ctx.fmt_io, fmt_pos)
+    @assert nb == (bytes isa Vector{UInt8} ? length(bytes) : sizeof(bytes))
+    return nb
+end
+
 struct NullNode end
 const nullnode = NullNode()
 
@@ -113,21 +122,42 @@ end
 function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
     node_kind = JuliaSyntax.kind(node)
 
+    # TODO: Split these into matchers and a handlers and move to another file
     # Normalize line endings and remove trailing whitespace
     if node_kind === K"NewlineWs"
-        @assert JuliaSyntax.children(node) === ()
+        @assert !JuliaSyntax.haschildren(node)
         str = String(node_bytes(ctx, node))
         str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
         if str != str′
             # Write new bytes and reset the stream
-            fmt_pos = position(ctx.fmt_io)
-            nb = write(ctx.fmt_io, str′)
-            seek(ctx.fmt_io, fmt_pos)
-            @assert nb == sizeof(str′)
+            nb = write_and_reset(ctx, str′)
             @assert nb != JuliaSyntax.span(node)
             # Create new node and return it
             node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
             return node′
+        end
+    end
+
+    # Hex literals
+    if node_kind === K"HexInt"
+        @assert JuliaSyntax.flags(node) == 0
+        @assert !JuliaSyntax.haschildren(node)
+        span = JuliaSyntax.span(node)
+        @assert span > 2 # 0x prefix
+        target_spans = 2 .+ (2, 4, 8, 16, 32) # 0x + expected chars
+        if span < 34 && !(span in target_spans)
+            i::Int = findfirst(x -> x > span, target_spans)
+            bytes = node_bytes(ctx, node)
+            while length(bytes) < target_spans[i]
+                insert!(bytes, 3, '0')
+            end
+            nb = write_and_reset(ctx, bytes)
+            @assert nb == length(bytes) == target_spans[i]
+            # Create new node and return it
+            node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
+            return node′
+        else
+            # Do nothing: correctly formatted or a BigInt literal
         end
     end
 
