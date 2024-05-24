@@ -21,13 +21,19 @@ function (@main)(argv)
     # Default values
     inputfiles = String[]
     outputfile = nothing
-    inplace::Bool = false
+    verbose = false
+    debug = false
+    inplace = false
 
     # Parse the arguments
     while length(argv) > 0
         x = popfirst!(argv)
         if x == "-i"
             inplace = true
+        elseif x == "-v"
+            verbose = true
+        elseif x == "-vv"
+            debug = verbose = true
         elseif x == "-o"
             if length(argv) < 1
                 return panic("expected output file as argument after `-o`")
@@ -113,19 +119,27 @@ function (@main)(argv)
         end
 
         # Call the library to format the text
-        ctx, err = format_context(sourcetext)
-        if err !== nothing
+        ctx = try
+            ctx = Context(sourcetext; verbose = verbose, debug = debug)
+            format_tree!(ctx)
+            ctx
+        catch err
             panic(err)
-            continue
         end
 
-        # Write the output
-        try
-            write(output, take!(ctx.io))
-        catch err
-            panic("could not write to output: ", err)
+        # Write the output, but skip if inplace and it didn't change
+        changed = ctx.fmt_tree !== ctx.src_tree
+        if changed || !inplace
+            try
+                write(output, take!(ctx.fmt_io))
+            catch err
+                panic("could not write to output: ", err)
+            end
+        else
+            # Log if verbose perhaps
         end
-    end
+
+    end # inputfile loop
 
     return errno
 end
