@@ -3,13 +3,22 @@ module Runic
 using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
+# compat for const fields
+@eval macro $(Symbol("const"))(field)
+    if VERSION >= v"1.8.0-DEV.1148"
+        Expr(:const, esc(field))
+    else
+        return esc(field)
+    end
+end
+
 mutable struct Context
     # Input
-    const src_str::String
-    const src_tree::JuliaSyntax.GreenNode
-    const src_io::IOBuffer
+    @const src_str::String
+    @const src_tree::JuliaSyntax.GreenNode
+    @const src_io::IOBuffer
     # Output
-    const fmt_io::IOBuffer
+    @const fmt_io::IOBuffer
     fmt_tree::Union{JuliaSyntax.GreenNode, Nothing}
     # User settings
     verbose::Bool
