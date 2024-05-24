@@ -125,6 +125,7 @@ function (@main)(argv)
             ctx
         catch err
             panic(err)
+            continue
         end
 
         # Write the output, but skip if inplace and it didn't change
