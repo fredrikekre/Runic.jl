@@ -4,66 +4,134 @@ using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
 mutable struct Context
-    const io::IO
-    const src::String
-    indent_level::Int
-    offset::Int
-    node::JuliaSyntax.GreenNode
-    parent::Union{JuliaSyntax.GreenNode, Nothing}
+    # Input
+    const src_str::String
+    const src_tree::JuliaSyntax.GreenNode
+    const src_io::IOBuffer
+    # Output
+    const fmt_io::IOBuffer
+    fmt_tree::Union{JuliaSyntax.GreenNode, Nothing}
+    # User settings
+    verbose::Bool
+    debug::Bool
 end
 
-function Context(src)::Union{Tuple{Nothing, Exception}, Tuple{Context, Nothing}}
-    root = try
-        JuliaSyntax.parseall(JuliaSyntax.GreenNode, src; ignore_warnings=true)
-    catch e
-        return nothing, e
-    end
-    return Context(IOBuffer(), src, 0, 0, root, nothing), nothing
+function Context(src_str; debug::Bool = false, verbose::Bool = debug)
+    src_io = IOBuffer(src_str)
+    src_tree = JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings=true)
+    fmt_io = IOBuffer()
+    fmt_tree = nothing
+    return Context(src_str, src_tree, src_io, fmt_io, fmt_tree, verbose, debug)
 end
 
-# Emit the node like in the original source code.
-function emit!(ctx::Context)::Union{Nothing, Exception}
-    node = ctx.node
-    # Should never emit nodes with children
-    @assert !JuliaSyntax.haschildren(node)
-    # First index of the current node, assumed to be valid
-    i = ctx.offset + 1
-    @assert isvalid(ctx.src, i)
-    # Last index of the current node computed as the previous valid index from the first index of the next node
-    j = prevind(ctx.src, ctx.offset + JuliaSyntax.span(node) + 1)
-    @assert isvalid(ctx.src, j)
-    # String representation of this node
-    str = @view ctx.src[i:j]
-    @debug "Emitting ..." JuliaSyntax.kind(node) str
-    return emit!(ctx, str)
+# Read the bytes of the current node from the output io
+function node_bytes(ctx, node)
+    pos = mark(ctx.fmt_io)
+    bytes = read(ctx.fmt_io, JuliaSyntax.span(node))
+    reset(ctx.fmt_io)
+    @assert position(ctx.fmt_io) == pos
+    return bytes
 end
 
-# Emit the node with a replacement string.
-function emit!(ctx::Context, str::AbstractString)
-    write(ctx.io, str)
-    ctx.offset += JuliaSyntax.span(ctx.node)
+function accept_node!(ctx::Context, node::JuliaSyntax.GreenNode)
+    # Accept the string representation of the current node by advancing the
+    # output IO to the start of the next node
+    pos = position(ctx.fmt_io) + JuliaSyntax.span(node)
+    seek(ctx.fmt_io, pos)
     return
 end
 
-function recurse!(ctx)::Union{Nothing, Exception}
-    # Stash the family
-    grandparent = ctx.parent
-    ctx.parent = ctx.node
-    for child in JuliaSyntax.children(ctx.node)
-        ctx.node = child
-        if (err = format_context!(ctx); err !== nothing)
-            return err
+struct NullNode end
+const nullnode = NullNode()
+
+function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
+    if !JuliaSyntax.haschildren(node)
+        return node
+    end
+    # @assert JuliaSyntax.haschildren(node)
+    span_sum = 0
+    original_bytes = node_bytes(ctx, node) # TODO: Read into reusable buffer
+    children = JuliaSyntax.children(node)
+    # The new node parts
+    head′ = JuliaSyntax.head(node)
+    children′ = ()
+    # Keep track of changes; if no child changes the original node can be returned
+    any_child_changed = false
+    for (i, child) in pairs(children)
+        child′ = child
+        span_sum += JuliaSyntax.span(child)
+        this_child_changed = false
+        itr = 0
+        while true
+            # Format this node
+            fmt_pos = position(ctx.fmt_io)
+            child′′ = format_node!(ctx, child′)
+            if child′′ === nullnode
+                this_child_changed = true
+                error("TODO: handle removed children")
+            elseif child′′ === child′
+                child′ = child′′
+                @assert position(ctx.fmt_io) == fmt_pos + JuliaSyntax.span(child′)
+                break
+            else
+                this_child_changed = true
+                # any_changed = true
+                # Reset the output stream and go again
+                seek(ctx.fmt_io, fmt_pos)
+                child′ = child′′
+            end
+            if (itr += 1) == 1000
+                error("infinite loop?")
+            end
+        end
+        if this_child_changed
+            # If the node change we have to re-write the original bytes for the next
+            # children
+            remaining_bytes = @view original_bytes[(span_sum+1):end]
+            fmt_pos = position(ctx.fmt_io)
+            nb = write(ctx.fmt_io, remaining_bytes)
+            seek(ctx.fmt_io, fmt_pos)
+            @assert nb == length(remaining_bytes)
+        end
+        any_child_changed |= this_child_changed
+        if any_child_changed
+            # Promote children from tuple to array and copy older siblings into it
+            if children′ === ()
+                children′ = eltype(children)[children[j] for j in 1:(i-1)]
+            end
+            push!(children′, child′)
         end
     end
-    # Restore the family
-    ctx.node = ctx.parent
-    ctx.parent = grandparent
-    return nothing
+    if any_child_changed
+        span′ = mapreduce(JuliaSyntax.span, +, children′; init=0)
+        return JuliaSyntax.GreenNode(head′, span′, children′)
+    else
+        return node
+    end
 end
 
-function format_context!(ctx::Context)::Union{Nothing, Exception}
-    node = ctx.node
+function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
     node_kind = JuliaSyntax.kind(node)
+
+    # Normalize line endings and remove trailing whitespace
+    if node_kind === K"NewlineWs"
+        @assert JuliaSyntax.children(node) === ()
+        str = String(node_bytes(ctx, node))
+        str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
+        if str != str′
+            # Write new bytes and reset the stream
+            fmt_pos = position(ctx.fmt_io)
+            nb = write(ctx.fmt_io, str′)
+            seek(ctx.fmt_io, fmt_pos)
+            @assert nb == sizeof(str′)
+            @assert nb != JuliaSyntax.span(node)
+            # Create new node and return it
+            node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
+            return node′
+        end
+    end
+
+    # If the node is unchanged, just keep going.
 
     # Nodes that always recurse!
     if (
@@ -100,11 +168,9 @@ function format_context!(ctx::Context)::Union{Nothing, Exception}
         node_kind === K"vcat" ||
         node_kind === K"vect"
     )
-        @debug "Recursing always" node_kind
         @assert !JuliaSyntax.is_trivia(node)
-        if (err = recurse!(ctx); err !== nothing)
-            return err
-        end
+        node′ = format_node_with_children!(ctx, node)
+        return node′
 
         # Nodes that recurse! if not trivia
         elseif !JuliaSyntax.is_trivia(node) && (
@@ -141,29 +207,23 @@ function format_context!(ctx::Context)::Union{Nothing, Exception}
            node_kind === K"where" ||
            node_kind === K"while"
         )
-        @debug "Recursing if not trivia" node_kind
-        if (err = recurse!(ctx); err !== nothing)
-            return err
-        end
+        node′ = format_node_with_children!(ctx, node)
+        return node′
 
     # Nodes that should recurse if they have children (all??)
     elseif JuliaSyntax.haschildren(node) && (
         JuliaSyntax.is_operator(node) ||
         node_kind === K"else" # try-(catch|finally)-else
     )
-        @debug "Recursing because children" node_kind
-        if (err = recurse!(ctx); err !== nothing)
-            return err
-        end
+        node′ = format_node_with_children!(ctx, node)
+        return node′
 
     # Whitespace and comments emitted verbatim for now
     elseif node_kind === K"Whitespace" ||
            node_kind === K"NewlineWs" ||
            node_kind === K"Comment"
-        @debug "emit ws" node_kind
-        if (err = emit!(ctx); err !== nothing)
-            return err
-        end
+        accept_node!(ctx, node)
+        return node
 
     # Nodes that always emit like the source code
     elseif (
@@ -238,40 +298,76 @@ function format_context!(ctx::Context)::Union{Nothing, Exception}
             node_kind === K"}"
         )
     )
-        @debug "Emitting raw" node_kind
-        if (err = emit!(ctx); err !== nothing)
-            return err
-        end
+        accept_node!(ctx, node)
+        return node
     else
-        return ErrorException("unhandled node of type $(JuliaSyntax.kind(ctx.node)), current text:\n" * String(take!(ctx.io)))
+        msg = "unhandled node of type $(node_kind), current text:\n" * String(take!(ctx.fmt_io))
+        throw(ErrorException(msg))
     end
+end
+
+# Entrypoint
+function format_tree!(ctx::Context)
+    root = ctx.src_tree
+    # Write the root node to the output IO so that the formatter can read it if needed
+    src_pos = position(ctx.src_io)
+    @assert src_pos == 0
+    fmt_pos = position(ctx.fmt_io)
+    @assert fmt_pos == 0
+    nb = write(ctx.fmt_io, read(ctx.src_io, JuliaSyntax.span(root)))
+    @assert nb == JuliaSyntax.span(root)
+    # Reset IOs so that the offsets are correct
+    seek(ctx.src_io, src_pos)
+    seek(ctx.fmt_io, fmt_pos)
+    # Keep track of the depth to break out of infinite loops
+    root′ = root
+    itr = 0
+    while true
+        # Format the node.
+        root′′ = format_node!(ctx, root′)
+        if root′′ === nullnode
+            # This signals that the node should be deleted, but that doesn't make sense for
+            # the root node so error instead
+            error("root node deleted")
+        elseif root′′ === root′
+            root′ = root′′
+            @assert position(ctx.fmt_io) == fmt_pos + JuliaSyntax.span(root′)
+            break
+        else
+            # The node was changed, reset the output stream and try again
+            seek(ctx.fmt_io, fmt_pos)
+            root′ = root′′
+        end
+        # The root node must only change once.
+        if (itr += 1) == 2
+            error("root node modified more than once")
+        end
+    end
+    # Truncate the output at the root span
+    truncate(ctx.fmt_io, JuliaSyntax.span(root′))
+    # Set the final tree
+    ctx.fmt_tree = root′
     return nothing
 end
 
-function format_context(sourcetext)::Tuple{Any,Union{Nothing, Exception}}
-    # Build the context
-    ctx, err = Context(sourcetext)
-    if err !== nothing
-        return ctx, err
-    end
-    # Run the formatter
-    err = format_context!(ctx)
-    return ctx, err
-end
+# function format_context(ctx)
+#     # Build the context
+#     ctx = Context(sourcetext)
+#     # Run the formatter
+#     fmt_tree = format_tree!(ctx)
+#     ctx.fmt_tree = fmt_tree
+#     return ctx
+# end
 
 """
-    format_string(sourcetext::AbstractString) -> String
+    format_string(str::AbstractString) -> String
 
 Format a string.
 """
-function format_string(sourcetext::AbstractString)
-    # Format it!
-    ctx, err = format_context(sourcetext)
-    if err !== nothing
-        throw(err)
-    end
-    # Return the string
-    return String(take!(ctx.io))
+function format_string(str::AbstractString)
+    ctx = Context(str)
+    format_tree!(ctx)
+    return String(take!(ctx.fmt_io))
 end
 
 """
@@ -279,22 +375,22 @@ end
 
 Format a file.
 """
-function format_file(inputfile::AbstractString, outputfile::Union{AbstractString, Nothing} = nothing; inplace::Bool=false)
+function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool=false)
     # Argument handling
-    sourcetext = read(inputfile, String)
-    if outputfile === nothing && !inplace
-        error("output file required when `inplace = false`")
-    end
-    if isfile(outputfile) && samefile(inputfile, outputfile) && !inplace
-        error("must not use same input and output file when `inplace = false`")
+    inputfile = normpath(abspath(inputfile))
+    outputfile = normpath(abspath(outputfile))
+    str = read(inputfile, String)
+    if !inplace && (outputfile == inputfile || (isfile(outputfile) && samefile(inputfile, outputfile)))
+        error("input and output must not be the same when `inplace = false`")
     end
     # Format it
-    ctx, err = format_context(sourcetext)
-    if err !== nothing
-        throw(err)
+    ctx = Context(str)
+    format_tree!(ctx)
+    # Write the output but skip if it text didn't change
+    changed = ctx.fmt_tree !== nothing
+    if changed || !inplace
+        write(outputfile, take!(ctx.fmt_io))
     end
-    # Write the output on success
-    write(outputfile, take!(ctx.io))
     return
 end
 
