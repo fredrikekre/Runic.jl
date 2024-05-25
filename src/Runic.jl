@@ -190,6 +190,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)::Union{JuliaSyn
     @return_something trim_trailing_whitespace(ctx, node)
     @return_something format_hex_literals(ctx, node)
     @return_something format_oct_literals(ctx, node)
+    @return_something format_float_literals(ctx, node)
 
     # If the node is unchanged at this point, just keep going.
 

@@ -87,3 +87,55 @@ function format_oct_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
     return node′
 end
+
+function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
+    JuliaSyntax.kind(node) in KSet"Float Float32" || return nothing
+    @assert JuliaSyntax.flags(node) == 0
+    @assert !JuliaSyntax.haschildren(node)
+    str = String(node_bytes(ctx, node))
+    # Check and shortcut the happy path first
+    r = r"""
+    ^
+    (?:(?:[1-9]\d*)|0)   # Non-zero followed by any digit, or just a single zero
+    \.                   # Decimal point
+    (?:(?:\d*[1-9])|0)   # Any digit with a final nonzero, or just a single zero
+    (?:[ef][+-]?[1-9]\d*)?
+    $
+    """x
+    if occursin(r, str)
+        return nothing
+    end
+    if occursin('_', str) || startswith(str, "0x")
+        # TODO: Hex floats and floats with underscores are ignored
+        return nothing
+    end
+    # Split up the pieces
+    r = r"^(?<int>\d*)(?:\.?(?<frac>\d*))?(?:(?<epm>[eEf][+-]?)(?<exp>\d+))?$"
+    m = match(r, str)
+    io = IOBuffer() # TODO: Could be reused?
+    # Strip leading zeros from integral part
+    int_part = isempty(m[:int]) ? "0" : m[:int]
+    int_part = replace(int_part, r"^0*((?:[1-9]\d*)|0)$" => s"\1")
+    write(io, int_part)
+    # Always write the decimal point
+    write(io, ".")
+    # Strip trailing zeros from fractional part
+    frac_part = isempty(m[:frac]) ? "0" : m[:frac]
+    frac_part = replace(frac_part, r"^((?:\d*[1-9])|0)0*$" => s"\1")
+    write(io, frac_part)
+    # Write the exponent part
+    if m[:epm] !== nothing
+        write(io, replace(m[:epm], "E" => "e"))
+        @assert m[:exp] !== nothing
+        # Strip leading zeros from integral part
+        exp_part = isempty(m[:exp]) ? "0" : m[:exp]
+        exp_part = replace(exp_part, r"^0*((?:[1-9]\d*)|0)$" => s"\1")
+        write(io, exp_part)
+    end
+    bytes = take!(io)
+    nb = write_and_reset(ctx, bytes)
+    @assert nb == length(bytes)
+    # Create new node and return it
+    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
+    return node′
+end

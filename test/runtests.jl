@@ -53,22 +53,39 @@ end
         "0o4" * z(42) => "0o4" * z(42), # typemax(UInt128) + 1
         "0o7" * z(42) => "0o7" * z(42),
     ]
-    # Test the test cases :)
     mod = Module()
     for (a, b) in test_cases
         c = Core.eval(mod, Meta.parse(a))
         d = Core.eval(mod, Meta.parse(b))
         @test c == d
         @test typeof(c) == typeof(d)
+        @test format_string(a) == b
     end
-    # Join all cases to a single string so that we only need to call the formatter once
-    input_str = let io = IOBuffer()
-        join(io, (case.first for case in test_cases), '\n')
-        String(take!(io))
+end
+
+@testset "Floating point literals" begin
+    test_cases = [
+        ["1.0", "1.", "01.", "001.", "001.00", "1.00"] => "1.0",
+        ["0.1", ".1", ".10", ".100", "00.100", "0.10"] => "0.1",
+        ["1.1", "01.1", "1.10", "1.100", "001.100", "01.10"] => "1.1",
+        ["1e3", "01e3", "01.e3", "1.e3", "1.000e3", "01.00e3"] => "1.0e3",
+        ["1e+3", "01e+3", "01.e+3", "1.e+3", "1.000e+3", "01.00e+3"] => "1.0e+3",
+        ["1e-3", "01e-3", "01.e-3", "1.e-3", "1.000e-3", "01.00e-3"] => "1.0e-3",
+        ["1E3", "01E3", "01.E3", "1.E3", "1.000E3", "01.00E3"] => "1.0e3",
+        ["1E+3", "01E+3", "01.E+3", "1.E+3", "1.000E+3", "01.00E+3"] => "1.0e+3",
+        ["1E-3", "01E-3", "01.E-3", "1.E-3", "1.000E-3", "01.00E-3"] => "1.0e-3",
+        ["1f3", "01f3", "01.f3", "1.f3", "1.000f3", "01.00f3"] => "1.0f3",
+        ["1f+3", "01f+3", "01.f+3", "1.f+3", "1.000f+3", "01.00f+3"] => "1.0f+3",
+        ["1f-3", "01f-3", "01.f-3", "1.f-3", "1.000f-3", "01.00f-3"] => "1.0f-3",
+    ]
+    mod = Module()
+    for (as, b) in test_cases
+        for a in as
+            c = Core.eval(mod, Meta.parse(a))
+            d = Core.eval(mod, Meta.parse(b))
+            @test c == d
+            @test typeof(c) == typeof(d)
+            @test format_string(a) == b
+        end
     end
-    output_str = let io = IOBuffer()
-        join(io, (case.second for case in test_cases), '\n')
-        String(take!(io))
-    end
-    @test format_string(input_str) == output_str
 end
