@@ -10,7 +10,7 @@ using Test:
     println(io, "  ") # Trailing space on consecutive lines
     println(io, "  ")
     str = String(take!(io))
-    @test_broken format_string(str) == "a = 1\nb = 2\n\n\n"
+    @test format_string(str) == "a = 1\nb = 2\n\n\n"
 end
 
 @testset "Hex/oct/bin literal integers" begin
