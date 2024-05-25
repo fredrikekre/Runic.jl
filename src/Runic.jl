@@ -14,6 +14,13 @@ using JuliaSyntax:
     end
 end
 
+# Return the result of expr if it doesn't evaluate to `nothing`
+macro return_something(expr)
+    return :(let node = $(esc(expr))
+        node === nothing || return node
+    end)
+end
+
 mutable struct Context
     # Input
     @const src_str::String
@@ -179,87 +186,12 @@ Format a node. Return values:
 function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)::Union{JuliaSyntax.GreenNode, Nothing, NullNode}
     node_kind = JuliaSyntax.kind(node)
 
-    # TODO: Split these into matchers and a handlers and move to another file
-    # Normalize line endings and remove trailing whitespace
-    if node_kind === K"NewlineWs"
-        @assert !JuliaSyntax.haschildren(node)
-        str = String(node_bytes(ctx, node))
-        str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
-        # If the next sibling is also a NewlineWs we can trim trailing
-        # whitespace from this node too
-        next_kind = next_sibling_kind(ctx)
-        if next_kind === K"NewlineWs"
-            str′ = replace(str′, r"(\r\n|\r|\n)\h*" => '\n')
-        end
-        if str != str′
-            # Write new bytes and reset the stream
-            nb = write_and_reset(ctx, str′)
-            @assert nb != JuliaSyntax.span(node)
-            # Create new node and return it
-            node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
-            return node′
-        end
-    end
+    # Go through the runestone and apply transformations.
+    @return_something trim_trailing_whitespace(ctx, node)
+    @return_something format_hex_literals(ctx, node)
+    @return_something format_oct_literals(ctx, node)
 
-    # Hex literals
-    if node_kind === K"HexInt"
-        @assert JuliaSyntax.flags(node) == 0
-        @assert !JuliaSyntax.haschildren(node)
-        span = JuliaSyntax.span(node)
-        @assert span > 2 # 0x prefix
-        target_spans = 2 .+ (2, 4, 8, 16, 32) # 0x + expected chars
-        if span < 34 && !(span in target_spans)
-            i = findfirst(x -> x > span, target_spans)::Int
-            bytes = node_bytes(ctx, node)
-            while length(bytes) < target_spans[i]
-                insert!(bytes, 3, '0')
-            end
-            nb = write_and_reset(ctx, bytes)
-            @assert nb == length(bytes) == target_spans[i]
-            # Create new node and return it
-            node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
-            return node′
-        else
-            # Do nothing: correctly formatted or a BigInt hex literal
-        end
-    end
-
-    # Oct literals
-    if node_kind === K"OctInt"
-        @assert JuliaSyntax.flags(node) == 0
-        @assert !JuliaSyntax.haschildren(node)
-        span = JuliaSyntax.span(node)
-        # Padding depends on the value of the literal
-        str = String(node_bytes(ctx, node))
-        n = tryparse(UInt128, str)
-        if n !== nothing
-            target_span_from_value =
-                n <= typemax(UInt8) ? 5 : n <= typemax(UInt16) ? 8 :
-                n <= typemax(UInt32) ? 13 : n <= typemax(UInt64) ? 24 :
-                n <= typemax(UInt128) ? 45 : error("unreachable")
-            target_spans = (5, 8, 13, 24, 45)
-            i = findfirst(x -> x >= span, target_spans)::Int
-            target_span_from_source = target_spans[i]
-            target_span = max(target_span_from_value, target_span_from_source)
-            if span != target_span
-                bytes = node_bytes(ctx, node)
-                while length(bytes) < target_span
-                    insert!(bytes, 3, '0')
-                end
-                nb = write_and_reset(ctx, bytes)
-                @assert nb == length(bytes) == target_span
-                # Create new node and return it
-                node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
-                return node′
-            else
-                # Do nothing: correctly formatted oct literal
-            end
-        else
-            # Do nothing: BigInt oct literal
-        end
-    end
-
-    # If the node is unchanged, just keep going.
+    # If the node is unchanged at this point, just keep going.
 
     # Nodes that always recurse!
     if (
@@ -516,6 +448,8 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
     end
     return
 end
+
+include("runestone.jl")
 
 if isdefined(Base, Symbol("@main"))
     include("main.jl")
