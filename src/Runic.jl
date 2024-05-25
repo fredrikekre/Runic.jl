@@ -424,15 +424,6 @@ function format_tree!(ctx::Context)
     return nothing
 end
 
-# function format_context(ctx)
-#     # Build the context
-#     ctx = Context(sourcetext)
-#     # Run the formatter
-#     fmt_tree = format_tree!(ctx)
-#     ctx.fmt_tree = fmt_tree
-#     return ctx
-# end
-
 """
     format_string(str::AbstractString) -> String
 

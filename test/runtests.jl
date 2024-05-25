@@ -1,7 +1,17 @@
 using Runic:
     format_string
 using Test:
-    @test, @testset
+    @test, @testset, @test_broken
+
+@testset "Trailing whitespace" begin
+    io = IOBuffer()
+    println(io, "a = 1  ") # Trailing space
+    println(io, "b = 2\t") # Trailing tab
+    println(io, "  ") # Trailing space on consecutive lines
+    println(io, "  ")
+    str = String(take!(io))
+    @test_broken format_string(str) == "a = 1\nb = 2\n\n\n"
+end
 
 @testset "Hex/oct/bin literal integers" begin
     z(n) = "0"^n
