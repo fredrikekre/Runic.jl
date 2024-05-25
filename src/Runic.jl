@@ -95,9 +95,11 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
     span_sum = 0
 
     # The new node parts. `children′` aliases `children` and only copied below if any of the
-    # nodes change ("copy-on-write").
+    # nodes change ("copy-on-write"). Since we return directly if the node don't have
+    # children we can assert that `JuliaSyntax.children` returns a vector (and not the
+    # empty tuple) to help the compiler.
     head′ = JuliaSyntax.head(node)
-    children = JuliaSyntax.children(node)
+    children = JuliaSyntax.children(node)::AbstractVector
     children′ = children
     any_child_changed = false
 
