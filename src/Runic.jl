@@ -17,19 +17,19 @@ end
 mutable struct Context
     # Input
     @const src_str::String
-    @const src_tree::JuliaSyntax.GreenNode
+    @const src_tree::JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}
     @const src_io::IOBuffer
     # Output
     @const fmt_io::IOBuffer
-    fmt_tree::Union{JuliaSyntax.GreenNode, Nothing}
+    fmt_tree::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
     # User settings
     verbose::Bool
     debug::Bool
     # Current state
-    # node::Union{JuliaSyntax.GreenNode, Nothing}
-    prev_sibling::Union{JuliaSyntax.GreenNode, Nothing}
-    next_sibling::Union{JuliaSyntax.GreenNode, Nothing}
-    # parent::Union{JuliaSyntax.GreenNode, Nothing}
+    # node::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
+    prev_sibling::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
+    next_sibling::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
+    # parent::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
 end
 
 function Context(src_str; debug::Bool = false, verbose::Bool = debug)
