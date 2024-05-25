@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 using Runic:
     format_string
 using Test:

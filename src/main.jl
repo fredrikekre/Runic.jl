@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 errno::Cint = 0
 
 function panic(msg...)
