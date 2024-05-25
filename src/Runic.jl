@@ -66,7 +66,7 @@ function accept_node!(ctx::Context, node::JuliaSyntax.GreenNode)
 end
 
 # Write formatted thing and reset the output stream
-function write_and_reset(ctx::Context, bytes::Union{String, SubString{String}, Vector{UInt8}})
+function write_and_reset(ctx::Context, bytes::Union{String, AbstractVector{UInt8}})
     fmt_pos = position(ctx.fmt_io)
     nb = write(ctx.fmt_io, bytes)
     seek(ctx.fmt_io, fmt_pos)
@@ -78,23 +78,30 @@ struct NullNode end
 const nullnode = NullNode()
 
 function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
+    # If the node doesn't have children there is nothing to do here
     if !JuliaSyntax.haschildren(node)
-        return node
+        return nothing
     end
+
     # Keep track of the siblings on this stack
     prev_sibling = ctx.prev_sibling
     next_sibling = ctx.next_sibling
     ctx.prev_sibling = nothing
     ctx.next_sibling = nothing
-    # @assert JuliaSyntax.haschildren(node)
+
+    # A formatted node can have a larger span than the original so we need to backup the
+    # original bytes and keep track of the accumulated span of processed children
+    original_bytes = node_bytes(ctx, node) # TODO: Read into reusable buffer?
     span_sum = 0
-    original_bytes = node_bytes(ctx, node) # TODO: Read into reusable buffer
-    children = JuliaSyntax.children(node)
-    # The new node parts
+
+    # The new node parts. `children′` aliases `children` and only copied below if any of the
+    # nodes change ("copy-on-write").
     head′ = JuliaSyntax.head(node)
-    children′ = children # This aliases until the need to copy below
-    # Keep track of changes; if no child changes the original node can be returned
+    children = JuliaSyntax.children(node)
+    children′ = children
     any_child_changed = false
+
+    # Loop over all the children
     for (i, child) in pairs(children)
         # Set the siblings: previous from children′, next from children
         ctx.prev_sibling = get(children′, i - 1, nothing)
@@ -103,23 +110,27 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
         span_sum += JuliaSyntax.span(child)
         this_child_changed = false
         itr = 0
+        # Loop until this node reaches a steady state and is accepted
         while true
-            # Format this node
+            # Keep track of the stream position and reset it below if the node is changed
             fmt_pos = position(ctx.fmt_io)
+            # Format the child
             child′′ = format_node!(ctx, child′)
             if child′′ === nullnode
+                # This node should be deleted from the tree
+                # TODO: When this is fixed the sibling setting above needs to be modified to
+                # handle this too
                 this_child_changed = true
-                # TODO: When this is fixed the sibling setting above needs to handle this
-                # too
                 error("TODO: handle removed children")
-            elseif child′′ === child′
-                child′ = child′′
+            elseif child′′ === nothing
+                # The node was accepted, continue to next sibling
                 @assert position(ctx.fmt_io) == fmt_pos + JuliaSyntax.span(child′)
                 break
             else
+                # The node should be replaced with the new one. Reset the stream and try
+                # again until it is accepted.
+                @assert child′′ isa JuliaSyntax.GreenNode
                 this_child_changed = true
-                # any_changed = true
-                # Reset the output stream and go again
                 seek(ctx.fmt_io, fmt_pos)
                 child′ = child′′
             end
@@ -128,17 +139,15 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
             end
         end
         if this_child_changed
-            # If the node change we have to re-write the original bytes for the next
-            # children
+            # If the node changed we have to re-write the original bytes for the next
+            # children to the output stream and then reset
             remaining_bytes = @view original_bytes[(span_sum+1):end]
-            fmt_pos = position(ctx.fmt_io)
-            nb = write(ctx.fmt_io, remaining_bytes)
-            seek(ctx.fmt_io, fmt_pos)
+            nb = write_and_reset(ctx, remaining_bytes)
             @assert nb == length(remaining_bytes)
         end
         any_child_changed |= this_child_changed
         if any_child_changed
-            # De-alias the children if needed
+            # De-alias the children if not already done
             if children′ === children
                 children′ = eltype(children)[children[j] for j in 1:(i-1)]
             end
@@ -153,11 +162,19 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
         span′ = mapreduce(JuliaSyntax.span, +, children′; init=0)
         return JuliaSyntax.GreenNode(head′, span′, children′)
     else
-        return node
+        return nothing
     end
 end
 
-function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
+"""
+    format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
+
+Format a node. Return values:
+ - `nothing::Nothing`: The node is accepted as is
+ - `nullnode::NullNode`: The node should be deleted from the tree
+ - `node::JuliaSyntax.GreenNode`: The node should be replaced with the new node
+"""
+function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)::Union{JuliaSyntax.GreenNode, Nothing, NullNode}
     node_kind = JuliaSyntax.kind(node)
 
     # TODO: Split these into matchers and a handlers and move to another file
@@ -279,6 +296,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
     )
         @assert !JuliaSyntax.is_trivia(node)
         node′ = format_node_with_children!(ctx, node)
+        @assert node′ !== nullnode
         return node′
 
         # Nodes that recurse! if not trivia
@@ -317,6 +335,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
            node_kind === K"while"
         )
         node′ = format_node_with_children!(ctx, node)
+        @assert node′ !== nullnode
         return node′
 
     # Nodes that should recurse if they have children (all??)
@@ -325,6 +344,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
         node_kind === K"else" # try-(catch|finally)-else
     )
         node′ = format_node_with_children!(ctx, node)
+        @assert node′ !== nullnode
         return node′
 
     # Whitespace and comments emitted verbatim for now
@@ -332,7 +352,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
            node_kind === K"NewlineWs" ||
            node_kind === K"Comment"
         accept_node!(ctx, node)
-        return node
+        return nothing
 
     # Nodes that always emit like the source code
     elseif (
@@ -408,7 +428,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)
         )
     )
         accept_node!(ctx, node)
-        return node
+        return nothing
     else
         msg = "unhandled node of type $(node_kind), current text:\n" * String(take!(ctx.fmt_io))
         throw(ErrorException(msg))
@@ -438,11 +458,12 @@ function format_tree!(ctx::Context)
             # This signals that the node should be deleted, but that doesn't make sense for
             # the root node so error instead
             error("root node deleted")
-        elseif root′′ === root′
-            root′ = root′′
+        elseif root′′ === nothing
+            # root′ = root′′
             @assert position(ctx.fmt_io) == fmt_pos + JuliaSyntax.span(root′)
             break
         else
+            @assert root′′ isa JuliaSyntax.GreenNode
             # The node was changed, reset the output stream and try again
             seek(ctx.fmt_io, fmt_pos)
             root′ = root′′
