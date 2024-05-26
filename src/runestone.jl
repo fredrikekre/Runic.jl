@@ -269,7 +269,7 @@ end
 # This pass handles spaces around infix operator calls and comparison chains
 function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(
-        JuliaSyntax.is_infix_op_call(node) ||
+        is_infix_op_call(node) ||
         (JuliaSyntax.kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
     )
         return nothing

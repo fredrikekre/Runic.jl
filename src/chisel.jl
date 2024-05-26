@@ -23,6 +23,10 @@ end
 function is_assignment(node::JuliaSyntax.GreenNode)
     return JuliaSyntax.is_prec_assignment(node)
 end
+function is_infix_op_call(node::JuliaSyntax.GreenNode)
+    return JuliaSyntax.kind(node) === K"call" &&
+        JuliaSyntax.is_infix_op_call(node)
+end
 function is_comparison_leaf(node::JuliaSyntax.GreenNode)
     return is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
 end
