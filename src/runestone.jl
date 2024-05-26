@@ -270,11 +270,12 @@ end
 function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(
         is_infix_op_call(node) ||
+        (JuliaSyntax.kind(node) in KSet"<: >:" && !is_leaf(node)) ||
         (JuliaSyntax.kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
     )
         return nothing
     end
-    @assert JuliaSyntax.kind(node) in KSet"call comparison"
+    @assert JuliaSyntax.kind(node) in KSet"call comparison <: >:"
     is_x = x -> is_operator_leaf(x) || is_comparison_leaf(x)
     return spaces_around_x(ctx, node, is_x)
 end

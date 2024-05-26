@@ -142,3 +142,20 @@ end
     @test format_string("for i  =  1:10\nend\n") == "for i = 1 : 10\nend\n"
     @test format_string("for i  in  1:10\nend\n") == "for i in 1 : 10\nend\n"
 end
+
+@testset "whitespace around <: and >:, no whitespace around ::" begin
+    # K"::"
+    @test format_string("a::T") == "a::T"
+    @test format_string("a::T::S") == "a::T::S"
+    @test_broken format_string("a  ::  T") == "a::T" # TODO: Eliminate spaces instead
+    # K"<:" and K">:"
+    @test format_string("a<:T") == "a <: T"
+    @test format_string("a>:T") == "a >: T"
+    @test format_string("a  <:   T") == "a <: T"
+    @test format_string("a  >:   T") == "a >: T"
+    # K"comparison" for chains
+    @test format_string("a<:T<:S") == "a <: T <: S"
+    @test format_string("a>:T>:S") == "a >: T >: S"
+    @test format_string("a <:  T   <:    S") == "a <: T <: S"
+    @test format_string("a >:  T   >:    S") == "a >: T >: S"
+end
