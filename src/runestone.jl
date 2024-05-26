@@ -140,12 +140,12 @@ function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     return node′
 end
 
-# TODO: So much boilerplate here...
-function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
-    JuliaSyntax.is_infix_op_call(node) || return nothing
-    @assert JuliaSyntax.kind(node) === K"call"
+# Insert space around `x`, where `x` can be operators, assignments, etc. with the pattern:
+# `<something><space><x><space><something>`, for example the spaces around `+` and `=` in
+# `a = x + y`.
+function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, x::JuliaSyntax.Kind)
+    # TODO: So much boilerplate here...
     @assert JuliaSyntax.haschildren(node)
-
     # TODO: Can't handle NewlineWs here right now
     if any(JuliaSyntax.kind(c) === K"NewlineWs" for c in JuliaSyntax.children(node))
         return nothing
@@ -163,10 +163,10 @@ function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
 
     # Toggle for whether we are currently looking for whitespace or not
     looking_for_whitespace = false
+    looking_for_x = false
 
     for (i, child) in pairs(children)
         span_sum += JuliaSyntax.span(child)
-        ckind = JuliaSyntax.kind(child)
         if i == 1 && JuliaSyntax.kind(child) === K"Whitespace"
             # If the first child is whitespace it will be accepted as is even if the span is
             # larger than one since we don't look behind. The whitespace pass for the parent
@@ -238,12 +238,20 @@ function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
                 write_and_reset(ctx, remaining_bytes_inclusive)
                 accept_node!(ctx, child)
                 looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+                if looking_for_x
+                    @assert JuliaSyntax.kind(child) === x
+                end
+                looking_for_x = !looking_for_x
             end
         else # !expect_ws
+            if looking_for_x
+                @assert JuliaSyntax.kind(child) === x
+            end
             @assert JuliaSyntax.kind(child) !== K"Whitespace" # This would be weird, I think?
             any_changes && push!(children′, child)
             accept_node!(ctx, child)
             looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+            looking_for_x = !looking_for_x
         end
     end
     # Reset stream
@@ -256,4 +264,25 @@ function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
     else
         return nothing
     end
+end
+
+function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
+    if !(JuliaSyntax.is_infix_op_call(node))
+        return nothing
+    end
+    @assert JuliaSyntax.kind(node) === K"call"
+    # Find the specific operator
+    children = JuliaSyntax.children(node)::AbstractVector
+    start_idx = JuliaSyntax.is_whitespace(first_leaf(node)) ? 3 : 2
+    i = findnext(!JuliaSyntax.is_whitespace, children, start_idx)::Int
+    op = JuliaSyntax.kind(children[i])
+    @assert JuliaSyntax.is_operator(op)
+    return spaces_around_x(ctx, node, op)
+end
+
+function spaces_around_assignments(ctx::Context, node::JuliaSyntax.GreenNode)
+    if !(is_assignment(node) && !JuliaSyntax.is_trivia(node))
+        return nothing
+    end
+    return spaces_around_x(ctx, node, JuliaSyntax.kind(node))
 end

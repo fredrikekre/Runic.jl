@@ -19,3 +19,7 @@ function last_leaf(node::JuliaSyntax.GreenNode)
         return last_leaf(last(JuliaSyntax.children(node)::AbstractVector))
     end
 end
+
+function is_assignment(node::JuliaSyntax.GreenNode)
+    return JuliaSyntax.is_prec_assignment(node)
+end

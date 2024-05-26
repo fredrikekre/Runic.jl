@@ -110,3 +110,24 @@ end
         @test format_string("sin(π)$(op)cos(pi)") == "sin(π) $(op) cos(pi)"
     end
 end
+
+@testset "whitespace around assignments" begin
+    # Regular assignments and dot-assignments
+    for a in ("=", "+=", "-=", ".=", ".+=", ".-=")
+        @test format_string("a$(a)b") == "a $(a) b"
+        @test format_string("a $(a)b") == "a $(a) b"
+        @test format_string("a$(a) b") == "a $(a) b"
+        @test format_string("  a$(a) b") == "  a $(a) b"
+        @test format_string("  a$(a) b  ") == "  a $(a) b  "
+        @test format_string("a$(a)   b") == "a $(a) b"
+        @test format_string("a$(a)   b  *  x") == "a $(a) b * x"
+        @test format_string("a$(a)( b *  x)") == "a $(a) ( b * x)"
+    end
+    # Chained assignments
+    @test format_string("x=a= b  ") == "x = a = b  "
+    @test format_string("a=   b = x") == "a = b = x"
+    # Check the common footgun of permuting the operator and =
+    @test format_string("a =+ c") == "a = + c"
+    # Short form function definitions
+    @test format_string("sin(π)=cos(pi)") == "sin(π) = cos(pi)"
+end
