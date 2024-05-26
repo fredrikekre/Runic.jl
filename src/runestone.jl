@@ -139,3 +139,121 @@ function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
     return node′
 end
+
+# TODO: So much boilerplate here...
+function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
+    JuliaSyntax.is_infix_op_call(node) || return nothing
+    @assert JuliaSyntax.kind(node) === K"call"
+    @assert JuliaSyntax.haschildren(node)
+
+    # TODO: Can't handle NewlineWs here right now
+    if any(JuliaSyntax.kind(c) === K"NewlineWs" for c in JuliaSyntax.children(node))
+        return nothing
+    end
+
+    children = JuliaSyntax.children(node)::AbstractVector
+    children′ = children
+    any_changes = false
+    original_bytes = node_bytes(ctx, node)
+    span_sum = 0
+    pos = position(ctx.fmt_io)
+    ws = JuliaSyntax.GreenNode(
+        JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1, (),
+    )
+
+    # Toggle for whether we are currently looking for whitespace or not
+    looking_for_whitespace = false
+
+    for (i, child) in pairs(children)
+        span_sum += JuliaSyntax.span(child)
+        ckind = JuliaSyntax.kind(child)
+        if i == 1 && JuliaSyntax.kind(child) === K"Whitespace"
+            # If the first child is whitespace it will be accepted as is even if the span is
+            # larger than one since we don't look behind. The whitespace pass for the parent
+            # node should trim it later (if not already done).
+            accept_node!(ctx, child)
+            @assert !any_changes
+            looking_for_whitespace = false
+        elseif looking_for_whitespace
+            if JuliaSyntax.kind(child) === K"Whitespace" && JuliaSyntax.span(child) == 1
+                # All good, just advance the IO
+                accept_node!(ctx, child)
+                any_changes && push!(children′, child)
+                looking_for_whitespace = false
+            elseif JuliaSyntax.kind(child) === K"Whitespace"
+                # Whitespace node but replace since not single space
+                any_changes = true
+                if children′ === children
+                    children′ = children[1:i-1]
+                end
+                push!(children′, ws)
+                write_and_reset(ctx, " ")
+                accept_node!(ctx, ws)
+                # Re-write bytes for remaining children
+                remaining_bytes = @view original_bytes[(span_sum+1):end]
+                write_and_reset(ctx, remaining_bytes)
+                looking_for_whitespace = false
+            elseif JuliaSyntax.haschildren(child) &&
+                    JuliaSyntax.kind(first_leaf(child)) === K"Whitespace"
+                # Whitespace found at the beginning of next child.
+                child_ws = first_leaf(child)
+                looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+                if JuliaSyntax.span(child_ws) == 1
+                    # Accept the node
+                    accept_node!(ctx, child)
+                    any_changes && push!(children′, child)
+                else
+                    # Replace the whitespace node of the child
+                    grand_children = JuliaSyntax.children(child)[2:end]
+                    pushfirst!(grand_children, ws)
+                    span′ = mapreduce(JuliaSyntax.span, +, grand_children; init=0)
+                    @assert span′ == JuliaSyntax.span(child) - JuliaSyntax.span(child_ws) + 1
+                    bytes_to_skip = JuliaSyntax.span(child) - span′
+                    @assert bytes_to_skip > 0
+                    remaining_bytes_inclusive =
+                        @view original_bytes[(span_sum+1+bytes_to_skip-JuliaSyntax.span(child)):end]
+                    write_and_reset(ctx, remaining_bytes_inclusive)
+                    child′ = JuliaSyntax.GreenNode(
+                        JuliaSyntax.head(child), span′, grand_children,
+                    )
+                    any_changes = true
+                    if children′ === children
+                        children′ = children[1:i-1]
+                    end
+                    push!(children′, child′)
+                end
+            else
+                # Not a whitespace node, insert one
+                any_changes = true
+                if children′ === children
+                    children′ = children[1:i-1]
+                end
+                push!(children′, ws)
+                write_and_reset(ctx, " ")
+                accept_node!(ctx, ws)
+                # Write and accept the node
+                push!(children′, child)
+                remaining_bytes_inclusive =
+                    @view original_bytes[(span_sum+1-JuliaSyntax.span(child)):end]
+                write_and_reset(ctx, remaining_bytes_inclusive)
+                accept_node!(ctx, child)
+                looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+            end
+        else # !expect_ws
+            @assert JuliaSyntax.kind(child) !== K"Whitespace" # This would be weird, I think?
+            any_changes && push!(children′, child)
+            accept_node!(ctx, child)
+            looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+        end
+    end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    if any_changes
+        # Create new node and return it
+        span′ = mapreduce(JuliaSyntax.span, +, children′; init=0)
+        node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+        return node′
+    else
+        return nothing
+    end
+end

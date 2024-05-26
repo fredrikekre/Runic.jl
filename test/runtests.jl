@@ -89,3 +89,24 @@ end
         end
     end
 end
+
+@testset "whitespace between operators" begin
+    for op in ("+", "-", "==", "!=", "===", "!==", "<", "<=")
+        @test format_string("a$(op)b") == "a $(op) b"
+        @test format_string("a $(op)b") == "a $(op) b"
+        @test format_string("a$(op) b") == "a $(op) b"
+        @test format_string("  a$(op) b") == "  a $(op) b"
+        @test format_string("  a$(op) b  ") == "  a $(op) b  "
+        @test format_string("x=a$(op) b  ") == "x = a $(op) b  "
+        @test format_string("a$(op)   b") == "a $(op) b"
+        if op in ("==", "!=", "===", "!==", "<", "<=")
+            # TODO: Broken when chaining these operators
+            @test_broken format_string("a$(op)   b $(op) x") == "a $(op) b $(op) x"
+        else
+            @test format_string("a$(op)   b $(op) x") == "a $(op) b $(op) x"
+        end
+        @test format_string("a$(op)   b  *  x") == "a $(op) b * x"
+        @test format_string("a$(op)( b *  x)") == "a $(op) ( b * x)"
+        @test format_string("sin(π)$(op)cos(pi)") == "sin(π) $(op) cos(pi)"
+    end
+end

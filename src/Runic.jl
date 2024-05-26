@@ -14,6 +14,8 @@ using JuliaSyntax:
     end
 end
 
+include("chisel.jl")
+
 # Return the result of expr if it doesn't evaluate to `nothing`
 macro return_something(expr)
     return :(let node = $(esc(expr))
@@ -191,6 +193,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)::Union{JuliaSyn
     @return_something format_hex_literals(ctx, node)
     @return_something format_oct_literals(ctx, node)
     @return_something format_float_literals(ctx, node)
+    @return_something spaces_around_operators(ctx, node)
 
     # If the node is unchanged at this point, just keep going.
 
