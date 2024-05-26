@@ -283,5 +283,8 @@ function spaces_around_assignments(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(is_assignment(node) && !JuliaSyntax.is_trivia(node))
         return nothing
     end
-    return spaces_around_x(ctx, node, is_assignment)
+    # for-loop nodes are of kind K"=" even when `in` is used so we need to
+    # include K"in" in the predicate too.
+    is_x = x -> is_assignment(x) || JuliaSyntax.kind(x) === K"in"
+    return spaces_around_x(ctx, node, is_x)
 end

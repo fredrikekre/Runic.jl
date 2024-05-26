@@ -136,4 +136,9 @@ end
     @test format_string("a =+ c") == "a = + c"
     # Short form function definitions
     @test format_string("sin(π)=cos(pi)") == "sin(π) = cos(pi)"
+    # For loop nodes are assignment, even when using `in`
+    @test format_string("for i=1:10\nend\n") == "for i = 1 : 10\nend\n"
+    @test format_string("for i  =1:10\nend\n") == "for i = 1 : 10\nend\n"
+    @test format_string("for i  =  1:10\nend\n") == "for i = 1 : 10\nend\n"
+    @test format_string("for i  in  1:10\nend\n") == "for i in 1 : 10\nend\n"
 end
