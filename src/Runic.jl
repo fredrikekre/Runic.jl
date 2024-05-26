@@ -43,7 +43,7 @@ end
 
 function Context(src_str; debug::Bool = false, verbose::Bool = debug)
     src_io = IOBuffer(src_str)
-    src_tree = JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings=true)
+    src_tree = JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true)
     fmt_io = IOBuffer()
     fmt_tree = nothing
     return Context(
@@ -152,7 +152,7 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
         if this_child_changed
             # If the node changed we have to re-write the original bytes for the next
             # children to the output stream and then reset
-            remaining_bytes = @view original_bytes[(span_sum+1):end]
+            remaining_bytes = @view original_bytes[(span_sum + 1):end]
             nb = write_and_reset(ctx, remaining_bytes)
             @assert nb == length(remaining_bytes)
         end
@@ -160,7 +160,7 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
         if any_child_changed
             # De-alias the children if not already done
             if children′ === children
-                children′ = eltype(children)[children[j] for j in 1:(i-1)]
+                children′ = eltype(children)[children[j] for j in 1:(i - 1)]
             end
             push!(children′, child′)
         end
@@ -170,7 +170,7 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
     ctx.next_sibling = next_sibling
     # Return a new node if any of the children changed
     if any_child_changed
-        span′ = mapreduce(JuliaSyntax.span, +, children′; init=0)
+        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
         return JuliaSyntax.GreenNode(head′, span′, children′)
     else
         return nothing
@@ -435,7 +435,7 @@ end
 
 Format a file.
 """
-function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool=false)
+function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool = false)
     # Argument handling
     inputfile = normpath(abspath(inputfile))
     outputfile = normpath(abspath(outputfile))

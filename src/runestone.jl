@@ -184,13 +184,13 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                 # Whitespace node but replace since not single space
                 any_changes = true
                 if children′ === children
-                    children′ = children[1:i-1]
+                    children′ = children[1:i - 1]
                 end
                 push!(children′, ws)
                 write_and_reset(ctx, " ")
                 accept_node!(ctx, ws)
                 # Re-write bytes for remaining children
-                remaining_bytes = @view original_bytes[(span_sum+1):end]
+                remaining_bytes = @view original_bytes[(span_sum + 1):end]
                 write_and_reset(ctx, remaining_bytes)
                 looking_for_whitespace = false
             elseif JuliaSyntax.haschildren(child) &&
@@ -206,19 +206,19 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                     # Replace the whitespace node of the child
                     grand_children = JuliaSyntax.children(child)[2:end]
                     pushfirst!(grand_children, ws)
-                    span′ = mapreduce(JuliaSyntax.span, +, grand_children; init=0)
+                    span′ = mapreduce(JuliaSyntax.span, +, grand_children; init = 0)
                     @assert span′ == JuliaSyntax.span(child) - JuliaSyntax.span(child_ws) + 1
                     bytes_to_skip = JuliaSyntax.span(child) - span′
                     @assert bytes_to_skip > 0
                     remaining_bytes_inclusive =
-                        @view original_bytes[(span_sum+1+bytes_to_skip-JuliaSyntax.span(child)):end]
+                        @view original_bytes[(span_sum + 1 + bytes_to_skip - JuliaSyntax.span(child)):end]
                     write_and_reset(ctx, remaining_bytes_inclusive)
                     child′ = JuliaSyntax.GreenNode(
                         JuliaSyntax.head(child), span′, grand_children,
                     )
                     any_changes = true
                     if children′ === children
-                        children′ = children[1:i-1]
+                        children′ = children[1:i - 1]
                     end
                     push!(children′, child′)
                 end
@@ -226,7 +226,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                 # Not a whitespace node, insert one
                 any_changes = true
                 if children′ === children
-                    children′ = children[1:i-1]
+                    children′ = children[1:i - 1]
                 end
                 push!(children′, ws)
                 write_and_reset(ctx, " ")
@@ -234,7 +234,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                 # Write and accept the node
                 push!(children′, child)
                 remaining_bytes_inclusive =
-                    @view original_bytes[(span_sum+1-JuliaSyntax.span(child)):end]
+                    @view original_bytes[(span_sum + 1 - JuliaSyntax.span(child)):end]
                 write_and_reset(ctx, remaining_bytes_inclusive)
                 accept_node!(ctx, child)
                 looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
@@ -258,7 +258,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
     seek(ctx.fmt_io, pos)
     if any_changes
         # Create new node and return it
-        span′ = mapreduce(JuliaSyntax.span, +, children′; init=0)
+        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
         node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
         return node′
     else
