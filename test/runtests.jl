@@ -91,18 +91,49 @@ end
 end
 
 @testset "whitespace between operators" begin
-    for op in ("+", "-", "==", "!=", "===", "!==", "<", "<=")
-        @test format_string("a$(op)b") == "a $(op) b"
-        @test format_string("a $(op)b") == "a $(op) b"
-        @test format_string("a$(op) b") == "a $(op) b"
-        @test format_string("  a$(op) b") == "  a $(op) b"
-        @test format_string("  a$(op) b  ") == "  a $(op) b  "
-        @test format_string("x=a$(op) b  ") == "x = a $(op) b  "
-        @test format_string("a$(op)   b") == "a $(op) b"
-        @test format_string("a$(op)   b $(op) x") == "a $(op) b $(op) x"
-        @test format_string("a$(op)   b  *  x") == "a $(op) b * x"
-        @test format_string("a$(op)( b *  x)") == "a $(op) ( b * x)"
-        @test format_string("sin(π)$(op)cos(pi)") == "sin(π) $(op) cos(pi)"
+    for sp in ("", " ", "  ")
+        for op in ("+", "-", "==", "!=", "===", "!==", "<", "<=")
+            # a op b
+            @test format_string("$(sp)a$(sp)$(op)$(sp)b$(sp)") ==
+                "$(sp)a $(op) b$(sp)"
+            # x = a op b
+            @test format_string("$(sp)x$(sp)=$(sp)a$(sp)$(op)$(sp)b$(sp)") ==
+                "$(sp)x = a $(op) b$(sp)"
+            # a op b op c
+            @test format_string("$(sp)a$(sp)$(op)$(sp)b$(sp)$(op)$(sp)c$(sp)") ==
+                "$(sp)a $(op) b $(op) c$(sp)"
+            # a op b other_op c
+            @test format_string("$(sp)a$(sp)$(op)$(sp)b$(sp)*$(sp)c$(sp)") ==
+                "$(sp)a $(op) b * c$(sp)"
+            # a op (b other_op c) (TODO: leading and trailing spaces should be removed in ()
+            @test format_string("$(sp)a$(sp)$(op)$(sp)($(sp)b$(sp)*$(sp)c$(sp))$(sp)") ==
+                "$(sp)a $(op) ($(sp)b * c$(sp))$(sp)"
+            # call() op call()
+            @test format_string("$(sp)sin(α)$(sp)$(op)$(sp)cos(β)$(sp)") ==
+                "$(sp)sin(α) $(op) cos(β)$(sp)"
+            # call() op call() op call()
+            @test format_string("$(sp)sin(α)$(sp)$(op)$(sp)cos(β)$(sp)$(op)$(sp)tan(γ)$(sp)") ==
+                "$(sp)sin(α) $(op) cos(β) $(op) tan(γ)$(sp)"
+        end
+        # Exceptions to the rule: `:` and `^`
+        if sp == ""
+            # a:b
+            @test format_string("$(sp)a$(sp):$(sp)b$(sp)") == "a:b"
+            @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") == "(1 + 2):(1 + 3)"
+            # a:b:c
+            @test format_string("$(sp)a$(sp):$(sp)b$(sp):$(sp)c$(sp)") == "a:b:c"
+            @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp):$(sp)(1 + 4)$(sp)") ==
+                "(1 + 2):(1 + 3):(1 + 4)"
+            # a^b
+            @test format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "a^b"
+        else
+            @test_broken format_string("$(sp)a$(sp):$(sp)b$(sp)") == "a:b"
+            @test_broken format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") == "(1 + 2):(1 + 3)"
+            @test_broken format_string("$(sp)a$(sp):$(sp)b$(sp):$(sp)c$(sp)") == "a:b:c"
+            @test_broken format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp):$(sp)(1 + 4)$(sp)") ==
+                "(1 + 2):(1 + 3):(1 + 4)"
+            @test_broken format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "a^b"
+        end
     end
 end
 
@@ -137,10 +168,10 @@ end
     # Short form function definitions
     @test format_string("sin(π)=cos(pi)") == "sin(π) = cos(pi)"
     # For loop nodes are assignment, even when using `in`
-    @test format_string("for i=1:10\nend\n") == "for i = 1 : 10\nend\n"
-    @test format_string("for i  =1:10\nend\n") == "for i = 1 : 10\nend\n"
-    @test format_string("for i  =  1:10\nend\n") == "for i = 1 : 10\nend\n"
-    @test format_string("for i  in  1:10\nend\n") == "for i in 1 : 10\nend\n"
+    @test format_string("for i=1:10\nend\n") == "for i = 1:10\nend\n"
+    @test format_string("for i  =1:10\nend\n") == "for i = 1:10\nend\n"
+    @test format_string("for i  =  1:10\nend\n") == "for i = 1:10\nend\n"
+    @test format_string("for i  in  1:10\nend\n") == "for i in 1:10\nend\n"
 end
 
 @testset "whitespace around <: and >:, no whitespace around ::" begin

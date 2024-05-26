@@ -27,6 +27,13 @@ function is_infix_op_call(node::JuliaSyntax.GreenNode)
     return JuliaSyntax.kind(node) === K"call" &&
         JuliaSyntax.is_infix_op_call(node)
 end
+function infix_op_call_op(node::JuliaSyntax.GreenNode)
+    @assert is_infix_op_call(node)
+    children = JuliaSyntax.children(node)::AbstractVector
+    first_operand_index = findfirst(!JuliaSyntax.is_whitespace, children)
+    op_index = findnext(JuliaSyntax.is_operator, children, first_operand_index + 1)
+    return children[op_index]
+end
 function is_comparison_leaf(node::JuliaSyntax.GreenNode)
     return is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
 end
