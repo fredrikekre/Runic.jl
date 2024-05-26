@@ -23,3 +23,9 @@ end
 function is_assignment(node::JuliaSyntax.GreenNode)
     return JuliaSyntax.is_prec_assignment(node)
 end
+function is_comparison_leaf(node::JuliaSyntax.GreenNode)
+    return is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
+end
+function is_operator_leaf(node::JuliaSyntax.GreenNode)
+    return is_leaf(node) && JuliaSyntax.is_operator(node)
+end

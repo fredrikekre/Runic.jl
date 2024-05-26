@@ -99,15 +99,21 @@ end
         @test format_string("  a$(op) b  ") == "  a $(op) b  "
         @test format_string("x=a$(op) b  ") == "x = a $(op) b  "
         @test format_string("a$(op)   b") == "a $(op) b"
-        if op in ("==", "!=", "===", "!==", "<", "<=")
-            # TODO: Broken when chaining these operators
-            @test_broken format_string("a$(op)   b $(op) x") == "a $(op) b $(op) x"
-        else
-            @test format_string("a$(op)   b $(op) x") == "a $(op) b $(op) x"
-        end
+        @test format_string("a$(op)   b $(op) x") == "a $(op) b $(op) x"
         @test format_string("a$(op)   b  *  x") == "a $(op) b * x"
         @test format_string("a$(op)( b *  x)") == "a $(op) ( b * x)"
         @test format_string("sin(π)$(op)cos(pi)") == "sin(π) $(op) cos(pi)"
+    end
+end
+
+@testset "whitespace in comparison chains" begin
+    for sp in ("", " ", "  ")
+        @test format_string("a$(sp)==$(sp)b") == "a == b"
+        @test format_string("a$(sp)==$(sp)b$(sp)==$(sp)c") == "a == b == c"
+        @test format_string("a$(sp)<=$(sp)b$(sp)==$(sp)c") == "a <= b == c"
+        @test format_string("a$(sp)<=$(sp)b$(sp)>=$(sp)c") == "a <= b >= c"
+        @test format_string("a$(sp)<$(sp)b$(sp)>=$(sp)c") == "a < b >= c"
+        @test format_string("a$(sp)<$(sp)b$(sp)<$(sp)c") == "a < b < c"
     end
 end
 

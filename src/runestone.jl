@@ -143,7 +143,7 @@ end
 # Insert space around `x`, where `x` can be operators, assignments, etc. with the pattern:
 # `<something><space><x><space><something>`, for example the spaces around `+` and `=` in
 # `a = x + y`.
-function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, x::JuliaSyntax.Kind)
+function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) where F
     # TODO: So much boilerplate here...
     @assert JuliaSyntax.haschildren(node)
     # TODO: Can't handle NewlineWs here right now
@@ -239,13 +239,13 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, x::JuliaSynt
                 accept_node!(ctx, child)
                 looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
                 if looking_for_x
-                    @assert JuliaSyntax.kind(child) === x
+                    @assert is_x(child)::Bool
                 end
                 looking_for_x = !looking_for_x
             end
         else # !expect_ws
             if looking_for_x
-                @assert JuliaSyntax.kind(child) === x
+                @assert is_x(child)::Bool
             end
             @assert JuliaSyntax.kind(child) !== K"Whitespace" # This would be weird, I think?
             any_changes && push!(children′, child)
@@ -266,23 +266,22 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, x::JuliaSynt
     end
 end
 
+# This pass handles spaces around infix operator calls and comparison chains
 function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
-    if !(JuliaSyntax.is_infix_op_call(node))
+    if !(
+        JuliaSyntax.is_infix_op_call(node) ||
+        (JuliaSyntax.kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
+    )
         return nothing
     end
-    @assert JuliaSyntax.kind(node) === K"call"
-    # Find the specific operator
-    children = JuliaSyntax.children(node)::AbstractVector
-    start_idx = JuliaSyntax.is_whitespace(first_leaf(node)) ? 3 : 2
-    i = findnext(!JuliaSyntax.is_whitespace, children, start_idx)::Int
-    op = JuliaSyntax.kind(children[i])
-    @assert JuliaSyntax.is_operator(op)
-    return spaces_around_x(ctx, node, op)
+    @assert JuliaSyntax.kind(node) in KSet"call comparison"
+    is_x = x -> is_operator_leaf(x) || is_comparison_leaf(x)
+    return spaces_around_x(ctx, node, is_x)
 end
 
 function spaces_around_assignments(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(is_assignment(node) && !JuliaSyntax.is_trivia(node))
         return nothing
     end
-    return spaces_around_x(ctx, node, JuliaSyntax.kind(node))
+    return spaces_around_x(ctx, node, is_assignment)
 end
