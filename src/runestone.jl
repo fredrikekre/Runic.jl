@@ -308,6 +308,12 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
 
     looking_for_x = false
 
+    # K"::" is a special case here since it can be used without an LHS in e.g. function
+    # definitions like `f(::Int) = ...`.
+    if JuliaSyntax.kind(node) === K"::"
+        looking_for_x = is_x(first_non_whitespace_child(node))::Bool
+    end
+
     for (i, child) in pairs(children)
         span_sum += JuliaSyntax.span(child)
         if (i == 1 || i == length(children)) && JuliaSyntax.kind(child) === K"Whitespace"

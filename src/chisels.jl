@@ -82,3 +82,10 @@ end
 function is_operator_leaf(node::JuliaSyntax.GreenNode)
     return is_leaf(node) && JuliaSyntax.is_operator(node)
 end
+
+function first_non_whitespace_child(node::JuliaSyntax.GreenNode)
+    @assert !is_leaf(node)
+    children = JuliaSyntax.children(node)::AbstractVector
+    idx = findfirst(!JuliaSyntax.is_whitespace, children)::Int
+    return children[idx]
+end

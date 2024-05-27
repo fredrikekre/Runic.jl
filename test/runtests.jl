@@ -171,6 +171,8 @@ end
     @test format_string("a::T") == "a::T"
     @test format_string("a::T::S") == "a::T::S"
     @test format_string("a  ::  T") == "a::T"
+    @test format_string("f(::T)::T = 1") == "f(::T)::T = 1"
+    @test format_string("f(:: T) :: T = 1") == "f(::T)::T = 1"
     # K"<:" and K">:"
     @test format_string("a<:T") == "a <: T"
     @test format_string("a>:T") == "a >: T"
