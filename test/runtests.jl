@@ -130,6 +130,11 @@ end
             "$(sp)(1 + 2):(1 + 3):(1 + 4)$(sp)"
         # a^b
         @test format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "$(sp)a^b$(sp)"
+        # Edgecase when formatting whitespace in the next leaf, when the next leaf is a
+        # grand child or even younger. Note that this test depends a bit on where
+        # JuliaSyntax.jl decides to place the K"Whitespace" node.
+        @test format_string("$(sp)a$(sp)+$(sp)b$(sp)*$(sp)c$(sp)/$(sp)d$(sp)") ==
+            "$(sp)a + b * c / d$(sp)"
     end
 end
 

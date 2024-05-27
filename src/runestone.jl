@@ -209,18 +209,13 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                     any_changes && push!(children′, child)
                 else
                     # Replace the whitespace node of the child
-                    grand_children = JuliaSyntax.children(child)[2:end]
-                    pushfirst!(grand_children, ws)
-                    span′ = mapreduce(JuliaSyntax.span, +, grand_children; init = 0)
-                    @assert span′ == JuliaSyntax.span(child) - JuliaSyntax.span(child_ws) + 1
-                    bytes_to_skip = JuliaSyntax.span(child) - span′
+                    child′ = replace_first_leaf(child, ws)
+                    @assert JuliaSyntax.span(child′) == JuliaSyntax.span(child) - JuliaSyntax.span(child_ws) + 1
+                    bytes_to_skip = JuliaSyntax.span(child) - JuliaSyntax.span(child′)
                     @assert bytes_to_skip > 0
                     remaining_bytes_inclusive =
                         @view original_bytes[(span_sum + 1 + bytes_to_skip - JuliaSyntax.span(child)):end]
                     write_and_reset(ctx, remaining_bytes_inclusive)
-                    child′ = JuliaSyntax.GreenNode(
-                        JuliaSyntax.head(child), span′, grand_children,
-                    )
                     any_changes = true
                     if children′ === children
                         children′ = children[1:i - 1]

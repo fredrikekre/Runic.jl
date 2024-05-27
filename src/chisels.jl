@@ -49,6 +49,18 @@ function first_leaf(node::JuliaSyntax.GreenNode)
     end
 end
 
+function replace_first_leaf(node::JuliaSyntax.GreenNode, child′::JuliaSyntax.GreenNode)
+    if is_leaf(node)
+        return child′
+    else
+        children′ = copy(JuliaSyntax.children(node)::AbstractVector)
+        children′[1] = replace_first_leaf(children′[1], child′)
+        @assert length(children′) > 0
+        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
+        return JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+    end
+end
+
 function last_leaf(node::JuliaSyntax.GreenNode)
     if is_leaf(node)
         return node
