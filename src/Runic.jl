@@ -195,6 +195,7 @@ function format_node!(ctx::Context, node::JuliaSyntax.GreenNode)::Union{JuliaSyn
     @return_something format_float_literals(ctx, node)
     @return_something spaces_around_operators(ctx, node)
     @return_something spaces_around_assignments(ctx, node)
+    @return_something no_spaces_around_colon_etc(ctx, node)
 
     # If the node is unchanged at this point, just keep going.
 

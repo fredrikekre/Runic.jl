@@ -266,7 +266,8 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
     end
 end
 
-# This pass handles spaces around infix operator calls and comparison chains
+# This pass handles spaces around infix operator calls, comparison chains, and
+# <: and >: operators.
 function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(
         (is_infix_op_call(node) && !(JuliaSyntax.kind(infix_op_call_op(node)) in KSet": ^")) ||
@@ -288,4 +289,70 @@ function spaces_around_assignments(ctx::Context, node::JuliaSyntax.GreenNode)
     # include K"in" in the predicate too.
     is_x = x -> is_assignment(x) || JuliaSyntax.kind(x) === K"in"
     return spaces_around_x(ctx, node, is_x)
+end
+
+# Opposite of `spaces_around_x`: remove spaces around `x`
+function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) where F
+    @assert JuliaSyntax.haschildren(node)
+    # TODO: Can't handle NewlineWs here right now
+    if any(JuliaSyntax.kind(c) === K"NewlineWs" for c in JuliaSyntax.children(node))
+        return nothing
+    end
+
+    children = JuliaSyntax.children(node)::AbstractVector
+    children′ = children
+    any_changes = false
+    original_bytes = node_bytes(ctx, node)
+    span_sum = 0
+    pos = position(ctx.fmt_io)
+
+    looking_for_x = false
+
+    for (i, child) in pairs(children)
+        span_sum += JuliaSyntax.span(child)
+        if (i == 1 || i == length(children)) && JuliaSyntax.kind(child) === K"Whitespace"
+            accept_node!(ctx, child)
+            any_changes && push!(children′, child)
+        elseif JuliaSyntax.kind(child) === K"Whitespace"
+            # Ignore it but need to copy children and re-write bytes
+            any_changes = true
+            if children′ === children
+                children′ = children[1:i - 1]
+            end
+            remaining_bytes = @view original_bytes[(span_sum + 1):end]
+            write_and_reset(ctx, remaining_bytes)
+        else
+            @assert JuliaSyntax.kind(child) !== K"Whitespace"
+            if looking_for_x
+                @assert is_x(child)::Bool
+            end
+            any_changes && push!(children′, child)
+            accept_node!(ctx, child)
+            looking_for_x = !looking_for_x
+        end
+    end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    if any_changes
+        # Create new node and return it
+        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
+        @assert span′ < JuliaSyntax.span(node)
+        node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+        return node′
+    else
+        return nothing
+    end
+end
+
+# no spaces around `:`, `^`, and `::`
+function no_spaces_around_colon_etc(ctx::Context, node::JuliaSyntax.GreenNode)
+    if !(
+        (is_infix_op_call(node) && JuliaSyntax.kind(infix_op_call_op(node)) in KSet": ^") ||
+        (JuliaSyntax.kind(node) === K"::" && !is_leaf(node))
+    )
+        return nothing
+    end
+    @assert JuliaSyntax.kind(node) in KSet"call ::"
+    is_x = x -> is_leaf(x) && JuliaSyntax.kind(x) in KSet": ^ ::"
+    return no_spaces_around_x(ctx, node, is_x)
 end

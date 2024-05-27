@@ -116,24 +116,16 @@ end
                 "$(sp)sin(α) $(op) cos(β) $(op) tan(γ)$(sp)"
         end
         # Exceptions to the rule: `:` and `^`
-        if sp == ""
-            # a:b
-            @test format_string("$(sp)a$(sp):$(sp)b$(sp)") == "a:b"
-            @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") == "(1 + 2):(1 + 3)"
-            # a:b:c
-            @test format_string("$(sp)a$(sp):$(sp)b$(sp):$(sp)c$(sp)") == "a:b:c"
-            @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp):$(sp)(1 + 4)$(sp)") ==
-                "(1 + 2):(1 + 3):(1 + 4)"
-            # a^b
-            @test format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "a^b"
-        else
-            @test_broken format_string("$(sp)a$(sp):$(sp)b$(sp)") == "a:b"
-            @test_broken format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") == "(1 + 2):(1 + 3)"
-            @test_broken format_string("$(sp)a$(sp):$(sp)b$(sp):$(sp)c$(sp)") == "a:b:c"
-            @test_broken format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp):$(sp)(1 + 4)$(sp)") ==
-                "(1 + 2):(1 + 3):(1 + 4)"
-            @test_broken format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "a^b"
-        end
+        # a:b
+        @test format_string("$(sp)a$(sp):$(sp)b$(sp)") == "$(sp)a:b$(sp)"
+        @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") ==
+            "$(sp)(1 + 2):(1 + 3)$(sp)"
+        # a:b:c
+        @test format_string("$(sp)a$(sp):$(sp)b$(sp):$(sp)c$(sp)") == "$(sp)a:b:c$(sp)"
+        @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp):$(sp)(1 + 4)$(sp)") ==
+            "$(sp)(1 + 2):(1 + 3):(1 + 4)$(sp)"
+        # a^b
+        @test format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "$(sp)a^b$(sp)"
     end
 end
 
@@ -178,7 +170,7 @@ end
     # K"::"
     @test format_string("a::T") == "a::T"
     @test format_string("a::T::S") == "a::T::S"
-    @test_broken format_string("a  ::  T") == "a::T" # TODO: Eliminate spaces instead
+    @test format_string("a  ::  T") == "a::T"
     # K"<:" and K">:"
     @test format_string("a<:T") == "a <: T"
     @test format_string("a>:T") == "a >: T"
