@@ -159,11 +159,11 @@ end
     @test format_string("a =+ c") == "a = + c"
     # Short form function definitions
     @test format_string("sin(π)=cos(pi)") == "sin(π) = cos(pi)"
-    # For loop nodes are assignment, even when using `in`
-    @test format_string("for i=1:10\nend\n") == "for i = 1:10\nend\n"
-    @test format_string("for i  =1:10\nend\n") == "for i = 1:10\nend\n"
-    @test format_string("for i  =  1:10\nend\n") == "for i = 1:10\nend\n"
-    @test format_string("for i  in  1:10\nend\n") == "for i in 1:10\nend\n"
+    # For loop nodes are assignment, even when using `in` and `∈`
+    for op in ("in", "=", "∈"), sp in ("", " ", "  ")
+        op == "in" && sp == "" && continue
+        @test format_string("for i$(sp)$(op)$(sp)1:10\nend\n") == "for i $(op) 1:10\nend\n"
+    end
 end
 
 @testset "whitespace around <: and >:, no whitespace around ::" begin
