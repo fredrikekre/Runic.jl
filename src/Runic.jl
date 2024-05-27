@@ -5,7 +5,7 @@ module Runic
 using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
-# compat for const fields
+# Julia compat for const struct fields
 @eval macro $(Symbol("const"))(field)
     if VERSION >= v"1.8.0-DEV.1148"
         Expr(:const, esc(field))
@@ -14,7 +14,8 @@ using JuliaSyntax:
     end
 end
 
-include("chisel.jl")
+# JuliaSyntax extensions and other utilities
+include("chisels.jl")
 
 # Return the result of expr if it doesn't evaluate to `nothing`
 macro return_something(expr)
@@ -33,6 +34,7 @@ mutable struct Context
     fmt_tree::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
     # User settings
     verbose::Bool
+    assert::Bool
     debug::Bool
     # Current state
     # node::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
@@ -41,14 +43,17 @@ mutable struct Context
     # parent::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
 end
 
-function Context(src_str; debug::Bool = false, verbose::Bool = debug)
+function Context(src_str; assert::Bool = true, debug::Bool = false, verbose::Bool = debug)
     src_io = IOBuffer(src_str)
     src_tree = JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true)
     fmt_io = IOBuffer()
     fmt_tree = nothing
+    # Debug mode enforces verbose and assert
+    verbose = debug ? true : verbose
+    assert = debug ? true : assert
     return Context(
-        src_str, src_tree, src_io, fmt_io, fmt_tree, verbose, debug,
-        nothing, nothing,
+        src_str, src_tree, src_io, fmt_io, fmt_tree, verbose, assert, debug, nothing,
+        nothing,
     )
 end
 

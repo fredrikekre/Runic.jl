@@ -1,5 +1,42 @@
 # SPDX-License-Identifier: MIT
 
+##############
+# Debug info #
+##############
+
+# @lock is defined but not exported in older Julia versions
+if VERSION < v"1.7.0"
+    using Base: @lock
+end
+
+# Code derived from ToggleableAsserts.jl kept in a separate file
+include("ToggleableAsserts.jl")
+
+abstract type RunicException <: Exception end
+
+struct AssertionError <: RunicException
+    msg::String
+end
+
+function Base.showerror(io::IO, err::AssertionError)
+    print(
+        io,
+        "Runic.AssertionError: `", err.msg, "`. This is unexpected, " *
+        "please file an issue with a reproducible example at " *
+        "https://github.com/fredrikekre/Runic.jl/issues/new.",
+    )
+end
+
+function macroexpand_assert(expr)
+    msg = string(expr)
+    return :($(esc(expr)) || throw(AssertionError($msg)))
+end
+
+
+##########################
+# JuliaSyntax extensions #
+##########################
+
 function is_leaf(node::JuliaSyntax.GreenNode)
     return !JuliaSyntax.haschildren(node)
 end
@@ -23,10 +60,13 @@ end
 function is_assignment(node::JuliaSyntax.GreenNode)
     return JuliaSyntax.is_prec_assignment(node)
 end
+
+# Just like `JuliaSyntax.is_infix_op_call`, but also check that the node is K"call"
 function is_infix_op_call(node::JuliaSyntax.GreenNode)
     return JuliaSyntax.kind(node) === K"call" &&
         JuliaSyntax.is_infix_op_call(node)
 end
+
 function infix_op_call_op(node::JuliaSyntax.GreenNode)
     @assert is_infix_op_call(node)
     children = JuliaSyntax.children(node)::AbstractVector
@@ -34,9 +74,11 @@ function infix_op_call_op(node::JuliaSyntax.GreenNode)
     op_index = findnext(JuliaSyntax.is_operator, children, first_operand_index + 1)
     return children[op_index]
 end
+
 function is_comparison_leaf(node::JuliaSyntax.GreenNode)
     return is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
 end
+
 function is_operator_leaf(node::JuliaSyntax.GreenNode)
     return is_leaf(node) && JuliaSyntax.is_operator(node)
 end
