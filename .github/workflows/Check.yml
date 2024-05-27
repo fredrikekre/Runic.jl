@@ -1,0 +1,53 @@
+name: Code checks
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'release-'
+    tags:
+      - '*'
+  pull_request:
+
+jobs:
+  runic:
+    name: Runic (Julia ${{ matrix.version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.6'
+          - '1.7'
+          - '1.8'
+          - '1.9'
+          - '1'
+          - 'nightly'
+    env:
+      coverage_flag: ${{ (matrix.version == '1.6' || matrix.version == '1.7') && 'user' || '@' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+      - name: Install dependencies
+        run: |
+          julia --project --code-coverage=${{ env.coverage_flag }} -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+      - name: Run Runic
+        run: |
+          julia --project --code-coverage=${{ env.coverage_flag }} -m Runic -i $(git ls-files -- '*.jl')
+        if: ${{ matrix.version == 'nightly' }}
+      - name: Run Runic
+        run: |
+          julia --project --code-coverage=${{ env.coverage_flag }} -e 'using Runic; exit(Runic.main(ARGS))' -- -i $(git ls-files -- '*.jl')
+        if: ${{ matrix.version != 'nightly' }}
+      - name: Check formatting diff
+        run: |
+          git diff --color=always --exit-code
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v4
+        with:
+          file: lcov.info
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
