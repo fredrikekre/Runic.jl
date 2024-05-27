@@ -96,6 +96,7 @@ function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     # Check and shortcut the happy path first
     r = r"""
     ^
+    (?:[+-])?            # Optional sign
     (?:(?:[1-9]\d*)|0)   # Non-zero followed by any digit, or just a single zero
     \.                   # Decimal point
     (?:(?:\d*[1-9])|0)   # Any digit with a final nonzero, or just a single zero
@@ -110,9 +111,13 @@ function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
         return nothing
     end
     # Split up the pieces
-    r = r"^(?<int>\d*)(?:\.?(?<frac>\d*))?(?:(?<epm>[eEf][+-]?)(?<exp>\d+))?$"
+    r = r"^(?<sgn>[+-])?(?<int>\d*)(?:\.?(?<frac>\d*))?(?:(?<epm>[eEf][+-]?)(?<exp>\d+))?$"
     m = match(r, str)
     io = IOBuffer() # TODO: Could be reused?
+    # Write the sign part
+    if (sgn = m[:sgn]; sgn !== nothing)
+        write(io, sgn)
+    end
     # Strip leading zeros from integral part
     int_part = isempty(m[:int]) ? "0" : m[:int]
     int_part = replace(int_part, r"^0*((?:[1-9]\d*)|0)$" => s"\1")

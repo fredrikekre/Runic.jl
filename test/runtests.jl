@@ -79,13 +79,17 @@ end
         ["1f-3", "01f-3", "01.f-3", "1.f-3", "1.000f-3", "01.00f-3"] => "1.0f-3",
     ]
     mod = Module()
-    for (as, b) in test_cases
-        for a in as
-            c = Core.eval(mod, Meta.parse(a))
-            d = Core.eval(mod, Meta.parse(b))
-            @test c == d
-            @test typeof(c) == typeof(d)
-            @test format_string(a) == b
+    for prefix in ("", "-", "+")
+        for (as, b) in test_cases
+            b = prefix * b
+            for a in as
+                a = prefix * a
+                c = Core.eval(mod, Meta.parse(a))
+                d = Core.eval(mod, Meta.parse(b))
+                @test c == d
+                @test typeof(c) == typeof(d)
+                @test format_string(a) == b
+            end
         end
     end
 end
