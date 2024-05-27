@@ -461,9 +461,6 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
 end
 
 include("runestone.jl")
-
-if isdefined(Base, Symbol("@main"))
-    include("main.jl")
-end
+include("main.jl")
 
 end # module

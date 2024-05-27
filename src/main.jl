@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: MIT
 
-errno::Cint = 0
+@static if VERSION >= v"1.8"
+    errno::Cint = 0
+else
+    errno = 0
+end
 
 function panic(msg...)
     printstyled(stderr, "ERROR: "; color = :red, bold = true)
@@ -16,7 +20,7 @@ function panic(msg...)
     return errno
 end
 
-function (@main)(argv)
+function main(argv)
     # Reset errno
     global errno = 0
 
@@ -145,4 +149,8 @@ function (@main)(argv)
     end # inputfile loop
 
     return errno
+end
+
+@static if isdefined(Base, Symbol("@main"))
+    @main
 end
