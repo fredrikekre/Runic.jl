@@ -36,6 +36,8 @@ mutable struct Context
     verbose::Bool
     assert::Bool
     debug::Bool
+    check::Bool
+    diff::Bool
     # Current state
     # node::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
     prev_sibling::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
@@ -43,7 +45,10 @@ mutable struct Context
     # parent::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
 end
 
-function Context(src_str; assert::Bool = true, debug::Bool = false, verbose::Bool = debug)
+function Context(
+        src_str; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
+        diff::Bool = false, check::Bool = false,
+    )
     src_io = IOBuffer(src_str)
     src_tree = JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true)
     fmt_io = IOBuffer()
@@ -52,8 +57,8 @@ function Context(src_str; assert::Bool = true, debug::Bool = false, verbose::Boo
     verbose = debug ? true : verbose
     assert = debug ? true : assert
     return Context(
-        src_str, src_tree, src_io, fmt_io, fmt_tree, verbose, assert, debug, nothing,
-        nothing,
+        src_str, src_tree, src_io, fmt_io, fmt_tree,
+        verbose, assert, debug, check, diff, nothing, nothing,
     )
 end
 

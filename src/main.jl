@@ -20,9 +20,71 @@ function panic(msg...)
     return errno
 end
 
+# Print a typical cli program help message
+function print_help()
+    io = stdout
+    printstyled(io, "NAME\n", bold = true)
+    println(io, "       Runic.main - format Julia source code")
+    println(io)
+    printstyled(io, "SYNOPSIS\n", bold = true)
+    println(io, "       julia -m Runic [<options>] <path>...")
+    println(io)
+    printstyled(io, "DESCRIPTION\n", bold = true)
+    println(io, """
+                `Runic.main` (typically invoked as `julia -m Runic`) formats Julia source
+                code using the Runic.jl formatter.
+         """)
+    printstyled(io, "OPTIONS\n", bold = true)
+    println(io, """
+                <path>...
+                    Input path(s) (files and/or directories) to process. For directories,
+                    all files (recursively) with the '*.jl' suffix are used as input files.
+                    If no path is given, or if path is `-`, input is read from stdin.
+
+                -c, --check
+                    Do not write output and exit with a non-zero code if the input is not
+                    formatted correctly.
+
+                -d, --diff
+                    Print the diff between the input and formatted output to stderr.
+                    Requires `git` or `diff` to be installed.
+
+                --help
+                    Print this message.
+
+                -i, --inplace
+                    Edit files in place. This option is required when passing multiple input
+                    paths.
+
+                -o, --output <file>
+                    Output file to write formatted code to.  If no output file is given, or
+                    if the specified file is `-`, output is written to stdout. This option
+                    can not be used together with multiple input paths.
+         """)
+    return
+end
+
+function maybe_expand_directory!(outfiles, dir)
+    if !isdir(dir)
+        # Assumed a file, checked when using it
+        push!(outfiles, dir)
+        return
+    end
+    for (root, _, files) in walkdir(dir; onerror = (err) -> nothing)
+        for file in files
+            if endswith(file, ".jl")
+                push!(outfiles, joinpath(root, file))
+            end
+        end
+    end
+end
+
 function main(argv)
     # Reset errno
     global errno = 0
+
+    # Split argv entries with `=`
+    argv = mapreduce(x -> split(x, "="; limit = 2), append!, argv; init = String[])
 
     # Default values
     inputfiles = String[]
@@ -30,32 +92,52 @@ function main(argv)
     verbose = false
     debug = false
     inplace = false
+    diff = false
+    check = false
 
     # Parse the arguments
     while length(argv) > 0
         x = popfirst!(argv)
-        if x == "-i"
+        if x == "-i" || x == "--inplace"
             inplace = true
-        elseif x == "-v"
+        elseif x == "-v" || x == "--verbose"
             verbose = true
-        elseif x == "-vv"
+        elseif x == "-d" || x == "--diff"
+            diff = true
+        elseif x == "c" || x == "--check"
+            check = true
+        elseif x == "-vv" || x == "--debug"
             debug = verbose = true
-        elseif x == "-o"
+        elseif x == "-o" || x == "--output"
             if length(argv) < 1
-                return panic("expected output file as argument after `-o`")
+                return panic("expected output file as argument after `-o, --output`")
             end
             outputfile = popfirst!(argv)
         else
             # Remaining arguments must be inputfile(s)
-            push!(inputfiles, x)
+            maybe_expand_directory!(inputfiles, x)
             for x in argv
                 if x == "-"
-                    return panic("input \"-\" can not be used with multiple files")
+                    return panic("input `-` can not be used with multiple files")
+                else
+                    maybe_expand_directory!(inputfiles, x)
                 end
-                push!(inputfiles, x)
             end
             break
         end
+    end
+
+    # one of --check, --diff, --inplace, or --output must be specified
+    if !(inplace || check || diff || outputfile !== nothing)
+        return panic(
+            "at least one of options `-c, --check`, `-d, --diff`, `-i, --inplace`, " *
+            "or `-o, --output` must be specified",
+        )
+    end
+
+    # --check can not be used with --inplace
+    if inplace && check
+        return panic("options `-c, --check` and `-i, --inplace` are mutually exclusive")
     end
 
     # stdin is the default input
@@ -63,22 +145,22 @@ function main(argv)
         push!(inputfiles, "-")
     end
 
-    # multiple files require -i and no -o
+    # multiple files require --inplace or --check and no --output
     if length(inputfiles) > 1
-        if !inplace
-            return panic("option `-i` is required for multiple input files")
+        if !(inplace || check)
+            return panic("option `-i, --inplace` or `-c, --check` is required for multiple input files")
         elseif outputfile !== nothing
-            return panic("option `-o` is incompatible with multiple input files")
+            return panic("option `-o, --output` can not be used together with multiple input files")
         end
     end
 
-    # inplace = true is incompatible with given output
+    # --inplace can not be used when specifying output
     if inplace && outputfile !== nothing
         @assert length(inputfiles) == 1
-        return panic("option `-i` is incompatible with option `-o $(outputfile)`")
+        return panic("options `-i, --inplace` and `-o, --output` are  mutually exclusive")
     end
 
-    # inplace = true is incompatible with stdin as input
+    # --inplace is incompatible with stdin as input
     if inplace && first(inputfiles) == "-"
         return panic("option `-i` is incompatible with stdin as input")
     end
@@ -113,6 +195,9 @@ function main(argv)
             @assert input_is_file
             # @assert length(inputfiles) == 1 # checked above
             output = inputfile
+        elseif check
+            @assert outputfile === nothing
+            output = devnull
         else
             @assert length(inputfiles) == 1
             if outputfile === nothing || outputfile == "-"
@@ -126,7 +211,7 @@ function main(argv)
 
         # Call the library to format the text
         ctx = try
-            ctx = Context(sourcetext; verbose = verbose, debug = debug)
+            ctx = Context(sourcetext; verbose = verbose, debug = debug, diff = diff, check = check)
             format_tree!(ctx)
             ctx
         catch err
@@ -134,9 +219,13 @@ function main(argv)
             continue
         end
 
-        # Write the output, but skip if inplace and it didn't change
+        # Output the result
         changed = ctx.fmt_tree !== ctx.src_tree
-        if changed || !inplace
+        if check
+            if changed
+                global errno = 1
+            end
+        elseif changed || !inplace
             try
                 write(output, take!(ctx.fmt_io))
             catch err
@@ -144,6 +233,9 @@ function main(argv)
             end
         else
             # Log if verbose perhaps
+        end
+        if diff
+            error("todo")
         end
 
     end # inputfile loop
