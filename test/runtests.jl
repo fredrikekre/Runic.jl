@@ -19,13 +19,13 @@ end
     z(n) = "0"^n
     test_cases = [
         # Hex UInt8
-        ("0x" * z(n) * "1" => "0x01" for n in  0:1)...,
+        ("0x" * z(n) * "1" => "0x01" for n in 0:1)...,
         # Hex  UInt16
-        ("0x" * z(n) * "1" => "0x0001" for n in  2:3)...,
+        ("0x" * z(n) * "1" => "0x0001" for n in 2:3)...,
         # Hex  UInt32
-        ("0x" * z(n) * "1" => "0x00000001" for n in  4:7)...,
+        ("0x" * z(n) * "1" => "0x00000001" for n in 4:7)...,
         # Hex  UInt64
-        ("0x" * z(n) * "1" => "0x0000000000000001" for n in  8:15)...,
+        ("0x" * z(n) * "1" => "0x0000000000000001" for n in 8:15)...,
         # Hex UInt128
         ("0x" * z(n) * "1" => "0x" * z(31) * "1" for n in 16:31)...,
         # Hex BigInt
