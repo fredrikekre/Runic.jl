@@ -11,6 +11,8 @@ function panic(msg...)
     for m in msg
         if m isa Exception
             showerror(stderr, m)
+        elseif m isa Vector{Base.StackFrame}
+            Base.show_backtrace(stderr, m)
         else
             print(stderr, msg...)
         end
@@ -19,6 +21,9 @@ function panic(msg...)
     global errno = 1
     return errno
 end
+
+okln() = printstyled(stderr, "✔\n"; color = :green, bold = true)
+errln() = printstyled(stderr, "✖\n"; color = :red, bold = true)
 
 # Print a typical cli program help message
 function print_help()
@@ -89,6 +94,7 @@ function main(argv)
     # Default values
     inputfiles = String[]
     outputfile = nothing
+    quiet = false
     verbose = false
     debug = false
     inplace = false
@@ -100,11 +106,13 @@ function main(argv)
         x = popfirst!(argv)
         if x == "-i" || x == "--inplace"
             inplace = true
+        elseif x == "-q" || x == "--quiet"
+            quiet = true
         elseif x == "-v" || x == "--verbose"
             verbose = true
         elseif x == "-d" || x == "--diff"
             diff = true
-        elseif x == "c" || x == "--check"
+        elseif x == "-c" || x == "--check"
             check = true
         elseif x == "-vv" || x == "--debug"
             debug = verbose = true
@@ -189,12 +197,15 @@ function main(argv)
         end
 
         # Check output
+        output_is_file = false
+        output_is_samefile = false
         if inplace
             @assert outputfile === nothing
             @assert isfile(inputfile)
             @assert input_is_file
             # @assert length(inputfiles) == 1 # checked above
             output = inputfile
+            output_is_samefile = output_is_file = true
         elseif check
             @assert outputfile === nothing
             output = devnull
@@ -206,16 +217,35 @@ function main(argv)
                 return panic("can not use same file for input and output, use `-i` to modify a file in place")
             else
                 output = outputfile
+                output_is_file = true
+            end
+        end
+
+        # Print file info unless quiet and unless stdin and/or stdout is involved
+        print_progress = !(quiet || !input_is_file || !(output_is_file || check))
+
+        # Print file info unless quiet and unless formatting stdin -> stdout
+        if print_progress
+            input_pretty = relpath(inputfile)
+            if check
+                printstyled(stderr, "Checking `$(input_pretty)` ... "; color = :blue)
+            else
+                to = output_is_samefile ? "" : "-> `$(relpath(output))` "
+                printstyled(stderr, "Formatting `$(inputfile)` $(to) ... "; color = :blue)
             end
         end
 
         # Call the library to format the text
         ctx = try
-            ctx = Context(sourcetext; verbose = verbose, debug = debug, diff = diff, check = check)
+            ctx = Context(sourcetext; quiet, verbose, debug, diff, check)
             format_tree!(ctx)
             ctx
         catch err
-            panic(err)
+            print_progress && errln()
+            # Limit stacktrace to 5 frames because Runic uses recursion a lot and 5 should
+            # be enough to see where the error occurred.
+            bt = stacktrace(catch_backtrace())[1:5]
+            panic(err, bt)
             continue
         end
 
@@ -223,16 +253,21 @@ function main(argv)
         changed = ctx.fmt_tree !== ctx.src_tree
         if check
             if changed
+                print_progress && errln()
                 global errno = 1
+            else
+                print_progress && okln()
             end
         elseif changed || !inplace
             try
                 write(output, take!(ctx.fmt_io))
             catch err
+                print_progress && errln()
                 panic("could not write to output: ", err)
             end
+            print_progress && okln()
         else
-            # Log if verbose perhaps
+            print_progress && okln()
         end
         if diff
             error("todo")

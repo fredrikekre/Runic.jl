@@ -33,6 +33,7 @@ mutable struct Context
     @const fmt_io::IOBuffer
     fmt_tree::Union{JuliaSyntax.GreenNode{JuliaSyntax.SyntaxHead}, Nothing}
     # User settings
+    quiet::Bool
     verbose::Bool
     assert::Bool
     debug::Bool
@@ -47,7 +48,7 @@ end
 
 function Context(
         src_str; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
-        diff::Bool = false, check::Bool = false,
+        diff::Bool = false, check::Bool = false, quiet::Bool = false,
     )
     src_io = IOBuffer(src_str)
     src_tree = JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true)
@@ -58,7 +59,7 @@ function Context(
     assert = debug ? true : assert
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree,
-        verbose, assert, debug, check, diff, nothing, nothing,
+        quiet, verbose, assert, debug, check, diff, nothing, nothing,
     )
 end
 
