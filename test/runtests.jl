@@ -157,6 +157,9 @@ end
         @test format_string("a$(sp)<=$(sp)b$(sp)>=$(sp)c") == "a <= b >= c"
         @test format_string("a$(sp)<$(sp)b$(sp)>=$(sp)c") == "a < b >= c"
         @test format_string("a$(sp)<$(sp)b$(sp)<$(sp)c") == "a < b < c"
+        # Dotted chains
+        @test format_string("a$(sp).<=$(sp)b$(sp).>=$(sp)c") == "a .<= b .>= c"
+        @test format_string("a$(sp).<$(sp)b$(sp).<$(sp)c") == "a .< b .< c"
     end
 end
 

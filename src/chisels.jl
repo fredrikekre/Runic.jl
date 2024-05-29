@@ -101,8 +101,16 @@ function infix_op_call_op(node::JuliaSyntax.GreenNode)
     return children[op_index]
 end
 
+# Comparison leaf or a dotted comparison leaf (.<)
 function is_comparison_leaf(node::JuliaSyntax.GreenNode)
-    return is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
+    if is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
+        return true
+    elseif !is_leaf(node) && JuliaSyntax.kind(node) === K"." &&
+        n_children(node) == 2 && is_comparison_leaf(verified_children(node)[2])
+        return true
+    else
+        return false
+    end
 end
 
 function is_operator_leaf(node::JuliaSyntax.GreenNode)
