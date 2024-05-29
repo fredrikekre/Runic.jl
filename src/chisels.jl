@@ -49,6 +49,11 @@ function first_leaf(node::JuliaSyntax.GreenNode)
     end
 end
 
+# Return number of non-whitespace children
+function n_children(node::JuliaSyntax.GreenNode)
+    return is_leaf(node) ? 0 : count(!JuliaSyntax.is_whitespace, verified_children(node))
+end
+
 # This function exist so that we can type-assert the return value to narrow it down from
 # `Union{Tuple{}, Vector{JuliaSyntax.GreenNode}}` to `Vector{JuliaSyntax.GreenNode}`. Must
 # only be called after verifying that the node has children.

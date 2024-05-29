@@ -271,7 +271,7 @@ end
 function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(
         (is_infix_op_call(node) && !(JuliaSyntax.kind(infix_op_call_op(node)) in KSet": ^")) ||
-        (JuliaSyntax.kind(node) in KSet"<: >:" && !is_leaf(node)) ||
+        (JuliaSyntax.kind(node) in KSet"<: >:" && n_children(node) == 3) ||
         (JuliaSyntax.kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
     )
         return nothing
@@ -308,9 +308,9 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
 
     looking_for_x = false
 
-    # K"::" is a special case here since it can be used without an LHS in e.g. function
-    # definitions like `f(::Int) = ...`.
-    if JuliaSyntax.kind(node) === K"::"
+    # K"::", K"<:", and K">:" are special cases here since they can be used without an LHS
+    # in e.g. `f(::Int) = ...` and `Vector{<:Real}`.
+    if JuliaSyntax.kind(node) in KSet":: <: >:"
         looking_for_x = is_x(first_non_whitespace_child(node))::Bool
     end
 
@@ -354,11 +354,12 @@ end
 function no_spaces_around_colon_etc(ctx::Context, node::JuliaSyntax.GreenNode)
     if !(
         (is_infix_op_call(node) && JuliaSyntax.kind(infix_op_call_op(node)) in KSet": ^") ||
-        (JuliaSyntax.kind(node) === K"::" && !is_leaf(node))
+        (JuliaSyntax.kind(node) === K"::" && !is_leaf(node)) ||
+        (JuliaSyntax.kind(node) in KSet"<: >:" && n_children(node) == 2)
     )
         return nothing
     end
-    @assert JuliaSyntax.kind(node) in KSet"call ::"
-    is_x = x -> is_leaf(x) && JuliaSyntax.kind(x) in KSet": ^ ::"
+    @assert JuliaSyntax.kind(node) in KSet"call :: <: >:"
+    is_x = x -> is_leaf(x) && JuliaSyntax.kind(x) in KSet": ^ :: <: >:"
     return no_spaces_around_x(ctx, node, is_x)
 end

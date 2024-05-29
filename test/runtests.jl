@@ -187,17 +187,23 @@ end
 end
 
 @testset "whitespace around <: and >:, no whitespace around ::" begin
-    # K"::"
+    # K"::" with both LHS and RHS
     @test format_string("a::T") == "a::T"
     @test format_string("a::T::S") == "a::T::S"
     @test format_string("a  ::  T") == "a::T"
+    # K"::" with just RHS
     @test format_string("f(::T)::T = 1") == "f(::T)::T = 1"
     @test format_string("f(:: T) :: T = 1") == "f(::T)::T = 1"
-    # K"<:" and K">:"
+    # K"<:" and K">:" with both LHS and RHS
     @test format_string("a<:T") == "a <: T"
     @test format_string("a>:T") == "a >: T"
     @test format_string("a  <:   T") == "a <: T"
     @test format_string("a  >:   T") == "a >: T"
+    # K"<:" and K">:" with just RHS
+    @test format_string("V{<:T}") == "V{<:T}"
+    @test format_string("V{<: T}") == "V{<:T}"
+    @test format_string("V{>:T}") == "V{>:T}"
+    @test format_string("V{>: T}") == "V{>:T}"
     # K"comparison" for chains
     @test format_string("a<:T<:S") == "a <: T <: S"
     @test format_string("a>:T>:S") == "a >: T >: S"
