@@ -203,6 +203,8 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                 # Whitespace found at the beginning of next child.
                 child_ws = first_leaf(child)
                 looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+                @assert !is_x(child)::Bool
+                looking_for_x = true
                 if JuliaSyntax.span(child_ws) == 1
                     # Accept the node
                     accept_node!(ctx, child)
@@ -216,6 +218,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                     remaining_bytes_inclusive =
                         @view original_bytes[(span_sum + 1 + bytes_to_skip - JuliaSyntax.span(child)):end]
                     write_and_reset(ctx, remaining_bytes_inclusive)
+                    accept_node!(ctx, child′)
                     any_changes = true
                     if children′ === children
                         children′ = children[1:i - 1]

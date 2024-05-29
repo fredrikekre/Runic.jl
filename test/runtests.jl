@@ -143,6 +143,9 @@ end
         # JuliaSyntax.jl decides to place the K"Whitespace" node.
         @test format_string("$(sp)a$(sp)+$(sp)b$(sp)*$(sp)c$(sp)/$(sp)d$(sp)") ==
             "$(sp)a + b * c / d$(sp)"
+        # Edgecase when using whitespace from the next leaf but the call chain continues
+        # after with more children.
+        @test format_string("$(sp)z$(sp)+$(sp)2x$(sp)+$(sp)z$(sp)") == "$(sp)z + 2x + z$(sp)"
     end
 end
 
