@@ -1,9 +1,17 @@
 # SPDX-License-Identifier: MIT
 
 using Runic:
-    format_string
+    Runic, format_string
 using Test:
-    @test, @testset, @test_broken
+    @test, @testset, @test_broken, @inferred
+using JuliaSyntax:
+    JuliaSyntax
+
+@testset "Chisels" begin
+    # Type stability of verified_children
+    node = JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n")
+    @test typeof(@inferred Runic.verified_children(node)) <: Vector{<:JuliaSyntax.GreenNode}
+end
 
 @testset "Trailing whitespace" begin
     io = IOBuffer()

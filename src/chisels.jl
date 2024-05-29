@@ -45,15 +45,23 @@ function first_leaf(node::JuliaSyntax.GreenNode)
     if is_leaf(node)
         return node
     else
-        return first_leaf(first(JuliaSyntax.children(node)::AbstractVector))
+        return first_leaf(first(verified_children(node)))
     end
+end
+
+# This function exist so that we can type-assert the return value to narrow it down from
+# `Union{Tuple{}, Vector{JuliaSyntax.GreenNode}}` to `Vector{JuliaSyntax.GreenNode}`. Must
+# only be called after verifying that the node has children.
+function verified_children(node::JuliaSyntax.GreenNode)
+    @assert JuliaSyntax.haschildren(node)
+    return JuliaSyntax.children(node)::AbstractVector
 end
 
 function replace_first_leaf(node::JuliaSyntax.GreenNode, child′::JuliaSyntax.GreenNode)
     if is_leaf(node)
         return child′
     else
-        children′ = copy(JuliaSyntax.children(node)::AbstractVector)
+        children′ = copy(verified_children(node))
         children′[1] = replace_first_leaf(children′[1], child′)
         @assert length(children′) > 0
         span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
@@ -65,12 +73,13 @@ function last_leaf(node::JuliaSyntax.GreenNode)
     if is_leaf(node)
         return node
     else
-        return last_leaf(last(JuliaSyntax.children(node)::AbstractVector))
+        return last_leaf(last(verified_children(node)))
     end
 end
 
 function is_assignment(node::JuliaSyntax.GreenNode)
     return JuliaSyntax.is_prec_assignment(node)
+    return !is_leaf(node) && JuliaSyntax.is_prec_assignment(node)
 end
 
 # Just like `JuliaSyntax.is_infix_op_call`, but also check that the node is K"call"
@@ -81,7 +90,7 @@ end
 
 function infix_op_call_op(node::JuliaSyntax.GreenNode)
     @assert is_infix_op_call(node)
-    children = JuliaSyntax.children(node)::AbstractVector
+    children = verified_children(node)
     first_operand_index = findfirst(!JuliaSyntax.is_whitespace, children)
     op_index = findnext(JuliaSyntax.is_operator, children, first_operand_index + 1)
     return children[op_index]
@@ -97,7 +106,7 @@ end
 
 function first_non_whitespace_child(node::JuliaSyntax.GreenNode)
     @assert !is_leaf(node)
-    children = JuliaSyntax.children(node)::AbstractVector
+    children = verified_children(node)
     idx = findfirst(!JuliaSyntax.is_whitespace, children)::Int
     return children[idx]
 end

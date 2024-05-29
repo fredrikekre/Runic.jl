@@ -156,7 +156,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
         return nothing
     end
 
-    children = JuliaSyntax.children(node)::AbstractVector
+    children = verified_children(node)
     children′ = children
     any_changes = false
     original_bytes = node_bytes(ctx, node)
@@ -299,7 +299,7 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
         return nothing
     end
 
-    children = JuliaSyntax.children(node)::AbstractVector
+    children = verified_children(node)
     children′ = children
     any_changes = false
     original_bytes = node_bytes(ctx, node)
