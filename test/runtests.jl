@@ -42,7 +42,7 @@ end
         ("0o" * z(n) * "1" => "0o001" for n in 0:2)...,
         "0o377" => "0o377", # typemax(UInt8)
         # Octal UInt16
-        "0o400"    => "0o000400", # typemax(UInt8) + 1
+        "0o400" => "0o000400", # typemax(UInt8) + 1
         ("0o" * z(n) * "1" => "0o000001" for n in 3:5)...,
         "0o177777" => "0o177777", # typemax(UInt16)
         # Octal UInt32
@@ -126,6 +126,12 @@ end
             # call() op call() op call()
             @test format_string("$(sp)sin(α)$(sp)$(op)$(sp)cos(β)$(sp)$(op)$(sp)tan(γ)$(sp)") ==
                 "$(sp)sin(α) $(op) cos(β) $(op) tan(γ)$(sp)"
+            # a op \n b
+            @test format_string("$(sp)a$(sp)$(op)$(sp)\nb$(sp)") ==
+                "$(sp)a $(op)\nb$(sp)"
+            # a op # comment \n b
+            @test format_string("$(sp)a$(sp)$(op)$(sp)# comment\nb$(sp)") ==
+                "$(sp)a $(op) # comment\nb$(sp)"
         end
         # Exceptions to the rule: `:` and `^`
         # a:b
@@ -146,6 +152,9 @@ end
         # Edgecase when using whitespace from the next leaf but the call chain continues
         # after with more children.
         @test format_string("$(sp)z$(sp)+$(sp)2x$(sp)+$(sp)z$(sp)") == "$(sp)z + 2x + z$(sp)"
+        # Edgecase where the NewlineWs ends up inside the second call in a chain
+        @test format_string("$(sp)a$(sp)\\$(sp)b$(sp)≈ $(sp)\n$(sp)c$(sp)\\$(sp)d$(sp)") ==
+            "$(sp)a \\ b ≈\n$(sp)c \\ d$(sp)"
     end
 end
 

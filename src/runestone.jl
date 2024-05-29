@@ -151,10 +151,6 @@ end
 function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) where F
     # TODO: So much boilerplate here...
     @assert JuliaSyntax.haschildren(node)
-    # TODO: Can't handle NewlineWs here right now
-    if any(JuliaSyntax.kind(c) === K"NewlineWs" for c in JuliaSyntax.children(node))
-        return nothing
-    end
 
     children = verified_children(node)
     children′ = children
@@ -172,12 +168,14 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
 
     for (i, child) in pairs(children)
         span_sum += JuliaSyntax.span(child)
-        if i == 1 && JuliaSyntax.kind(child) === K"Whitespace"
-            # If the first child is whitespace it will be accepted as is even if the span is
-            # larger than one since we don't look behind. The whitespace pass for the parent
-            # node should trim it later (if not already done).
+        if JuliaSyntax.kind(child) === K"NewlineWs" ||
+            (i == 1 && JuliaSyntax.kind(child) === K"Whitespace")
+            # NewlineWs are accepted as is by this pass.
+            # Whitespace is accepted as is if this is the first child even if the span is
+            # larger than we expect since we don't look backwards. It should be cleaned up
+            # by some other pass.
             accept_node!(ctx, child)
-            @assert !any_changes
+            any_changes && push!(children′, child)
             looking_for_whitespace = false
         elseif looking_for_whitespace
             if JuliaSyntax.kind(child) === K"Whitespace" && JuliaSyntax.span(child) == 1
@@ -225,6 +223,14 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                     end
                     push!(children′, child′)
                 end
+            elseif JuliaSyntax.haschildren(child) &&
+                    JuliaSyntax.kind(first_leaf(child)) === K"NewlineWs"
+                # NewlineWs have to be accepted as is
+                accept_node!(ctx, child)
+                any_changes && push!(children′, child)
+                looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
+                @assert !is_x(child)::Bool
+                looking_for_x = true
             else
                 # Not a whitespace node, insert one
                 any_changes = true
@@ -244,7 +250,8 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                 if looking_for_x
                     @assert is_x(child)::Bool
                 end
-                looking_for_x = !looking_for_x
+                # Flip the switch, unless child is a comment
+                looking_for_x = JuliaSyntax.kind(child) === K"Comment" ? looking_for_x : !looking_for_x
             end
         else # !expect_ws
             if looking_for_x
@@ -254,7 +261,8 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
             any_changes && push!(children′, child)
             accept_node!(ctx, child)
             looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
-            looking_for_x = !looking_for_x
+            # Flip the switch, unless child is a comment
+            looking_for_x = JuliaSyntax.kind(child) === K"Comment" ? looking_for_x : !looking_for_x
         end
     end
     # Reset stream
