@@ -173,6 +173,9 @@ end
         op == "in" && sp == "" && continue
         @test format_string("for i$(sp)$(op)$(sp)1:10\nend\n") == "for i $(op) 1:10\nend\n"
     end
+    # Quoted assignment operators
+    @test format_string(":(=)") == ":(=)"
+    @test format_string(":(+=)") == ":(+=)"
 end
 
 @testset "whitespace around <: and >:, no whitespace around ::" begin

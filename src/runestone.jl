@@ -282,7 +282,7 @@ function spaces_around_operators(ctx::Context, node::JuliaSyntax.GreenNode)
 end
 
 function spaces_around_assignments(ctx::Context, node::JuliaSyntax.GreenNode)
-    if !(is_assignment(node) && !JuliaSyntax.is_trivia(node))
+    if !(is_assignment(node) && !is_leaf(node) )
         return nothing
     end
     # for-loop nodes are of kind K"=" even when `in` or `∈` is used so we need to
