@@ -226,11 +226,22 @@ end
     @test format_string("a >:  T   >:    S") == "a >: T >: S"
 end
 
-@testset "replace ∈ and = with in in for loops" begin
+@testset "replace ∈ and = with in in for loops and generators" begin
     for sp in ("", " ", "  "), op in ("∈", "=", "in")
         op == "in" && sp == "" && continue
+        # for loops
         @test format_string("for i$(sp)$(op)$(sp)I\nend") == "for i in I\nend"
         @test format_string("for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J\nend") ==
             "for i in I, j in J\nend"
+        @test format_string("for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K\nend") ==
+            "for i in I, j in J, k in K\nend"
+        # for generators
+        for (l, r) in (("[", "]"), ("(", ")"))
+            @test format_string("$(l)i for i$(sp)$(op)$(sp)I$(r)") == "$(l)i for i in I$(r)"
+            @test format_string("$(l)(i, j) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J$(r)") ==
+                "$(l)(i, j) for i in I, j in J$(r)"
+            @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K$(r)") ==
+                "$(l)(i, j, k) for i in I, j in J, k in K$(r)"
+        end
     end
 end

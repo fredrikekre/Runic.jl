@@ -457,23 +457,26 @@ end
 
 # replace `=` and `∈` with `in` in for-loops
 function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
-    if !(JuliaSyntax.kind(node) === K"for" && !is_leaf(node) && n_children(node) == 4)
+    if !(
+        (JuliaSyntax.kind(node) === K"for" && !is_leaf(node) && n_children(node) == 4) ||
+        (JuliaSyntax.kind(node) === K"generator" && n_children(node) == 3) # TODO: Unsure about 3.
+    )
         return nothing
     end
     pos = position(ctx.fmt_io) # In case a reset is needed later
     bytes = node_bytes(ctx, node)
     children = verified_children(node)
-    for_index = 1
+    for_index = findfirst(c -> JuliaSyntax.kind(c) === K"for" && is_leaf(c), children)::Int
     for_node = children[for_index]
-    # TODO: Could there be whitespace here before the K"for"?
     @assert JuliaSyntax.kind(for_node) === K"for" && JuliaSyntax.span(for_node) == 3 &&
         is_leaf(for_node) && JuliaSyntax.is_trivia(for_node)
-    accept_node!(ctx, for_node)
+    for i in 1:for_index
+        accept_node!(ctx, children[i])
+    end
     # The for loop specification node can be either K"=" or K"cartesian_iterator"
-    for_spec_index = 2
+    for_spec_index = for_index + 1
     for_spec_node = children[for_spec_index]
     @assert JuliaSyntax.kind(for_spec_node) in KSet"= cartesian_iterator"
-    pos_before = position(ctx.fmt_io)
     if JuliaSyntax.kind(for_spec_node) === K"="
         for_spec_node′ = replace_with_in(ctx, for_spec_node)
     else
@@ -485,7 +488,7 @@ function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
         seek(ctx.fmt_io, pos)
         return nothing
     end
-    @assert position(ctx.fmt_io) == pos + JuliaSyntax.span(for_node) + JuliaSyntax.span(for_spec_node′)
+    @assert position(ctx.fmt_io) == pos + mapreduce(JuliaSyntax.span, +, @view(children[1:for_index])) + JuliaSyntax.span(for_spec_node′)
     # Insert the new for spec node
     children′ = copy(children)
     children′[for_spec_index] = for_spec_node′
