@@ -18,7 +18,7 @@ function trim_trailing_whitespace(ctx::Context, node::JuliaSyntax.GreenNode)
         return nothing
     end
     # Write new bytes and reset the stream
-    nb = write_and_reset(ctx, str′)
+    nb = replace_bytes!(ctx, str′, JuliaSyntax.span(node))
     @assert nb != JuliaSyntax.span(node)
     # Create new node and return it
     node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
@@ -43,7 +43,7 @@ function format_hex_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     while length(bytes) < target_spans[i]
         insert!(bytes, 3, '0')
     end
-    nb = write_and_reset(ctx, bytes)
+    nb = replace_bytes!(ctx, bytes, span)
     @assert nb == length(bytes) == target_spans[i]
     # Create new node and return it
     node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
@@ -81,7 +81,7 @@ function format_oct_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     while length(bytes) < target_span
         insert!(bytes, 3, '0')
     end
-    nb = write_and_reset(ctx, bytes)
+    nb = replace_bytes!(ctx, bytes, span)
     @assert nb == length(bytes) == target_span
     # Create new node and return it
     node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
@@ -138,7 +138,7 @@ function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
         write(io, exp_part)
     end
     bytes = take!(io)
-    nb = write_and_reset(ctx, bytes)
+    nb = replace_bytes!(ctx, bytes, JuliaSyntax.span(node))
     @assert nb == length(bytes)
     # Create new node and return it
     node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), nb, ())
@@ -155,8 +155,6 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
     children = verified_children(node)
     children′ = children
     any_changes = false
-    original_bytes = node_bytes(ctx, node)
-    span_sum = 0
     pos = position(ctx.fmt_io)
     ws = JuliaSyntax.GreenNode(
         JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1, (),
@@ -167,7 +165,6 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
     looking_for_x = false
 
     for (i, child) in pairs(children)
-        span_sum += JuliaSyntax.span(child)
         if JuliaSyntax.kind(child) === K"NewlineWs" ||
             (i == 1 && JuliaSyntax.kind(child) === K"Whitespace")
             # NewlineWs are accepted as is by this pass.
@@ -190,11 +187,8 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                     children′ = children[1:i - 1]
                 end
                 push!(children′, ws)
-                write_and_reset(ctx, " ")
+                replace_bytes!(ctx, " ", JuliaSyntax.span(child))
                 accept_node!(ctx, ws)
-                # Re-write bytes for remaining children
-                remaining_bytes = @view original_bytes[(span_sum + 1):end]
-                write_and_reset(ctx, remaining_bytes)
                 looking_for_whitespace = false
             elseif JuliaSyntax.haschildren(child) &&
                     JuliaSyntax.kind(first_leaf(child)) === K"Whitespace"
@@ -213,9 +207,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
                     @assert JuliaSyntax.span(child′) == JuliaSyntax.span(child) - JuliaSyntax.span(child_ws) + 1
                     bytes_to_skip = JuliaSyntax.span(child) - JuliaSyntax.span(child′)
                     @assert bytes_to_skip > 0
-                    remaining_bytes_inclusive =
-                        @view original_bytes[(span_sum + 1 + bytes_to_skip - JuliaSyntax.span(child)):end]
-                    write_and_reset(ctx, remaining_bytes_inclusive)
+                    replace_bytes!(ctx, "", bytes_to_skip)
                     accept_node!(ctx, child′)
                     any_changes = true
                     if children′ === children
@@ -226,25 +218,24 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
             elseif JuliaSyntax.haschildren(child) &&
                     JuliaSyntax.kind(first_leaf(child)) === K"NewlineWs"
                 # NewlineWs have to be accepted as is
+                # @info "     ... childs first leaf is NewlineWs I'll take it"
                 accept_node!(ctx, child)
                 any_changes && push!(children′, child)
                 looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
                 @assert !is_x(child)::Bool
                 looking_for_x = true
             else
+                # @info "     ... no whitespace, inserting" JuliaSyntax.kind(child)
                 # Not a whitespace node, insert one
                 any_changes = true
                 if children′ === children
                     children′ = children[1:i - 1]
                 end
                 push!(children′, ws)
-                write_and_reset(ctx, " ")
+                replace_bytes!(ctx, " ", 0)
                 accept_node!(ctx, ws)
                 # Write and accept the node
                 push!(children′, child)
-                remaining_bytes_inclusive =
-                    @view original_bytes[(span_sum + 1 - JuliaSyntax.span(child)):end]
-                write_and_reset(ctx, remaining_bytes_inclusive)
                 accept_node!(ctx, child)
                 looking_for_whitespace = JuliaSyntax.kind(last_leaf(child)) !== K"Whitespace"
                 if looking_for_x
@@ -313,8 +304,6 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
     children = verified_children(node)
     children′ = children
     any_changes = false
-    original_bytes = node_bytes(ctx, node)
-    span_sum = 0
     pos = position(ctx.fmt_io)
 
     looking_for_x = false
@@ -326,7 +315,6 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
     end
 
     for (i, child) in pairs(children)
-        span_sum += JuliaSyntax.span(child)
         if (i == 1 || i == length(children)) && JuliaSyntax.kind(child) === K"Whitespace"
             accept_node!(ctx, child)
             any_changes && push!(children′, child)
@@ -336,8 +324,7 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
             if children′ === children
                 children′ = children[1:i - 1]
             end
-            remaining_bytes = @view original_bytes[(span_sum + 1):end]
-            write_and_reset(ctx, remaining_bytes)
+            replace_bytes!(ctx, "", JuliaSyntax.span(child))
         else
             @assert JuliaSyntax.kind(child) !== K"Whitespace"
             if looking_for_x
@@ -394,24 +381,18 @@ function replace_with_in(ctx::Context, node::JuliaSyntax.GreenNode)
     @assert JuliaSyntax.kind(in_node) in KSet"∈ ="
     @assert JuliaSyntax.is_trivia(in_node)
     @assert is_leaf(in_node)
-    bytes = node_bytes(ctx, node) # TODO: Need something better...
     # Accept nodes to advance the stream
-    span_sum = 0
     for i in 1:(in_index - 1)
-        span_sum += JuliaSyntax.span(children[i])
         accept_node!(ctx, children[i])
     end
-    span_sum += JuliaSyntax.span(children[in_index])
     # Construct the replacement
-    nb = write_and_reset(ctx, "in")
+    nb = replace_bytes!(ctx, "in", JuliaSyntax.span(in_node))
     in_node′ = JuliaSyntax.GreenNode(
         JuliaSyntax.SyntaxHead(K"in", JuliaSyntax.TRIVIA_FLAG), nb, (),
     )
     accept_node!(ctx, in_node′)
     children′ = copy(children)
     children′[in_index] = in_node′
-    # Write the backed up bytes
-    write_and_reset(ctx, @view(bytes[(span_sum + 1):end]))
     # Accept remaining eq_children
     for i in (in_index + 1):length(children′)
         accept_node!(ctx, children′[i])
@@ -424,10 +405,7 @@ function replace_with_in_cartesian(ctx::Context, node::JuliaSyntax.GreenNode)
     @assert JuliaSyntax.kind(node) === K"cartesian_iterator" && !is_leaf(node)
     children = verified_children(node)
     children′ = children
-    bytes = node_bytes(ctx, node)
-    span_sum = 0
     for (i, child) in pairs(children)
-        span_sum += JuliaSyntax.span(child)
         if JuliaSyntax.kind(child) === K"="
             child′ = replace_with_in(ctx, child)
             if child′ !== nothing
@@ -435,8 +413,6 @@ function replace_with_in_cartesian(ctx::Context, node::JuliaSyntax.GreenNode)
                     children′ = copy(children)
                 end
                 children′[i] = child′
-                # Need to re-write the bytes
-                write_and_reset(ctx, @view(bytes[(span_sum + 1):end]))
             else
                 children′[i] = child
                 accept_node!(ctx, child)
@@ -463,8 +439,7 @@ function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
     )
         return nothing
     end
-    pos = position(ctx.fmt_io) # In case a reset is needed later
-    bytes = node_bytes(ctx, node)
+    pos = position(ctx.fmt_io)
     children = verified_children(node)
     for_index = findfirst(c -> JuliaSyntax.kind(c) === K"for" && is_leaf(c), children)::Int
     for_node = children[for_index]
@@ -484,7 +459,6 @@ function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
         for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)
     end
     if for_spec_node′ === nothing
-        # TODO: reset here? Because we werent' supposed to write "for" above
         seek(ctx.fmt_io, pos)
         return nothing
     end
@@ -492,9 +466,6 @@ function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
     # Insert the new for spec node
     children′ = copy(children)
     children′[for_spec_index] = for_spec_node′
-    # Write the backup bytes
-    span_sum = JuliaSyntax.span(for_node) + JuliaSyntax.span(for_spec_node)
-    write_and_reset(ctx, @view(bytes[(span_sum + 1):end]))
     # At this point the eq node is done, just accept any remaining nodes
     # TODO: Don't need to do this...
     for i in (for_spec_index + 1):length(children′)

@@ -85,13 +85,8 @@ function accept_node!(ctx::Context, node::JuliaSyntax.GreenNode)
     return
 end
 
-# Write formatted thing and reset the output stream
-function write_and_reset(ctx::Context, bytes::Union{String, AbstractVector{UInt8}})
-    fmt_pos = position(ctx.fmt_io)
-    nb = write(ctx.fmt_io, bytes)
-    seek(ctx.fmt_io, fmt_pos)
-    @assert nb == (bytes isa Vector{UInt8} ? length(bytes) : sizeof(bytes))
-    return nb
+function replace_bytes!(ctx::Context, bytes::Union{String, AbstractVector{UInt8}}, sz::Integer)
+    return replace_bytes!(ctx.fmt_io, bytes, Int(sz))
 end
 
 struct NullNode end
@@ -109,11 +104,6 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
     ctx.prev_sibling = nothing
     ctx.next_sibling = nothing
 
-    # A formatted node can have a larger span than the original so we need to backup the
-    # original bytes and keep track of the accumulated span of processed children
-    original_bytes = node_bytes(ctx, node) # TODO: Read into reusable buffer?
-    span_sum = 0
-
     # The new node parts. `children′` aliases `children` and only copied below if any of the
     # nodes change ("copy-on-write").
     head′ = JuliaSyntax.head(node)
@@ -127,7 +117,6 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
         ctx.prev_sibling = get(children′, i - 1, nothing)
         ctx.next_sibling = get(children, i + 1, nothing)
         child′ = child
-        span_sum += JuliaSyntax.span(child)
         this_child_changed = false
         itr = 0
         # Loop until this node reaches a steady state and is accepted
@@ -157,13 +146,6 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
             if (itr += 1) == 1000
                 error("infinite loop?")
             end
-        end
-        if this_child_changed
-            # If the node changed we have to re-write the original bytes for the next
-            # children to the output stream and then reset
-            remaining_bytes = @view original_bytes[(span_sum + 1):end]
-            nb = write_and_reset(ctx, remaining_bytes)
-            @assert nb == length(remaining_bytes)
         end
         any_child_changed |= this_child_changed
         if any_child_changed

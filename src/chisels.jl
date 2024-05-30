@@ -123,3 +123,38 @@ function first_non_whitespace_child(node::JuliaSyntax.GreenNode)
     idx = findfirst(!JuliaSyntax.is_whitespace, children)::Int
     return children[idx]
 end
+
+##########################
+# Utilities for IOBuffer #
+##########################
+
+# Replace bytes for a node at the current position in the IOBuffer. `size` is the current
+# window for the node, i.e. the number of bytes until the next node starts. If `size` is
+# smaller or larger than the length of `bytes` this method will shift the bytes for
+# remaining nodes to the left or right. Return number of written bytes.
+function replace_bytes!(io::IOBuffer, bytes::Union{String, AbstractVector{UInt8}}, size::Int)
+    pos = position(io)
+    nb = (bytes isa AbstractVector{UInt8} ? length(bytes) : sizeof(bytes))
+    if nb == size
+        nw = write(io, bytes)
+        @assert nb == nw
+    else
+        backup = IOBuffer() # TODO: global const (with lock)?
+        seek(io, pos + size)
+        @assert position(io) == pos + size
+        nb_written_to_backup = write(backup, io)
+        seek(io, pos)
+        @assert position(io) == pos
+        nw = write(io, bytes)
+        @assert nb == nw
+        nb_read_from_backup = write(io, seekstart(backup))
+        @assert nb_written_to_backup == nb_read_from_backup
+        truncate(io, position(io))
+    end
+    seek(io, pos)
+    @assert position(io) == pos
+    return nb
+end
+
+replace_bytes!(io::IOBuffer, bytes::Union{String, AbstractVector{UInt8}}, size::Integer) =
+    replace_bytes!(io, bytes, Int(size))

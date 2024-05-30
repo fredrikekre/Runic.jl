@@ -11,6 +11,31 @@ using JuliaSyntax:
     # Type stability of verified_children
     node = JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n")
     @test typeof(@inferred Runic.verified_children(node)) <: Vector{<:JuliaSyntax.GreenNode}
+
+    # replace_bytes!: insert larger
+    io = IOBuffer(); write(io, "abc"); seek(io, 1)
+    p = position(io)
+    Runic.replace_bytes!(io, "xx", 1)
+    @test p == position(io)
+    @test read(io, String) == "xxc"
+    seekstart(io)
+    @test read(io, String) == "axxc"
+    # replace_bytes!: insert smaller
+    io = IOBuffer(); write(io, "abbc"); seek(io, 1)
+    p = position(io)
+    Runic.replace_bytes!(io, "x", 2)
+    @test p == position(io)
+    @test read(io, String) == "xc"
+    seekstart(io)
+    @test read(io, String) == "axc"
+    # replace_bytes!: insert same
+    io = IOBuffer(); write(io, "abc"); seek(io, 1)
+    p = position(io)
+    Runic.replace_bytes!(io, "x", 1)
+    @test p == position(io)
+    @test read(io, String) == "xc"
+    seekstart(io)
+    @test read(io, String) == "axc"
 end
 
 @testset "Trailing whitespace" begin
