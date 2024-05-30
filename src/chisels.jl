@@ -37,6 +37,12 @@ end
 # JuliaSyntax extensions #
 ##########################
 
+# Create a new node with the same head but new children
+function make_node(node::JuliaSyntax.GreenNode, children′::AbstractVector{<:JuliaSyntax.GreenNode})
+    span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
+    return JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+end
+
 function is_leaf(node::JuliaSyntax.GreenNode)
     return !JuliaSyntax.haschildren(node)
 end
@@ -69,8 +75,7 @@ function replace_first_leaf(node::JuliaSyntax.GreenNode, child′::JuliaSyntax.G
         children′ = copy(verified_children(node))
         children′[1] = replace_first_leaf(children′[1], child′)
         @assert length(children′) > 0
-        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
-        return JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+        return make_node(node, children′)
     end
 end
 

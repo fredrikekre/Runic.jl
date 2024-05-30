@@ -106,7 +106,6 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
 
     # The new node parts. `children′` aliases `children` and only copied below if any of the
     # nodes change ("copy-on-write").
-    head′ = JuliaSyntax.head(node)
     children = verified_children(node)
     children′ = children
     any_child_changed = false
@@ -161,8 +160,7 @@ function format_node_with_children!(ctx::Context, node::JuliaSyntax.GreenNode)
     ctx.next_sibling = next_sibling
     # Return a new node if any of the children changed
     if any_child_changed
-        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
-        return JuliaSyntax.GreenNode(head′, span′, children′)
+        return make_node(node, children′)
     else
         return nothing
     end

@@ -260,9 +260,7 @@ function spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) whe
     seek(ctx.fmt_io, pos)
     if any_changes
         # Create new node and return it
-        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
-        node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
-        return node′
+        return make_node(node, children′)
     else
         return nothing
     end
@@ -339,9 +337,8 @@ function no_spaces_around_x(ctx::Context, node::JuliaSyntax.GreenNode, is_x::F) 
     seek(ctx.fmt_io, pos)
     if any_changes
         # Create new node and return it
-        span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
-        @assert span′ < JuliaSyntax.span(node)
-        node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+        node′ = make_node(node, children′)
+        @assert JuliaSyntax.span(node′) < JuliaSyntax.span(node)
         return node′
     else
         return nothing
@@ -397,8 +394,7 @@ function replace_with_in(ctx::Context, node::JuliaSyntax.GreenNode)
     for i in (in_index + 1):length(children′)
         accept_node!(ctx, children′[i])
     end
-    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), mapreduce(JuliaSyntax.span, +, children′; init = 0), children′)
-    return node′
+    return make_node(node, children′)
 end
 
 function replace_with_in_cartesian(ctx::Context, node::JuliaSyntax.GreenNode)
@@ -422,13 +418,10 @@ function replace_with_in_cartesian(ctx::Context, node::JuliaSyntax.GreenNode)
             accept_node!(ctx, child)
         end
     end
-    span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
     if children === children′
-        # No changes
         return nothing
     end
-    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
-    return node′
+    return make_node(node, children′)
 end
 
 # replace `=` and `∈` with `in` in for-loops
@@ -472,9 +465,8 @@ function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
         accept_node!(ctx, children′[i])
     end
     # Construct the full node and return
-    span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
-    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
-    @assert position(ctx.fmt_io) == pos + span′
+    node′ = make_node(node, children′)
+    @assert position(ctx.fmt_io) == pos + JuliaSyntax.span(node′)
     seek(ctx.fmt_io, pos) # reset
     return node′
 end
