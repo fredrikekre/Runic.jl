@@ -1,5 +1,23 @@
 # TODOs, notes, and various thoughts
 
+## TODOs
+ - [ ] `=` and `\in` should be `in` in for loops
+ - [ ] Space after `,` in tuples, function calls, function definitions, `{}` etc.
+ - [ ] No leading/trailing space in tuples etc `( a, b )` -> `(a, b)`
+ - [ ] Disallow putting kwargs before all positional args when calling functions
+ - [ ] Space after `;` in named tuples, keyword arguments (callsite and definitions)
+ - [ ] Indentation
+ - [ ] Trim trailing `;` togheter with ws.
+ - [ ] Whitespace in ternaries
+ - [ ] Parenteses around expressions in `:` operator (e.g. `1 + 2:3` -> `(1 + 2):3)`)
+
+
+## Ideas
+
+- Normalize `1.0e3` -> `1.0e+3`? Normalize `1.0e+3` -> `1.0e3`? Leave alone? I
+  kinda thing it looks clearer with the `+` and for `-` it is necessary anyway
+  so that would make it symmetric.
+
 ## Inconsistencies
 
 - The `spaces_around_operators` rule have the following inconsistencies.
@@ -22,3 +40,10 @@
      a{<:b}                    a{<: b}                          ✖
      a{>:b}                    a{>: b}                          ✖
      ```
+
+## Bad decisions?
+
+ - Space around operators: if there are more, leave alone? This usualy indicate
+   some kind of manual alignment. Perhaps we can align at `=` for connected
+   siblings.
+ - Trimming trailing 0 in floats messes up alignment sometimes.
