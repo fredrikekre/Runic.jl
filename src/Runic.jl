@@ -69,10 +69,11 @@ function next_sibling_kind(ctx::Context)::Union{JuliaSyntax.Kind, Nothing}
 end
 
 # Read the bytes of the current node from the output io
-function node_bytes(ctx, node)
-    pos = mark(ctx.fmt_io)
+function read_bytes(ctx, node)
+    pos = position(ctx.fmt_io)
     bytes = read(ctx.fmt_io, JuliaSyntax.span(node))
-    reset(ctx.fmt_io)
+    @assert length(bytes) == JuliaSyntax.span(node)
+    seek(ctx.fmt_io, pos)
     @assert position(ctx.fmt_io) == pos
     return bytes
 end

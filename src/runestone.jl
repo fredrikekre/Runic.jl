@@ -5,7 +5,7 @@
 function trim_trailing_whitespace(ctx::Context, node::JuliaSyntax.GreenNode)
     JuliaSyntax.kind(node) === K"NewlineWs" || return nothing
     @assert !JuliaSyntax.haschildren(node)
-    str = String(node_bytes(ctx, node))
+    str = String(read_bytes(ctx, node))
     str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
     # If the next sibling is also a NewlineWs we can trim trailing
     # whitespace from this node too
@@ -39,7 +39,7 @@ function format_hex_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     end
     # Insert leading zeros
     i = findfirst(x -> x > span, target_spans)::Int
-    bytes = node_bytes(ctx, node)
+    bytes = read_bytes(ctx, node)
     while length(bytes) < target_spans[i]
         insert!(bytes, 3, '0')
     end
@@ -57,7 +57,7 @@ function format_oct_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     span = JuliaSyntax.span(node)
     @assert span > 2 # 0o prefix + something more
     # Padding depends on the value of the literal...
-    str = String(node_bytes(ctx, node))
+    str = String(read_bytes(ctx, node))
     n = tryparse(UInt128, str)
     if n === nothing
         # Do nothing: BigInt oct literal
@@ -77,7 +77,7 @@ function format_oct_literals(ctx::Context, node::JuliaSyntax.GreenNode)
         return nothing
     end
     # Insert leading zeros
-    bytes = node_bytes(ctx, node)
+    bytes = read_bytes(ctx, node)
     while length(bytes) < target_span
         insert!(bytes, 3, '0')
     end
@@ -92,7 +92,7 @@ function format_float_literals(ctx::Context, node::JuliaSyntax.GreenNode)
     JuliaSyntax.kind(node) in KSet"Float Float32" || return nothing
     @assert JuliaSyntax.flags(node) == 0
     @assert !JuliaSyntax.haschildren(node)
-    str = String(node_bytes(ctx, node))
+    str = String(read_bytes(ctx, node))
     # Check and shortcut the happy path first
     r = r"""
     ^
