@@ -194,7 +194,7 @@ end
     # For loop nodes are assignment, even when using `in` and `∈`
     for op in ("in", "=", "∈"), sp in ("", " ", "  ")
         op == "in" && sp == "" && continue
-        @test format_string("for i$(sp)$(op)$(sp)1:10\nend\n") == "for i $(op) 1:10\nend\n"
+        @test format_string("for i$(sp)$(op)$(sp)1:10\nend\n") == "for i in 1:10\nend\n"
     end
     # Quoted assignment operators
     @test format_string(":(=)") == ":(=)"
@@ -224,4 +224,13 @@ end
     @test format_string("a>:T>:S") == "a >: T >: S"
     @test format_string("a <:  T   <:    S") == "a <: T <: S"
     @test format_string("a >:  T   >:    S") == "a >: T >: S"
+end
+
+@testset "replace ∈ and = with in in for loops" begin
+    for sp in ("", " ", "  "), op in ("∈", "=", "in")
+        op == "in" && sp == "" && continue
+        @test format_string("for i$(sp)$(op)$(sp)I\nend") == "for i in I\nend"
+        @test format_string("for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J\nend") ==
+            "for i in I, j in J\nend"
+    end
 end

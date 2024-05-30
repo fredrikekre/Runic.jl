@@ -374,3 +374,133 @@ function no_spaces_around_colon_etc(ctx::Context, node::JuliaSyntax.GreenNode)
     is_x = x -> is_leaf(x) && JuliaSyntax.kind(x) in KSet": ^ :: <: >:"
     return no_spaces_around_x(ctx, node, is_x)
 end
+
+# Replace the K"=" operator with `in`
+function replace_with_in(ctx::Context, node::JuliaSyntax.GreenNode)
+    @assert JuliaSyntax.kind(node) === K"=" && !is_leaf(node) && n_children(node) == 3
+    children = verified_children(node)
+    vars_index = findfirst(!JuliaSyntax.is_whitespace, children)
+    # TODO: Need to insert whitespaces around `in` when replacing e.g. `i=I` with `iinI`.
+    # However, at the moment it looks like the whitespace around operator pass does it's
+    # thing first? I don't really know how though, because the for loop pass should be
+    # happening before...
+    in_index = findnext(!JuliaSyntax.is_whitespace, children, vars_index + 1)
+    in_node = children[in_index]
+    if JuliaSyntax.kind(in_node) === K"in"
+        @assert JuliaSyntax.is_trivia(in_node)
+        @assert is_leaf(in_node)
+        return nothing
+    end
+    @assert JuliaSyntax.kind(in_node) in KSet"∈ ="
+    @assert JuliaSyntax.is_trivia(in_node)
+    @assert is_leaf(in_node)
+    bytes = node_bytes(ctx, node) # TODO: Need something better...
+    # Accept nodes to advance the stream
+    span_sum = 0
+    for i in 1:(in_index - 1)
+        span_sum += JuliaSyntax.span(children[i])
+        accept_node!(ctx, children[i])
+    end
+    span_sum += JuliaSyntax.span(children[in_index])
+    # Construct the replacement
+    nb = write_and_reset(ctx, "in")
+    in_node′ = JuliaSyntax.GreenNode(
+        JuliaSyntax.SyntaxHead(K"in", JuliaSyntax.TRIVIA_FLAG), nb, (),
+    )
+    accept_node!(ctx, in_node′)
+    children′ = copy(children)
+    children′[in_index] = in_node′
+    # Write the backed up bytes
+    write_and_reset(ctx, @view(bytes[(span_sum + 1):end]))
+    # Accept remaining eq_children
+    for i in (in_index + 1):length(children′)
+        accept_node!(ctx, children′[i])
+    end
+    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), mapreduce(JuliaSyntax.span, +, children′; init = 0), children′)
+    return node′
+end
+
+function replace_with_in_cartesian(ctx::Context, node::JuliaSyntax.GreenNode)
+    @assert JuliaSyntax.kind(node) === K"cartesian_iterator" && !is_leaf(node)
+    children = verified_children(node)
+    children′ = children
+    bytes = node_bytes(ctx, node)
+    span_sum = 0
+    for (i, child) in pairs(children)
+        span_sum += JuliaSyntax.span(child)
+        if JuliaSyntax.kind(child) === K"="
+            child′ = replace_with_in(ctx, child)
+            if child′ !== nothing
+                if children′ === children
+                    children′ = copy(children)
+                end
+                children′[i] = child′
+                # Need to re-write the bytes
+                write_and_reset(ctx, @view(bytes[(span_sum + 1):end]))
+            else
+                children′[i] = child
+                accept_node!(ctx, child)
+            end
+        else
+            children′[i] = child
+            accept_node!(ctx, child)
+        end
+    end
+    span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
+    if children === children′
+        # No changes
+        return nothing
+    end
+    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+    return node′
+end
+
+# replace `=` and `∈` with `in` in for-loops
+function for_loop_use_in(ctx::Context, node::JuliaSyntax.GreenNode)
+    if !(JuliaSyntax.kind(node) === K"for" && !is_leaf(node) && n_children(node) == 4)
+        return nothing
+    end
+    pos = position(ctx.fmt_io) # In case a reset is needed later
+    bytes = node_bytes(ctx, node)
+    children = verified_children(node)
+    for_index = 1
+    for_node = children[for_index]
+    # TODO: Could there be whitespace here before the K"for"?
+    @assert JuliaSyntax.kind(for_node) === K"for" && JuliaSyntax.span(for_node) == 3 &&
+        is_leaf(for_node) && JuliaSyntax.is_trivia(for_node)
+    accept_node!(ctx, for_node)
+    # The for loop specification node can be either K"=" or K"cartesian_iterator"
+    for_spec_index = 2
+    for_spec_node = children[for_spec_index]
+    @assert JuliaSyntax.kind(for_spec_node) in KSet"= cartesian_iterator"
+    pos_before = position(ctx.fmt_io)
+    if JuliaSyntax.kind(for_spec_node) === K"="
+        for_spec_node′ = replace_with_in(ctx, for_spec_node)
+    else
+        @assert JuliaSyntax.kind(for_spec_node) === K"cartesian_iterator"
+        for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)
+    end
+    if for_spec_node′ === nothing
+        # TODO: reset here? Because we werent' supposed to write "for" above
+        seek(ctx.fmt_io, pos)
+        return nothing
+    end
+    @assert position(ctx.fmt_io) == pos + JuliaSyntax.span(for_node) + JuliaSyntax.span(for_spec_node′)
+    # Insert the new for spec node
+    children′ = copy(children)
+    children′[for_spec_index] = for_spec_node′
+    # Write the backup bytes
+    span_sum = JuliaSyntax.span(for_node) + JuliaSyntax.span(for_spec_node)
+    write_and_reset(ctx, @view(bytes[(span_sum + 1):end]))
+    # At this point the eq node is done, just accept any remaining nodes
+    # TODO: Don't need to do this...
+    for i in (for_spec_index + 1):length(children′)
+        accept_node!(ctx, children′[i])
+    end
+    # Construct the full node and return
+    span′ = mapreduce(JuliaSyntax.span, +, children′; init = 0)
+    node′ = JuliaSyntax.GreenNode(JuliaSyntax.head(node), span′, children′)
+    @assert position(ctx.fmt_io) == pos + span′
+    seek(ctx.fmt_io, pos) # reset
+    return node′
+end
