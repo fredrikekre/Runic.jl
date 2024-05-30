@@ -228,10 +228,16 @@ function main(argv)
         if print_progress
             input_pretty = relpath(inputfile)
             if check
-                printstyled(stderr, "Checking `$(input_pretty)` ... "; color = :blue)
+                str = "Checking `$(input_pretty)` "
+                ndots = 80 - textwidth(str) - 1 - 1
+                dots = ndots > 0 ? "."^ndots : ""
+                printstyled(stderr, str, dots, " "; color = :blue)
             else
-                to = output_is_samefile ? "" : "-> `$(relpath(output))` "
-                printstyled(stderr, "Formatting `$(inputfile)` $(to) ... "; color = :blue)
+                to = output_is_samefile ? " " : " -> `$(relpath(output))` "
+                str = "Formatting `$(inputfile)`$(to)"
+                ndots = 80 - textwidth(str) - 1 - 1
+                dots = ndots > 0 ? "."^ndots : ""
+                printstyled(stderr, str, dots, " "; color = :blue)
             end
         end
 
