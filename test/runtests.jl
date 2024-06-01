@@ -7,10 +7,11 @@ using Test:
 using JuliaSyntax:
     JuliaSyntax
 
-@testset "Chisels" begin
-    # Type stability of verified_kids
+@testset "Node" begin
     node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))
-    @test typeof(@inferred Runic.verified_kids(node)) === Vector{Runic.Node}
+
+    # Pretty-printing
+    @test sprint(show, node) == "Node({head: {kind: K\"toplevel\", flags: \"0\"}, span: 10})"
 
     # JuliaSyntax duck-typing
     for n in (node, Runic.verified_kids(node)...,)
@@ -19,6 +20,12 @@ using JuliaSyntax:
         @test Runic.flags(n) === JuliaSyntax.flags(n) === n.head.flags
         @test Runic.span(n) === JuliaSyntax.span(n) === n.span
     end
+end
+
+@testset "Chisels" begin
+    # Type stability of verified_kids
+    node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))
+    @test typeof(@inferred Runic.verified_kids(node)) === Vector{Runic.Node}
 
     # replace_bytes!: insert larger
     io = IOBuffer(); write(io, "abc"); seek(io, 1)

@@ -39,6 +39,13 @@ function Node(node::JuliaSyntax.GreenNode)
     )
 end
 
+function Base.show(io::IO, node::Node)
+    print(io, "Node({head: {kind: ")
+    show(io, kind(node))
+    print(io, ", flags: \"$(flags(node))\"}, span: $(span(node))})")
+    return nothing
+end
+
 # Defining these allow using many duck-typed methods in JuliaSyntax directly without having
 # to re-package a Node as a GreenNode.
 JuliaSyntax.head(node::Node) = head(node)
