@@ -4,10 +4,90 @@
 # Node utilities extensions and JuliaSyntax extensions #
 ########################################################
 
+# See JuliaSyntax/src/parse_stream.jl
+function stringify_flags(node::Node)
+    io = IOBuffer()
+    if JuliaSyntax.has_flags(node, JuliaSyntax.TRIVIA_FLAG)
+        write(io, "trivia,")
+    end
+    if JuliaSyntax.is_operator(kind(node))
+        if JuliaSyntax.has_flags(node, JuliaSyntax.DOTOP_FLAG)
+            write(io, "dotted,")
+        end
+        if JuliaSyntax.has_flags(node, JuliaSyntax.SUFFIXED_FLAG)
+            write(io, "suffixed,")
+        end
+    end
+    if kind(node) in KSet"call dotcall"
+        if JuliaSyntax.has_flags(node, JuliaSyntax.PREFIX_CALL_FLAG)
+            write(io, "prefix-call,")
+        end
+        if JuliaSyntax.has_flags(node, JuliaSyntax.INFIX_FLAG)
+            write(io, "infix-op,")
+        end
+        if JuliaSyntax.has_flags(node, JuliaSyntax.PREFIX_OP_FLAG)
+            write(io, "prefix-op,")
+        end
+        if JuliaSyntax.has_flags(node, JuliaSyntax.POSTFIX_OP_FLAG)
+            write(io, "postfix-op,")
+        end
+    end
+    if kind(node) in KSet"string cmdstring" &&
+            JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG)
+        write(io, "triple,")
+    end
+    if kind(node) in KSet"string cmdstring Identifier" &&
+            JuliaSyntax.has_flags(node, JuliaSyntax.RAW_STRING_FLAG)
+        write(io, "raw,")
+    end
+    if kind(node) in KSet"tuple block macrocall" &&
+            JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
+        write(io, "parens,")
+    end
+    if kind(node) === K"quote" && JuliaSyntax.has_flags(node, JuliaSyntax.COLON_QUOTE)
+        write(io, "colon,")
+    end
+    if kind(node) === K"toplevel" && JuliaSyntax.has_flags(node, JuliaSyntax.TOPLEVEL_SEMICOLONS_FLAG)
+        write(io, "semicolons,")
+    end
+    if kind(node) === K"struct" && JuliaSyntax.has_flags(node, JuliaSyntax.MUTABLE_FLAG)
+        write(io, "mutable,")
+    end
+    if kind(node) === K"module" && JuliaSyntax.has_flags(node, JuliaSyntax.BARE_MODULE_FLAG)
+        write(io, "baremodule,")
+    end
+    truncate(io, max(0, position(io) - 1)) # Remove trailing comma
+    return String(take!(io))
+end
+
+
+# Node tags #
+
+# This node is responsible for incrementing the indentation level
+const TAG_INDENT = TagType(1) << 0
+# This node is responsible for decrementing the indentation level
+const TAG_DEDENT = TagType(1) << 1
+
+function has_tag(node::Node, tag::TagType)
+    return node.tags & tag != 0
+end
+
+function stringify_tags(node::Node)
+    io = IOBuffer()
+    if has_tag(node, TAG_INDENT)
+        write(io, "indent,")
+    end
+    if has_tag(node, TAG_DEDENT)
+        write(io, "dedent,")
+    end
+    truncate(io, max(0, position(io) - 1)) # Remove trailing comma
+    return String(take!(io))
+end
+
 # Create a new node with the same head but new kids
-function make_node(node::Node, kids′::Vector{Node})
+function make_node(node::Node, kids′::Vector{Node}, tags = TagType(0))
     span′ = mapreduce(span, +, kids′; init = 0)
-    return Node(head(node), span′, kids′)
+    return Node(head(node), span′, kids′, tags)
 end
 
 function first_leaf(node::Node)

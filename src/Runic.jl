@@ -21,6 +21,8 @@ include("debug.jl")
 # Node #
 ########
 
+const TagType = UInt32
+
 # This is essentially just a re-packed `JuliaSyntax.GreenNode`.
 struct Node
     # The next three fields directly match JuliaSyntax.GreenNode. We can not store a
@@ -29,20 +31,27 @@ struct Node
     head::JuliaSyntax.SyntaxHead
     span::UInt32
     kids::Union{Tuple{}, Vector{Node}}
+    # Metadata for the formatter
+    tags::TagType
+end
+
+function Node(head::JuliaSyntax.SyntaxHead, span::Integer)
+    return Node(head, span % UInt32, (), 0 % TagType)
 end
 
 # Re-package a GreenNode as a Node
 function Node(node::JuliaSyntax.GreenNode)
+    tags = 0 % TagType
     return Node(
         JuliaSyntax.head(node), JuliaSyntax.span(node),
-        map(Node, JuliaSyntax.children(node)),
+        map(Node, JuliaSyntax.children(node)), tags,
     )
 end
 
 function Base.show(io::IO, node::Node)
     print(io, "Node({head: {kind: ")
     show(io, kind(node))
-    print(io, ", flags: \"$(flags(node))\"}, span: $(span(node))})")
+    print(io, ", flags: \"$(stringify_flags(node))\"}, span: $(span(node)), tags: \"$(stringify_tags(node))\"})")
     return nothing
 end
 

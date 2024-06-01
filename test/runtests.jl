@@ -11,7 +11,7 @@ using JuliaSyntax:
     node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))
 
     # Pretty-printing
-    @test sprint(show, node) == "Node({head: {kind: K\"toplevel\", flags: \"0\"}, span: 10})"
+    @test sprint(show, node) == "Node({head: {kind: K\"toplevel\", flags: \"\"}, span: 10, tags: \"\"})"
 
     # JuliaSyntax duck-typing
     for n in (node, Runic.verified_kids(node)...,)

@@ -25,7 +25,7 @@ function trim_trailing_whitespace(ctx::Context, node::Node)
     nb = replace_bytes!(ctx, str′, span(node))
     @assert nb != span(node)
     # Create new node and return it
-    node′ = Node(head(node), nb, ())
+    node′ = Node(head(node), nb)
     return node′
 end
 
@@ -50,7 +50,7 @@ function format_hex_literals(ctx::Context, node::Node)
     nb = replace_bytes!(ctx, bytes, spn)
     @assert nb == length(bytes) == target_spans[i]
     # Create new node and return it
-    node′ = Node(head(node), nb, ())
+    node′ = Node(head(node), nb)
     return node′
 end
 
@@ -88,7 +88,7 @@ function format_oct_literals(ctx::Context, node::Node)
     nb = replace_bytes!(ctx, bytes, spn)
     @assert nb == length(bytes) == target_span
     # Create new node and return it
-    node′ = Node(head(node), nb, ())
+    node′ = Node(head(node), nb)
     return node′
 end
 
@@ -145,7 +145,7 @@ function format_float_literals(ctx::Context, node::Node)
     nb = replace_bytes!(ctx, bytes, span(node))
     @assert nb == length(bytes)
     # Create new node and return it
-    node′ = Node(head(node), nb, ())
+    node′ = Node(head(node), nb)
     return node′
 end
 
@@ -160,7 +160,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F) where F
     kids′ = kids
     any_changes = false
     pos = position(ctx.fmt_io)
-    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1, ())
+    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
 
     # Toggle for whether we are currently looking for whitespace or not
     looking_for_whitespace = false
@@ -385,7 +385,7 @@ function replace_with_in(ctx::Context, node::Node)
     # Construct the replacement
     nb = replace_bytes!(ctx, "in", span(in_node))
     in_node′ = Node(
-        JuliaSyntax.SyntaxHead(K"in", JuliaSyntax.TRIVIA_FLAG), nb, (),
+        JuliaSyntax.SyntaxHead(K"in", JuliaSyntax.TRIVIA_FLAG), nb,
     )
     accept_node!(ctx, in_node′)
     kids′ = copy(kids)
