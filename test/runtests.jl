@@ -8,9 +8,17 @@ using JuliaSyntax:
     JuliaSyntax
 
 @testset "Chisels" begin
-    # Type stability of verified_children
-    node = JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n")
-    @test typeof(@inferred Runic.verified_children(node)) <: Vector{<:JuliaSyntax.GreenNode}
+    # Type stability of verified_kids
+    node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))
+    @test typeof(@inferred Runic.verified_kids(node)) === Vector{Runic.Node}
+
+    # JuliaSyntax duck-typing
+    for n in (node, Runic.verified_kids(node)...,)
+        @test Runic.head(n) === JuliaSyntax.head(n) === n.head
+        @test Runic.kind(n) === JuliaSyntax.kind(n) === n.head.kind
+        @test Runic.flags(n) === JuliaSyntax.flags(n) === n.head.flags
+        @test Runic.span(n) === JuliaSyntax.span(n) === n.span
+    end
 
     # replace_bytes!: insert larger
     io = IOBuffer(); write(io, "abc"); seek(io, 1)
