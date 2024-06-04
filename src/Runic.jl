@@ -125,6 +125,16 @@ function Context(
     )
     fmt_io = IOBuffer()
     fmt_tree = nothing
+    # Set up buffers
+    src_pos = position(src_io)
+    @assert src_pos == 0
+    fmt_pos = position(fmt_io)
+    @assert fmt_pos == 0
+    nb = write(fmt_io, read(src_io, span(src_tree)))
+    @assert nb == span(src_tree)
+    # Reset IO positions to the beginning
+    seek(src_io, src_pos)
+    seek(fmt_io, fmt_pos)
     # Debug mode enforces verbose and assert
     verbose = debug ? true : verbose
     assert = debug ? true : assert
@@ -440,16 +450,10 @@ end
 # Entrypoint
 function format_tree!(ctx::Context)
     root = ctx.src_tree
-    # Write the root node to the output IO so that the formatter can read it if needed
-    src_pos = position(ctx.src_io)
-    @assert src_pos == 0
+    # Verify buffers
+    @assert position(ctx.src_io) == 0
     fmt_pos = position(ctx.fmt_io)
     @assert fmt_pos == 0
-    nb = write(ctx.fmt_io, read(ctx.src_io, span(root)))
-    @assert nb == span(root)
-    # Reset IOs so that the offsets are correct
-    seek(ctx.src_io, src_pos)
-    seek(ctx.fmt_io, fmt_pos)
     # Set the root to the current node
     root′ = root
     itr = 0

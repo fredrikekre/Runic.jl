@@ -173,6 +173,15 @@ function main(argv)
         return panic("option `-i` is incompatible with stdin as input")
     end
 
+    # --diff currently requires git
+    git = nothing
+    if diff
+        git = Sys.which("git")
+        if git === nothing
+            return panic("option `-d, --diff` requires `git` to be installed")
+        end
+    end
+
     # Loop over the input files
     for inputfile in inputfiles
         # Read the input
@@ -266,7 +275,7 @@ function main(argv)
             end
         elseif changed || !inplace
             try
-                write(output, take!(ctx.fmt_io))
+                write(output, seekstart(ctx.fmt_io))
             catch err
                 print_progress && errln()
                 panic("could not write to output: ", err)
@@ -276,7 +285,15 @@ function main(argv)
             print_progress && okln()
         end
         if diff
-            error("todo")
+            mktempdir() do dir
+                A = joinpath(dir, "A.jl")
+                B = joinpath(dir, "B.jl")
+                write(A, ctx.src_str)
+                write(B, seekstart(ctx.fmt_io))
+                # ignorestatus because --no-index implies --exit-code
+                cmd = `$(git) --no-pager diff --no-index --color=always A.jl B.jl`
+                run(setenv(ignorestatus(cmd); dir = dir))
+            end
         end
 
     end # inputfile loop
