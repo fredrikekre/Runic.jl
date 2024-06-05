@@ -4,6 +4,12 @@
 # Node utilities extensions and JuliaSyntax extensions #
 ########################################################
 
+# JuliaSyntax.jl overloads == for this but seems easier to just define a new function
+function nodes_equal(n1::Node, n2::Node)
+    return head(n1) == head(n2) && span(n1) == span(n2) && n1.tags == n2.tags &&
+        all(((x, y),) -> nodes_equal(x, y), zip(n1.kids, n2.kids))
+end
+
 # See JuliaSyntax/src/parse_stream.jl
 function stringify_flags(node::Node)
     io = IOBuffer()
@@ -67,6 +73,87 @@ end
 const TAG_INDENT = TagType(1) << 0
 # This node is responsible for decrementing the indentation level
 const TAG_DEDENT = TagType(1) << 1
+# This (NewlineWs) node is the last one before a TAG_DEDENT
+const TAG_PRE_DEDENT = TagType(1) << 2
+# This (NewlineWs) node is a line continuation
+const TAG_LINE_CONT = UInt32(1) << 31
+
+function add_tag(node::Node, tag::TagType)
+    @assert is_leaf(node)
+    return Node(head(node), span(node), node.kids, node.tags | tag)
+end
+
+# Tags all leading NewlineWs nodes as continuation nodes. Note that comments are skipped
+# over so that cases like `\n#comment\ncode` works as expected.
+function continue_newlines(node::Node; leading::Bool = true, trailing::Bool = true)
+    if is_leaf(node)
+        if kind(node) === K"NewlineWs" && !has_tag(node, TAG_LINE_CONT)
+            return add_tag(node, TAG_LINE_CONT)
+        else
+            return nothing
+        end
+    end
+    kids = verified_kids(node)
+    if length(kids) == 1
+        return nothing
+    end
+    any_kid_changed = false
+    if leading
+        idx = firstindex(kids) - 1
+        while true
+            # Skip over whitespace + comments which can mask the newlines
+            idx = findnext(x -> !(kind(x) in KSet"Whitespace Comment"), kids, idx + 1)
+            if idx === nothing
+                # No matching kid found
+                break
+            elseif kind(kids[idx]) === K"NewlineWs"
+                # Kid is a NewlineWs node, tag and keep looking
+                kid′ = continue_newlines(kids[idx]; leading = leading, trailing = trailing)
+                if kid′ !== nothing
+                    kids[idx] = kid′
+                    any_kid_changed = false
+                end
+            else
+                # This kid is not Whitespace, Comment or NewlineWs.
+                # Recurse but break out of the loop
+                kid′ = continue_newlines(kids[idx]; leading = leading, trailing = trailing)
+                if kid′ !== nothing
+                    kids[idx] = kid′
+                    any_kid_changed = false
+                end
+                break
+            end
+        end
+    end
+    if trailing
+        idx = lastindex(kids) + 1
+        while true
+            # Skip over whitespace + comments which can mask the newlines
+            idx = findprev(x -> !(kind(x) in KSet"Whitespace Comment"), kids, idx - 1)
+            if idx === nothing
+                # No matching kid found
+                break
+            elseif kind(kids[idx]) === K"NewlineWs"
+                # Kid is a NewlineWs node, tag and keep looking
+                kid′ = continue_newlines(kids[idx]; leading = leading, trailing = trailing)
+                if kid′ !== nothing
+                    kids[idx] = kid′
+                    any_kid_changed = false
+                end
+            else
+                # This kid is not Whitespace, Comment or NewlineWs.
+                # Recurse but break out of the loop
+                kid′ = continue_newlines(kids[idx]; leading = leading, trailing = trailing)
+                if kid′ !== nothing
+                    kids[idx] = kid′
+                    any_kid_changed = false
+                end
+                break
+            end
+        end
+    end
+    return any_kid_changed ? node : nothing
+end
 
 function has_tag(node::Node, tag::TagType)
     return node.tags & tag != 0
@@ -80,12 +167,18 @@ function stringify_tags(node::Node)
     if has_tag(node, TAG_DEDENT)
         write(io, "dedent,")
     end
+    if has_tag(node, TAG_PRE_DEDENT)
+        write(io, "pre-dedent,")
+    end
+    if has_tag(node, TAG_LINE_CONT)
+        write(io, "line-cont.,")
+    end
     truncate(io, max(0, position(io) - 1)) # Remove trailing comma
     return String(take!(io))
 end
 
 # Create a new node with the same head but new kids
-function make_node(node::Node, kids′::Vector{Node}, tags = TagType(0))
+function make_node(node::Node, kids′::Vector{Node}, tags = node.tags)
     span′ = mapreduce(span, +, kids′; init = 0)
     return Node(head(node), span′, kids′, tags)
 end
@@ -135,7 +228,7 @@ end
 
 # Extract the operator of an infix op call node
 function infix_op_call_op(node::Node)
-    @assert is_infix_op_call(node)
+    @assert is_infix_op_call(node) || kind(node) === K"||"
     kids = verified_kids(node)
     first_operand_index = findfirst(!JuliaSyntax.is_whitespace, kids)
     op_index = findnext(JuliaSyntax.is_operator, kids, first_operand_index + 1)
@@ -147,7 +240,7 @@ function is_comparison_leaf(node::Node)
     if is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
         return true
     elseif !is_leaf(node) && kind(node) === K"." &&
-        meta_nargs(node) == 2 && is_comparison_leaf(verified_kids(node)[2])
+            meta_nargs(node) == 2 && is_comparison_leaf(verified_kids(node)[2])
         return true
     else
         return false
@@ -163,6 +256,15 @@ function first_non_whitespace_kid(node::Node)
     kids = verified_kids(node)
     idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     return kids[idx]
+end
+
+function is_begin_block(node::Node)
+    return kind(node) === K"block" && length(verified_kids(node)) > 0 &&
+        kind(verified_kids(node)[1]) === K"begin"
+end
+
+function is_paren_block(node::Node)
+    return kind(node) === K"block" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
 end
 
 ##########################

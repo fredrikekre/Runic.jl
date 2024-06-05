@@ -168,10 +168,10 @@ end
                 "$(sp)sin(α) $(op) cos(β) $(op) tan(γ)$(sp)"
             # a op \n b
             @test format_string("$(sp)a$(sp)$(op)$(sp)\nb$(sp)") ==
-                "$(sp)a $(op)\nb$(sp)"
+                "$(sp)a $(op)\n    b$(sp)"
             # a op # comment \n b
             @test format_string("$(sp)a$(sp)$(op)$(sp)# comment\nb$(sp)") ==
-                "$(sp)a $(op) # comment\nb$(sp)"
+                "$(sp)a $(op) # comment\n    b$(sp)"
         end
         # Exceptions to the rule: `:` and `^`
         # a:b
@@ -194,7 +194,7 @@ end
         @test format_string("$(sp)z$(sp)+$(sp)2x$(sp)+$(sp)z$(sp)") == "$(sp)z + 2x + z$(sp)"
         # Edgecase where the NewlineWs ends up inside the second call in a chain
         @test format_string("$(sp)a$(sp)\\$(sp)b$(sp)≈ $(sp)\n$(sp)c$(sp)\\$(sp)d$(sp)") ==
-            "$(sp)a \\ b ≈\n$(sp)c \\ d$(sp)"
+            "$(sp)a \\ b ≈\n    c \\ d$(sp)"
     end
 end
 
@@ -283,5 +283,154 @@ end
             @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K$(r)") ==
                 "$(l)(i, j, k) for i in I, j in J, k in K$(r)"
         end
+    end
+end
+
+@testset "block/hard indentation" begin
+    for sp in ("", "  ", "    ", "      ")
+        # function-end
+        @test format_string("function f()\n$(sp)x\n$(sp)end") ==
+            "function f()\n    x\nend"
+        # macro-end
+        @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
+            "macro f()\n    x\nend"
+        # let-end
+        @test format_string("let a = 1\n$(sp)x\n$(sp)end") ==
+            "let a = 1\n    x\nend"
+        # begin-end
+        @test format_string("begin\n$(sp)x\n$(sp)end") ==
+            "begin\n    x\nend"
+        # quote-end
+        @test format_string("quote\n$(sp)x\n$(sp)end") ==
+            "quote\n    x\nend"
+        # if-end
+        @test format_string("if a\n$(sp)x\n$(sp)end") ==
+            "if a\n    x\nend"
+        # if-else-end
+        @test format_string("if a\n$(sp)x\n$(sp)else\n$(sp)y\n$(sp)end") ==
+            "if a\n    x\nelse\n    y\nend"
+        # if-elseif-end
+        @test format_string("if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)end") ==
+            "if a\n    x\nelseif b\n    y\nend"
+        # if-elseif-elseif-end
+        @test format_string(
+            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)elseif c\n$(sp)z\n$(sp)end",
+        ) == "if a\n    x\nelseif b\n    y\nelseif c\n    z\nend"
+        # if-elseif-else-end
+        @test format_string(
+            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end",
+        ) == "if a\n    x\nelseif b\n    y\nelse\n    z\nend"
+        # if-elseif-elseif-else-end
+        @test format_string(
+            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)elseif " *
+            "c\n$(sp)z\n$(sp)else\n$(sp)u\n$(sp)end"
+        ) ==
+            "if a\n    x\nelseif b\n    y\nelseif c\n    z\nelse\n    u\nend"
+        # begin-end
+        @test format_string("begin\n$(sp)x\n$(sp)end") == "begin\n    x\nend"
+        # (mutable) struct
+        for mut in ("", "mutable ")
+            @test format_string("$(mut)struct A\n$(sp)x\n$(sp)end") ==
+                "$(mut)struct A\n    x\nend"
+        end
+        # for-end
+        @test format_string("for i in I\n$(sp)x\n$(sp)end") == "for i in I\n    x\nend"
+        @test format_string("for i in I, j in J\n$(sp)x\n$(sp)end") == "for i in I, j in J\n    x\nend"
+        # while-end
+        @test format_string("while x\n$(sp)y\n$(sp)end") == "while x\n    y\nend"
+        # try-catch-end
+        @test format_string("try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)end") ==
+            "try\n    x\ncatch\n    y\nend"
+        # try-catch(err)-end
+        @test format_string("try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)end") ==
+            "try\n    x\ncatch err\n    y\nend"
+        # try-catch-finally-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)finally\n$(sp)z\n$(sp)end",
+        ) == "try\n    x\ncatch\n    y\nfinally\n    z\nend"
+        # try-catch(err)-finally-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)finally\n$(sp)z\n$(sp)end",
+        ) == "try\n    x\ncatch err\n    y\nfinally\n    z\nend"
+        # try-finally-catch-end (yes, this is allowed...)
+        @test format_string(
+            "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch\n$(sp)z\n$(sp)end",
+        ) == "try\n    x\nfinally\n    y\ncatch\n    z\nend"
+        # try-finally-catch(err)-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch err\n$(sp)z\n$(sp)end",
+        ) == "try\n    x\nfinally\n    y\ncatch err\n    z\nend"
+        if VERSION >= v"1.8"
+            # try-catch-else-end
+            @test format_string(
+                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end",
+            ) == "try\n    x\ncatch\n    y\nelse\n    z\nend"
+            # try-catch(err)-else-end
+            @test format_string(
+                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end",
+            ) == "try\n    x\ncatch err\n    y\nelse\n    z\nend"
+            # try-catch-else-finally-end
+            @test format_string(
+                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end",
+            ) == "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
+            # try-catch(err)-else-finally-end
+            @test format_string(
+                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end",
+            ) == "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
+        end
+        # do-end
+        @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
+        @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
+    end
+end
+
+@testset "continuation/soft indentation" begin
+    for sp in ("", "  ", "    ", "      ")
+        # tuple
+        @test format_string("(a,\n$(sp)b)") == "(a,\n    b)"
+        @test format_string("(a,\n$(sp)b\n$(sp))") == "(a,\n    b\n)"
+        @test format_string("(a,\n$(sp)b,\n$(sp))") == "(a,\n    b,\n)"
+        @test format_string("(\n$(sp)a,\n$(sp)b,\n$(sp))") == "(\n    a,\n    b,\n)"
+        # call
+        for sep in (",", ";")
+            @test format_string("f(a$(sep)\n$(sp)b)") == "f(a$(sep)\n    b)"
+            @test format_string("f(a$(sep)\n$(sp)b\n$(sp))") == "f(a$(sep)\n    b\n)"
+            @test format_string("f(a$(sep)\n$(sp)b,\n$(sp))") == "f(a$(sep)\n    b,\n)"
+            @test format_string("f(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") == "f(\n    a$(sep)\n    b,\n)"
+        end
+        # op-call
+        @test format_string("a +\n$(sp)b") == "a +\n    b"
+        @test format_string("a + b *\n$(sp)c") == "a + b *\n    c"
+        @test format_string("a +\n$(sp)b *\n$(sp)c") == "a +\n    b *\n    c"
+        @test format_string("a ||\n$(sp)b") == "a ||\n    b"
+        # assignment
+        for op in ("=", "+=")
+            @test format_string("a $(op)\n$(sp)b") == "a $(op)\n    b"
+        end
+        # using/import
+        for verb in ("using", "import")
+            @test format_string("$(verb) A,\n$(sp)B") == "$(verb) A,\n    B"
+            @test format_string("$(verb) A: a,\n$(sp)b") == "$(verb) A: a,\n    b"
+            @test format_string("$(verb) A:\n$(sp)a,\n$(sp)b") == "$(verb) A:\n    a,\n    b"
+        end
+        # export
+        @test format_string("export a,\n$(sp)b") == "export a,\n    b"
+        @test format_string("export\n$(sp)a,\n$(sp)b") == "export\n    a,\n    b"
+        # ternary
+        @test format_string("a ?\n$(sp)b : c") == "a ?\n    b : c"
+        @test format_string("a ? b :\n$(sp)c") == "a ? b :\n    c"
+        @test format_string("a ?\n$(sp)b :\n$(sp)c") == "a ?\n    b :\n    c"
+        @test format_string("a ?\n$(sp)b :\n$(sp)c ?\n$(sp)d : e") ==
+            "a ?\n    b :\n    c ?\n    d : e"
+        # paren-quote
+        @test format_string(":(a,\n$(sp)b)") == ":(a,\n    b)"
+        @test format_string(":(a,\n$(sp)b)") == ":(a,\n    b)"
+        @test format_string(":(a;\n$(sp)b)") == ":(a;\n    b)"
+        # paren-block
+        @test format_string("(a;\n$(sp)b)") == "(a;\n    b)"
+        # array literals
+        @test format_string("[a,\n$(sp)b]") == "[a,\n    b]"
+        @test format_string("[\n$(sp)a,\n$(sp)b\n$(sp)]") == "[\n    a,\n    b\n]"
+        @test format_string("[a b\n$(sp)c d]") == "[a b\n    c d]"
     end
 end

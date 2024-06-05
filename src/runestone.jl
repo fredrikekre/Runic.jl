@@ -168,7 +168,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F) where F
 
     for (i, kid) in pairs(kids)
         if kind(kid) === K"NewlineWs" ||
-            (i == 1 && kind(kid) === K"Whitespace")
+                (i == 1 && kind(kid) === K"Whitespace")
             # NewlineWs are accepted as is by this pass.
             # Whitespace is accepted as is if this is the first kid even if the span is
             # larger than we expect since we don't look backwards. It should be cleaned up
@@ -270,10 +270,10 @@ end
 # <: and >: operators.
 function spaces_around_operators(ctx::Context, node::Node)
     if !(
-        (is_infix_op_call(node) && !(kind(infix_op_call_op(node)) in KSet": ^")) ||
-        (kind(node) in KSet"<: >:" && meta_nargs(node) == 3) ||
-        (kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
-    )
+            (is_infix_op_call(node) && !(kind(infix_op_call_op(node)) in KSet": ^")) ||
+            (kind(node) in KSet"<: >:" && meta_nargs(node) == 3) ||
+            (kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
+        )
         return nothing
     end
     @assert kind(node) in KSet"call comparison <: >:"
@@ -348,10 +348,10 @@ end
 # no spaces around `:`, `^`, and `::`
 function no_spaces_around_colon_etc(ctx::Context, node::Node)
     if !(
-        (is_infix_op_call(node) && kind(infix_op_call_op(node)) in KSet": ^") ||
-        (kind(node) === K"::" && !is_leaf(node)) ||
-        (kind(node) in KSet"<: >:" && meta_nargs(node) == 2)
-    )
+            (is_infix_op_call(node) && kind(infix_op_call_op(node)) in KSet": ^") ||
+            (kind(node) === K"::" && !is_leaf(node)) ||
+            (kind(node) in KSet"<: >:" && meta_nargs(node) == 2)
+        )
         return nothing
     end
     @assert kind(node) in KSet"call :: <: >:"
@@ -427,9 +427,9 @@ end
 # replace `=` and `∈` with `in` in for-loops
 function for_loop_use_in(ctx::Context, node::Node)
     if !(
-        (kind(node) === K"for" && !is_leaf(node) && meta_nargs(node) == 4) ||
-        (kind(node) === K"generator" && meta_nargs(node) == 3) # TODO: Unsure about 3.
-    )
+            (kind(node) === K"for" && !is_leaf(node) && meta_nargs(node) == 4) ||
+            (kind(node) === K"generator" && meta_nargs(node) == 3) # TODO: Unsure about 3.
+        )
         return nothing
     end
     pos = position(ctx.fmt_io)
@@ -469,4 +469,676 @@ function for_loop_use_in(ctx::Context, node::Node)
     @assert position(ctx.fmt_io) == pos + span(node′)
     seek(ctx.fmt_io, pos) # reset
     return node′
+end
+
+# This function materialized all indentations marked by `insert_delete_mark_newlines`.
+function four_space_indent(ctx::Context, node::Node)
+    kind(node) === K"NewlineWs" || return nothing
+    next_sibling_kind(ctx) === K"NewlineWs" && return
+    bytes = read_bytes(ctx, node)
+    @assert !in(UInt8('\r'), bytes)
+    @assert bytes[1] == UInt8('\n')
+    indent_level = ctx.indent_level
+    # TAG_PRE_DEDENT means this is the newline just before an `end`
+    if has_tag(node, TAG_PRE_DEDENT)
+        indent_level -= 1
+    end
+    # TAG_LINE_CONT is a "soft" indentation
+    if has_tag(node, TAG_LINE_CONT)
+        indent_level += 1
+    end
+    spn′ = 1 + 4 * indent_level
+    spn = span(node)
+    if spn == spn′
+        return nothing
+    end
+    resize!(bytes, spn′)
+    fill!(@view(bytes[2:end]), UInt8(' '))
+    replace_bytes!(ctx, bytes, spn)
+    node′ = Node(head(node), spn′, (), node.tags)
+    return node′
+end
+
+# This function tags the `function`/`macro` and `end` keywords as well as the trailing
+# newline of the function/macro body.
+function indent_function_or_macro(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # First node is the function/macro keyword
+    func_idx = 1
+    func_node = kids[func_idx]
+    @assert is_leaf(func_node) && kind(func_node) in KSet"function macro"
+    if !has_tag(func_node, TAG_INDENT)
+        kids[func_idx] = add_tag(func_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    # Second node is the space between keyword and name
+    # TODO: Make sure there is just a single space
+    space_idx = 2
+    space_node = kids[space_idx]
+    @assert is_leaf(space_node) && kind(space_node) === K"Whitespace"
+    # Third node is the signature (call/where/::)
+    sig_idx = 3
+    sig_node = kids[sig_idx]
+    @assert !is_leaf(sig_node) && kind(sig_node) in KSet"call where ::"
+    # Fourth node is the function/macro body block.
+    block_idx = 4
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    # Fifth node is the closing end keyword
+    end_idx = 5
+    end_node = kids[end_idx]
+    @assert is_leaf(end_node) && kind(end_node) === K"end"
+    if !has_tag(end_node, TAG_DEDENT)
+        kids[end_idx] = add_tag(end_node, TAG_DEDENT)
+        any_kid_changed = true
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+function indent_let(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # First node is the let keyword
+    let_idx = 1
+    let_node = kids[let_idx]
+    @assert is_leaf(let_node) && kind(let_node) === K"let"
+    if !has_tag(let_node, TAG_INDENT)
+        kids[let_idx] = add_tag(let_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    # Second node is the variables block (will be soft-indented by the assignments pass)
+    vars_idx = 2
+    vars_node = kids[vars_idx]
+    @assert !is_leaf(vars_node) && kind(vars_node) === K"block"
+    @assert kind(last_leaf(vars_node)) !== "NewlineWs"
+    # Third node is the NewlineWs before the block
+    ln_idx = 3
+    ln_node = kids[ln_idx]
+    @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
+    # Fourth node is the function body block.
+    block_idx = 4
+    block_node = kids[block_idx]
+    @assert !is_leaf(block_node) && kind(block_node) === K"block"
+    block_node′ = indent_block(ctx, block_node)
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    # Fifth node is the closing end keyword
+    end_idx = 5
+    @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
+    if !has_tag(kids[end_idx], TAG_DEDENT)
+        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
+        any_kid_changed = true
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+# TODO: Reuse indent_block?
+function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # First node is the begin keyword
+    begin_idx = 1
+    begin_node = kids[begin_idx]
+    @assert is_leaf(begin_node) && kind(begin_node) === block_kind
+    if !has_tag(begin_node, TAG_INDENT)
+        kids[begin_idx] = add_tag(begin_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    # Second node is the newline
+    ln_idx = 2
+    ln_node = kids[ln_idx]
+    @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
+    # After the NewlineWs node we skip over all kids until the end
+    end_idx = findlast(x -> kind(x) === K"end", kids)
+    @assert end_idx == lastindex(kids) # ??
+    # Tag last newline as pre-dedent
+    ln_idx = end_idx - 1
+    ln_node = kids[ln_idx]
+    if kind(ln_node) === K"NewlineWs"
+        if !has_tag(ln_node, TAG_PRE_DEDENT)
+            kids[ln_idx] = add_tag(ln_node, TAG_PRE_DEDENT)
+            any_kid_changed = true
+        end
+    end
+    end_node = kids[end_idx]
+    @assert is_leaf(end_node) && kind(end_node) === K"end"
+    if !has_tag(end_node, TAG_DEDENT)
+        kids[end_idx] = add_tag(end_node, TAG_DEDENT)
+        any_kid_changed = true
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+# TODO: This needs to be reworked to handle non-standard cases like, for example, one-liners
+# of the form `if x y end`. For now we only handle the standard case and ignore the rest.
+function indent_block(::Context, node::Node)
+    @assert kind(node) === K"block" && !is_leaf(node)
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # Expect a NewlineWs node at the end of the block (otherwise the closing `end` is not on
+    # a separate line).
+    trailing_idx = findlast(x -> kind(x) === K"NewlineWs", kids)
+    if trailing_idx === nothing || trailing_idx != lastindex(kids)
+        return nothing
+    elseif !has_tag(kids[trailing_idx], TAG_PRE_DEDENT)
+        kids[trailing_idx] = add_tag(kids[trailing_idx], TAG_PRE_DEDENT)
+        any_kid_changed = true
+    end
+    # Look for a leading NewlineWs node
+    leading_idx = findfirst(x -> kind(x) === K"NewlineWs", kids)
+    if leading_idx !== nothing && leading_idx < trailing_idx
+        # TODO: Forgot why we check for this. I think it is only necessary if we want to
+        # split a one-liner into multiple lines.
+        # return nothing
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+function indent_catch(ctx::Context, node::Node)
+    @assert kind(node) in KSet"catch else finally"
+    kids = verified_kids(node)
+    any_kid_changed = false
+    catch_idx = 1
+    catch_node = kids[catch_idx]
+    @assert is_leaf(catch_node) && kind(catch_node) in KSet"catch else finally"
+    if !has_tag(catch_node, TAG_INDENT)
+        kids[catch_idx] = add_tag(catch_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    if !has_tag(catch_node, TAG_DEDENT)
+        kids[catch_idx] = add_tag(catch_node, TAG_DEDENT)
+        any_kid_changed = true
+    end
+    # Skip over the catch-identifier (if any)
+    block_idx = findnext(x -> kind(x) === K"block", kids, catch_idx + 1)::Int
+    @assert kind(kids[block_idx]) === K"block"
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    return any_kid_changed ? node : nothing
+end
+
+function indent_try(ctx::Context, node::Node)
+    @assert kind(node) in KSet"try"
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # First node is `try`
+    try_idx = 1
+    try_node = kids[try_idx]
+    @assert is_leaf(kids[try_idx]) && kind(try_node) in KSet"try"
+    if !has_tag(try_node, TAG_INDENT)
+        kids[try_idx] = add_tag(try_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    # Second node the try-block
+    try_block_idx = findnext(!JuliaSyntax.is_whitespace, kids, try_idx + 1)::Int
+    try_block_node′ = indent_block(ctx, kids[try_block_idx])
+    if try_block_node′ !== nothing
+        kids[try_block_idx] = try_block_node′
+        any_kid_changed = true
+    end
+    # Check for catch/finally. They can be in any order
+    catch_idx = findnext(x -> kind(x) in KSet"catch finally", kids, try_block_idx + 1)::Int
+    @assert !is_leaf(kids[catch_idx]) && kind(kids[catch_idx]) in KSet"catch finally"
+    catch_node′ = indent_catch(ctx, kids[catch_idx])
+    if catch_node′ !== nothing
+        kids[catch_idx] = catch_node′
+        any_kid_changed = true
+    end
+    # There may be an else in between catch and finally (lol)
+    else_idx = findnext(x -> kind(x) === K"else", kids, catch_idx + 1)
+    if else_idx !== nothing
+        else_node′ = indent_catch(ctx, kids[else_idx])
+        if else_node′ !== nothing
+            kids[else_idx] = else_node′
+            any_kid_changed = true
+        end
+    end
+    # Check for the other one
+    other_kind = kind(kids[catch_idx]) === K"catch" ? K"finally" : K"catch"
+    finally_idx = findnext(
+        x -> kind(x) === other_kind, kids, something(else_idx, catch_idx) + 1,
+    )
+    if finally_idx !== nothing
+        finally_node′ = indent_catch(ctx, kids[finally_idx])
+        if finally_node′ !== nothing
+            kids[finally_idx] = finally_node′
+            any_kid_changed = true
+        end
+    end
+    # Check for end
+    end_idx = findnext(
+        x -> kind(x) === K"end", kids, something(finally_idx, else_idx, catch_idx) + 1,
+    )::Int
+    @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
+    if !has_tag(kids[end_idx], TAG_DEDENT)
+        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
+        any_kid_changed = true
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+function indent_if(ctx::Context, node::Node)
+    @assert kind(node) in KSet"if elseif"
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # First node is either `if` or `elseif` (when called recursively)
+    if_idx = 1
+    if_node = kids[if_idx]
+    @assert is_leaf(kids[if_idx]) && kind(if_node) in KSet"if elseif"
+    if !has_tag(if_node, TAG_INDENT)
+        if_node = add_tag(if_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    if kind(node) === K"elseif" && !has_tag(if_node, TAG_DEDENT)
+        if_node = add_tag(if_node, TAG_DEDENT)
+        any_kid_changed = true
+    end
+    kids[if_idx] = if_node
+    # Look for the condition node
+    cond_idx = findnext(!JuliaSyntax.is_whitespace, kids, if_idx + 1)::Int
+    if cond_idx != if_idx + 1
+        # TODO: Trim whitespace between the keyword and the condition. It may exist as a
+        # separate leaf, or hidden in the condition node.
+    end
+    cond_node = kids[cond_idx]
+    @assert kind(last_leaf(cond_node)) !== "NewlineWs"
+    # Fourth node is the body block.
+    block_idx = findnext(!JuliaSyntax.is_whitespace, kids, cond_idx + 1)::Int
+    @assert block_idx == cond_idx + 1
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    # Check for elseif
+    elseif_idx = findnext(x -> kind(x) === K"elseif", kids, block_idx + 1)
+    if elseif_idx !== nothing
+        @assert !is_leaf(kids[elseif_idx]) && kind(kids[elseif_idx]) === K"elseif"
+        elseif_node′ = indent_if(ctx, kids[elseif_idx])
+        if elseif_node′ !== nothing
+            kids[elseif_idx] = elseif_node′
+            any_kid_changed = true
+        end
+    end
+    # Check for else
+    else_idx = findnext(x -> kind(x) === K"else", kids, something(elseif_idx, block_idx) + 1)
+    if else_idx !== nothing
+        @assert is_leaf(kids[else_idx]) && kind(kids[else_idx]) === K"else"
+        else_node = kids[else_idx]
+        if !has_tag(else_node, TAG_INDENT)
+            else_node = add_tag(else_node, TAG_INDENT)
+            any_kid_changed = true
+        end
+        if !has_tag(else_node, TAG_DEDENT)
+            else_node = add_tag(else_node, TAG_DEDENT)
+            any_kid_changed = true
+        end
+        kids[else_idx] = else_node
+        else_block_idx = findnext(!JuliaSyntax.is_whitespace, kids, else_idx + 1)::Int
+        @assert kind(kids[else_block_idx]) === K"block"
+        else_block′ = indent_block(ctx, kids[else_block_idx])
+        if else_block′ !== nothing
+            kids[else_block_idx] = else_block′
+            any_kid_changed = true
+        end
+    end
+    # Check for end
+    end_idx = findnext(x -> kind(x) === K"end", kids, something(else_idx, elseif_idx, block_idx) + 1)
+    @assert (kind(node) === K"elseif") == (end_idx === nothing)
+    if end_idx !== nothing
+        @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
+        if !has_tag(kids[end_idx], TAG_DEDENT)
+            kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
+            any_kid_changed = true
+        end
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+function indent_call(ctx::Context, node::Node)
+    @assert kind(node) === K"call"
+    return indent_paren(ctx, node)
+end
+
+
+function indent_newlines_between_indices(
+        ctx::Context, node::Node, open_idx::Int, close_idx::Int;
+        indent_closing_token::Bool = false,
+    )
+    kids = verified_kids(node)
+    any_kid_changed = false
+    for i in open_idx:close_idx
+        kid = kids[i]
+        this_kid_changed = false
+        # Skip the newline just before the closing token for e.g. (...\n)
+        # (indent_closing_token = false) but not in e.g. `a+\nb` (indent_closing_token =
+        # true) where the closing token is part of the expression itself.
+        if !indent_closing_token && i == close_idx - 1 && kind(kid) === K"NewlineWs"
+            continue
+        end
+        # Tag all direct NewlineWs kids
+        if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
+            kid = add_tag(kid, TAG_LINE_CONT)
+            this_kid_changed = true
+        end
+        # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
+        # TODO: The trailing argument should maybe depend on `indent_closing_token` or
+        #       possibly set to `false` if `i == close_idx - 1`?
+        kid′ = continue_newlines(kid; leading = true, trailing = true)
+        if kid′ !== nothing
+            kid = kid′
+            this_kid_changed = true
+        end
+        if this_kid_changed
+            kids[i] = kid
+        end
+        any_kid_changed |= this_kid_changed
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+
+# Mark opening and closing parentheses, in a call or a tuple, with indent and dedent tags.
+function indent_paren(ctx::Context, node::Node)
+    @assert kind(node) in KSet"call tuple parens"
+    kids = verified_kids(node)
+    opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)::Int
+    closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
+    return indent_newlines_between_indices(ctx, node, opening_paren_idx, closing_paren_idx)
+end
+
+# Insert line-continuation nodes instead of bumping the indent level.
+function indent_op_call(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    first_operand_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
+    last_operand_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
+    return indent_newlines_between_indices(
+        ctx, node, first_operand_idx, last_operand_idx; indent_closing_token = true,
+    )
+end
+
+function indent_loop(ctx::Context, node::Node)
+    @assert kind(node) in KSet"for while"
+    kids = verified_kids(node)
+    any_kid_changed = false
+    for_idx = findfirst(x -> kind(x) in KSet"for while", kids)::Int
+    if !has_tag(kids[for_idx], TAG_INDENT)
+        kids[for_idx] = add_tag(kids[for_idx], TAG_INDENT)
+        any_kid_changed = true
+    end
+    block_idx = findnext(x -> kind(x) === K"block", kids, for_idx + 1)::Int
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    end_idx = findlast(x -> kind(x) === K"end", kids)::Int
+    if !has_tag(kids[end_idx], TAG_DEDENT)
+        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
+        any_kid_changed = true
+    end
+    return any_kid_changed ? node : nothing
+end
+
+function indent_tuple(ctx::Context, node::Node)
+    @assert kind(node) === K"tuple"
+    kids = verified_kids(node)
+    # Check whether this is an explicit tuple, e.g. `(a, b)`,
+    # or an implicit tuple, e.g. `a, b`.
+    opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)
+    if opening_paren_idx === nothing
+        # Implicit tuple: don't indent the closing token
+        first_item_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
+        if first_item_idx === nothing
+            # Empty implicit tuple can happen in e.g. a do-block without arguments
+            return nothing
+        end
+        last_item_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
+        return indent_newlines_between_indices(
+            ctx, node, first_item_idx, last_item_idx; indent_closing_token = true,
+        )
+    else
+        # Explicit tuple: indent the closing token
+        closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
+        @assert opening_paren_idx == firstindex(kids)
+        @assert closing_paren_idx == lastindex(kids)
+        return indent_newlines_between_indices(
+            ctx, node, opening_paren_idx, closing_paren_idx; indent_closing_token = false,
+        )
+    end
+end
+
+function indent_parens(ctx::Context, node::Node)
+    @assert kind(node) in KSet"parens"
+    return indent_paren(ctx, node)
+end
+
+function indent_parameters(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    # TODO: This is always here?
+    semicolon_idx = findfirst(x -> kind(x) === K";", kids)::Int
+    last_non_ws_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
+    return indent_newlines_between_indices(
+        ctx, node, semicolon_idx, last_non_ws_idx; indent_closing_token = true,
+    )
+end
+
+function indent_struct(ctx::Context, node::Node)
+    @assert kind(node) === K"struct"
+    kids = verified_kids(node)
+    any_kid_changed = false
+    struct_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
+    @assert kind(kids[struct_idx]) in KSet"mutable struct"
+    if !has_tag(kids[struct_idx], TAG_INDENT)
+        kids[struct_idx] = add_tag(kids[struct_idx], TAG_INDENT)
+        any_kid_changed = true
+    end
+    block_idx = findnext(x -> kind(x) === K"block", kids, struct_idx + 1)::Int
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    end_idx = findlast(x -> kind(x) === K"end", kids)::Int
+    if !has_tag(kids[end_idx], TAG_DEDENT)
+        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
+        any_kid_changed = true
+    end
+    return any_kid_changed ? node : nothing
+end
+
+function indent_short_circuit(ctx::Context, node::Node)
+    return indent_op_call(ctx, node)
+end
+
+# TODO: This function can be used for more things than just indent_using I think. Perhaps
+# with a max_depth parameter.
+function continue_all_newlines(
+        ctx::Context, node::Node; skip_last::Bool = true, is_last::Bool = is_leaf(node),
+    )
+    if is_leaf(node)
+        if kind(node) === K"NewlineWs" && !has_tag(node, TAG_LINE_CONT) &&
+                !(skip_last && is_last)
+            return add_tag(node, TAG_LINE_CONT)
+        else
+            return nothing
+        end
+    else
+        any_kid_changed = false
+        kids = verified_kids(node)
+        for (i, kid) in pairs(kids)
+            kid′ = continue_all_newlines(
+                ctx, kid; skip_last = skip_last, is_last = i == lastindex(kids),
+            )
+            if kid′ !== nothing
+                kids[i] = kid′
+                any_kid_changed = true
+            end
+        end
+        return any_kid_changed ? node : nothing
+    end
+end
+
+function indent_using_import_export(ctx::Context, node::Node)
+    @assert kind(node) in KSet"using import export"
+    return continue_all_newlines(ctx, node)
+end
+
+function indent_ternary(ctx::Context, node::Node)
+    @assert kind(node) === K"?"
+    return continue_all_newlines(ctx, node)
+end
+
+function indent_assignment(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    # Also catches for loop specifications (but at this point we have normalized `=` and `∈`
+    # to `in`).
+    op_idx = findfirst(x -> is_assignment(x) || kind(x) === K"in", kids)::Int
+    last_non_ws_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
+    return indent_newlines_between_indices(
+        ctx, node, op_idx, last_non_ws_idx; indent_closing_token = true,
+    )
+end
+
+function indent_paren_block(ctx::Context, node::Node)
+    @assert kind(node) === K"block"
+    @assert JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
+    kids = verified_kids(node)
+    opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)::Int
+    closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
+    return indent_newlines_between_indices(ctx, node, opening_paren_idx, closing_paren_idx)
+end
+
+function indent_do(ctx::Context, node::Node)
+    @assert kind(node) === K"do"
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # Skip over the call and go directly to the do-keyword
+    do_idx = findfirst(x -> kind(x) === K"do", kids)::Int
+    if !has_tag(kids[do_idx], TAG_INDENT)
+        kids[do_idx] = add_tag(kids[do_idx], TAG_INDENT)
+        any_kid_changed = true
+    end
+    # Find the do body block
+    block_idx = findnext(x -> kind(x) === K"block", kids, do_idx + 1)::Int
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    # Closing `end`
+    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)::Int
+    if !has_tag(kids[end_idx], TAG_DEDENT)
+        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
+        any_kid_changed = true
+    end
+    return any_kid_changed ? node : nothing
+end
+
+function indent_quote(ctx::Context, node::Node)
+    @assert kind(node) === K"quote"
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # K"quote" can be `quote ... end` or `:(...)`.
+    block_form = !JuliaSyntax.has_flags(node, JuliaSyntax.COLON_QUOTE)
+    if block_form
+        block_idx = findfirst(x -> kind(x) === K"block", kids)
+        if block_idx === nothing
+            # `bar` in `foo.bar` is a quote block...
+            return nothing
+        end
+        block_node′ = indent_begin(ctx, kids[block_idx], K"quote")
+        if block_node′ !== nothing
+            kids[block_idx] = block_node′
+            any_kid_changed = true
+        end
+        return any_kid_changed ? node : nothing
+    else
+        # The short form can be ignored since the inside (K"block", K"tuple", or
+        # K"Identifier") of the quote will be handled by other passes.
+        return nothing
+    end
+end
+
+function indent_array(ctx::Context, node::Node)
+    @assert kind(node) in KSet"vect vcat ncat"
+    kids = verified_kids(node)
+    any_kid_changed = false
+    opening_bracket_idx = findfirst(x -> kind(x) === K"[", kids)::Int
+    closing_bracket_idx = findnext(x -> kind(x) === K"]", kids, opening_bracket_idx + 1)::Int
+    return indent_newlines_between_indices(
+        ctx, node, opening_bracket_idx, closing_bracket_idx,
+    )
+end
+
+function indent_array_row(ctx::Context, node::Node)
+    @assert kind(node) === K"row"
+    return continue_all_newlines(ctx, node)
+end
+
+function insert_delete_mark_newlines(ctx::Context, node::Node)
+    if is_leaf(node)
+        return nothing
+    elseif kind(node) in KSet"function macro"
+        return indent_function_or_macro(ctx, node)
+    elseif kind(node) === K"if"
+        return indent_if(ctx, node)
+    elseif kind(node) === K"let"
+        return indent_let(ctx, node)
+    elseif is_begin_block(node)
+        return indent_begin(ctx, node)
+    elseif kind(node) === K"call" && flags(node) == 0
+        return indent_call(ctx, node)
+    elseif is_infix_op_call(node)
+        return indent_op_call(ctx, node)
+    elseif kind(node) in KSet"for while"
+        return indent_loop(ctx, node)
+    elseif kind(node) === K"tuple"
+        return indent_tuple(ctx, node)
+    elseif kind(node) === K"struct"
+        return indent_struct(ctx, node)
+    elseif kind(node) === K"parens"
+        return indent_parens(ctx, node)
+    elseif kind(node) in KSet"|| &&"
+        return indent_short_circuit(ctx, node)
+    elseif kind(node) in KSet"using import export"
+        return indent_using_import_export(ctx, node)
+    elseif is_assignment(node)
+        return indent_assignment(ctx, node)
+    elseif kind(node) === K"parameters"
+        return indent_parameters(ctx, node)
+    elseif kind(node) === K"?"
+        return indent_ternary(ctx, node)
+    elseif kind(node) === K"try"
+        return indent_try(ctx, node)
+    elseif kind(node) === K"quote"
+        return indent_quote(ctx, node)
+    elseif kind(node) === K"do"
+        return indent_do(ctx, node)
+    elseif is_paren_block(node)
+        return indent_paren_block(ctx, node)
+    elseif kind(node) in KSet"vect vcat ncat"
+        return indent_array(ctx, node)
+    elseif kind(node) in KSet"row"
+        return indent_array_row(ctx, node)
+    end
+    return nothing
 end

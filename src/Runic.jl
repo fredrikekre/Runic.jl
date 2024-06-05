@@ -115,6 +115,9 @@ mutable struct Context
     debug::Bool
     check::Bool
     diff::Bool
+    # Global state
+    indent_level::Int # track (hard) indentation level
+    call_depth::Int # track call-depth level for debug printing
     # Current state
     # node::Union{Node, Nothing}
     prev_sibling::Union{Node, Nothing}
@@ -145,9 +148,12 @@ function Context(
     # Debug mode enforces verbose and assert
     verbose = debug ? true : verbose
     assert = debug ? true : assert
+    indent_level = 0
+    call_depth = 0
+    prev_sibling = next_sibling = nothing
     return Context(
-        src_str, src_tree, src_io, fmt_io, fmt_tree,
-        quiet, verbose, assert, debug, check, diff, nothing, nothing,
+        src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
+        diff, call_depth, indent_level, prev_sibling, next_sibling,
     )
 end
 
@@ -186,6 +192,8 @@ function format_node_with_kids!(ctx::Context, node::Node)
     if is_leaf(node)
         return nothing
     end
+
+    ctx.call_depth += 1
 
     # Keep track of the siblings on this stack
     prev_sibling = ctx.prev_sibling
@@ -247,6 +255,7 @@ function format_node_with_kids!(ctx::Context, node::Node)
     # Reset the siblings
     ctx.prev_sibling = prev_sibling
     ctx.next_sibling = next_sibling
+    ctx.call_depth -= 1
     # Return a new node if any of the kids changed
     if any_kid_changed
         return make_node(node, kids′)
@@ -266,7 +275,18 @@ Format a node. Return values:
 function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     node_kind = kind(node)
 
+    # Not that two separate `if`s are used here because a node like `else` can be both
+    # dedent and indent
+    if has_tag(node, TAG_INDENT)
+        ctx.indent_level += 1
+    end
+    if has_tag(node, TAG_DEDENT)
+        ctx.indent_level -= 1
+    end
+
     # Go through the runestone and apply transformations.
+    ctx.call_depth += 1
+    @return_something insert_delete_mark_newlines(ctx, node)
     @return_something trim_trailing_whitespace(ctx, node)
     @return_something format_hex_literals(ctx, node)
     @return_something format_oct_literals(ctx, node)
@@ -275,131 +295,128 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something spaces_around_assignments(ctx, node)
     @return_something no_spaces_around_colon_etc(ctx, node)
     @return_something for_loop_use_in(ctx, node)
+    @return_something four_space_indent(ctx, node)
+    ctx.call_depth -= 1
 
     # If the node is unchanged at this point, just keep going.
-
-    # Nodes that always recurse!
     if (
-        node_kind === K"block" ||
-        node_kind === K"braces" ||
-        node_kind === K"bracescat" || # {a; b}
-        node_kind === K"call" ||
-        node_kind === K"cartesian_iterator" ||
-        node_kind === K"char" ||
-        node_kind === K"cmdstring" ||
-        node_kind === K"comparison" ||
-        node_kind === K"comprehension" ||
-        node_kind === K"core_@cmd" ||
-        node_kind === K"curly" ||
-        node_kind === K"dotcall" ||
-        node_kind === K"filter" ||
-        node_kind === K"generator" ||
-        node_kind === K"hcat" ||
-        node_kind === K"importpath" ||
-        node_kind === K"inert" ||
-        node_kind === K"juxtapose" ||
-        node_kind === K"macrocall" ||
-        node_kind === K"ncat" ||
-        node_kind === K"nrow" ||
-        node_kind === K"parens" ||
-        node_kind === K"ref" ||
-        node_kind === K"row" ||
-        node_kind === K"string" ||
-        node_kind === K"toplevel" ||
-        node_kind === K"typed_comprehension" ||
-        node_kind === K"typed_hcat" ||
-        node_kind === K"typed_ncat" ||
-        node_kind === K"typed_vcat" ||
-        node_kind === K"vcat" ||
-        node_kind === K"vect"
-    )
+            node_kind === K"block" ||
+            node_kind === K"braces" ||
+            node_kind === K"bracescat" || # {a; b}
+            node_kind === K"call" ||
+            node_kind === K"cartesian_iterator" ||
+            node_kind === K"char" ||
+            node_kind === K"cmdstring" ||
+            node_kind === K"comparison" ||
+            node_kind === K"comprehension" ||
+            node_kind === K"core_@cmd" ||
+            node_kind === K"curly" ||
+            node_kind === K"dotcall" ||
+            node_kind === K"filter" ||
+            node_kind === K"generator" ||
+            node_kind === K"hcat" ||
+            node_kind === K"importpath" ||
+            node_kind === K"inert" ||
+            node_kind === K"juxtapose" ||
+            node_kind === K"macrocall" ||
+            node_kind === K"ncat" ||
+            node_kind === K"nrow" ||
+            node_kind === K"parens" ||
+            node_kind === K"ref" ||
+            node_kind === K"row" ||
+            node_kind === K"string" ||
+            node_kind === K"toplevel" ||
+            node_kind === K"typed_comprehension" ||
+            node_kind === K"typed_hcat" ||
+            node_kind === K"typed_ncat" ||
+            node_kind === K"typed_vcat" ||
+            node_kind === K"vcat" ||
+            node_kind === K"vect"
+        )
+        # Nodes that always recurse!
         @assert !JuliaSyntax.is_trivia(node)
         node′ = format_node_with_kids!(ctx, node)
         @assert node′ !== nullnode
         return node′
-
-        # Nodes that recurse! if not trivia
-        elseif !JuliaSyntax.is_trivia(node) && (
-           node_kind === K"abstract" ||
-           node_kind === K"as" ||
-           node_kind === K"break" ||
-           node_kind === K"catch" ||
-           node_kind === K"const" ||
-           node_kind === K"continue" ||
-           node_kind === K"do" ||
-           node_kind === K"doc" ||
-           node_kind === K"elseif" ||
-           node_kind === K"export" ||
-           node_kind === K"finally" ||
-           node_kind === K"for" ||
-           node_kind === K"function" ||
-           node_kind === K"global" ||
-           node_kind === K"if" ||
-           node_kind === K"import" ||
-           node_kind === K"let" ||
-           node_kind === K"local" ||
-           node_kind === K"macro" ||
-           node_kind === K"module" ||
-           node_kind === K"outer" ||
-           node_kind === K"parameters" ||
-           node_kind === K"primitive" ||
-           node_kind === K"quote" ||
-           node_kind === K"return" ||
-           node_kind === K"struct" ||
-           node_kind === K"try" ||
-           node_kind === K"tuple" ||
-           node_kind === K"using" ||
-           node_kind === K"var" ||
-           node_kind === K"where" ||
-           node_kind === K"while"
+    elseif !JuliaSyntax.is_trivia(node) && (
+            node_kind === K"abstract" ||
+            node_kind === K"as" ||
+            node_kind === K"break" ||
+            node_kind === K"catch" ||
+            node_kind === K"const" ||
+            node_kind === K"continue" ||
+            node_kind === K"do" ||
+            node_kind === K"doc" ||
+            node_kind === K"elseif" ||
+            node_kind === K"export" ||
+            node_kind === K"finally" ||
+            node_kind === K"for" ||
+            node_kind === K"function" ||
+            node_kind === K"global" ||
+            node_kind === K"if" ||
+            node_kind === K"import" ||
+            node_kind === K"let" ||
+            node_kind === K"local" ||
+            node_kind === K"macro" ||
+            node_kind === K"module" ||
+            node_kind === K"outer" ||
+            node_kind === K"parameters" ||
+            node_kind === K"primitive" ||
+            node_kind === K"quote" ||
+            node_kind === K"return" ||
+            node_kind === K"struct" ||
+            node_kind === K"try" ||
+            node_kind === K"tuple" ||
+            node_kind === K"using" ||
+            node_kind === K"var" ||
+            node_kind === K"where" ||
+            node_kind === K"while"
         )
+        # Nodes that recurse! if not trivia
+        @assert !JuliaSyntax.is_trivia(node)
         node′ = format_node_with_kids!(ctx, node)
         @assert node′ !== nullnode
         return node′
-
-    # Nodes that should recurse if they have kids (all??)
     elseif !is_leaf(node) && (
-        JuliaSyntax.is_operator(node) ||
-        node_kind === K"else" # try-(catch|finally)-else
-    )
+            JuliaSyntax.is_operator(node) ||
+            node_kind === K"else" # try-(catch|finally)-else
+        )
+        # Nodes that should recurse if they have kids (all??)
         node′ = format_node_with_kids!(ctx, node)
         @assert node′ !== nullnode
         return node′
-
-    # Whitespace and comments emitted verbatim for now
     elseif node_kind === K"Whitespace" ||
-           node_kind === K"NewlineWs" ||
-           node_kind === K"Comment"
+            node_kind === K"NewlineWs" ||
+            node_kind === K"Comment"
+        # Whitespace and comments emitted verbatim for now
         accept_node!(ctx, node)
         return nothing
-
-    # Nodes that always emit like the source code
     elseif (
-        node_kind === K"(" ||
-        node_kind === K")" ||
-        node_kind === K"," ||
-        node_kind === K"::" ||
-        node_kind === K";" ||
-        node_kind === K"<:" ||
-        node_kind === K"@" ||
-        node_kind === K"BinInt" ||
-        node_kind === K"Char" ||
-        node_kind === K"CmdMacroName" ||
-        node_kind === K"CmdString" ||
-        node_kind === K"Float" ||
-        node_kind === K"Float32" ||
-        node_kind === K"HexInt" ||
-        node_kind === K"Identifier" ||
-        node_kind === K"Integer" ||
-        node_kind === K"MacroName" ||
-        node_kind === K"OctInt" ||
-        node_kind === K"String" ||
-        node_kind === K"StringMacroName" ||
-        node_kind === K"false" ||
-        node_kind === K"true" ||
-        node_kind === K"type" ||
-        JuliaSyntax.is_operator(node) ||
-        JuliaSyntax.is_trivia(node) && (
+            node_kind === K"(" ||
+            node_kind === K")" ||
+            node_kind === K"," ||
+            node_kind === K"::" ||
+            node_kind === K";" ||
+            node_kind === K"<:" ||
+            node_kind === K"@" ||
+            node_kind === K"BinInt" ||
+            node_kind === K"Char" ||
+            node_kind === K"CmdMacroName" ||
+            node_kind === K"CmdString" ||
+            node_kind === K"Float" ||
+            node_kind === K"Float32" ||
+            node_kind === K"HexInt" ||
+            node_kind === K"Identifier" ||
+            node_kind === K"Integer" ||
+            node_kind === K"MacroName" ||
+            node_kind === K"OctInt" ||
+            node_kind === K"String" ||
+            node_kind === K"StringMacroName" ||
+            node_kind === K"false" ||
+            node_kind === K"true" ||
+            node_kind === K"type" ||
+            JuliaSyntax.is_operator(node) ||
+            JuliaSyntax.is_trivia(node) && (
             node_kind === K"$" ||
             node_kind === K"=" ||
             node_kind === K"[" ||
@@ -445,7 +462,8 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
             node_kind === K"{" ||
             node_kind === K"}"
         )
-    )
+        )
+        # Nodes that always emit like the source code
         accept_node!(ctx, node)
         return nothing
     else

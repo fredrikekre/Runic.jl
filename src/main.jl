@@ -265,7 +265,7 @@ function main(argv)
         end
 
         # Output the result
-        changed = ctx.fmt_tree !== ctx.src_tree
+        changed = !nodes_equal(ctx.fmt_tree, ctx.src_tree)
         if check
             if changed
                 print_progress && errln()
