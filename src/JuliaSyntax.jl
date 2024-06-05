@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: MIT
 
-# The code in this file is derived from code in the ToggleableAsserts.jl package
-# (https://github.com/MasonProtter/ToggleableAsserts.jl) licensed under the MIT license.
-# (https://github.com/MasonProtter/ToggleableAsserts.jl/blob/master/LICENSE):
+# The code in this file is derived from code in the JuliaSyntax.jl package
+# (https://github.com/JuliaLang/JuliaSyntax.jl) licensed under the MIT license.
+# (https://github.com/JuliaLang/JuliaSyntax.jl/blob/main/LICENSE.md):
 
 # MIT License
 #
-# Copyright (c) 2021 Mason Protter
+# Copyright (c) 2021 Julia Computing and contributors
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,19 +26,26 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-assert_enabled() = true
-
-macro assert(expr)
-    code = macroexpand_assert(expr)
-    :(assert_enabled() ? $(code) : nothing)
-end
-
-const toggle_lock = ReentrantLock()
-
-function enable_assert(enable::Bool)
-    @lock toggle_lock begin
-        if assert_enabled() != enable
-            @eval Runic assert_enabled() = $enable
+# https://github.com/JuliaLang/JuliaSyntax.jl/blob/bd290251c0aeb2d2e4c0349bb8ea4a33834d1c02/src/green_tree.jl#L45-L80
+function _show_green_node(io, node, indent, pos, str, show_trivia)
+    if !show_trivia && JuliaSyntax.is_trivia(node)
+        return
+    end
+    posstr = "$(lpad(pos, 6)):$(rpad(pos + span(node) - 1, 6)) │"
+    brackets = is_leaf(node) ? ("" => "") : ("[" => "]")
+    line = string(
+        posstr, indent, brackets.first, JuliaSyntax.summary(head(node)), brackets.second,
+    )
+    if node.tags != 0
+        line = string(rpad(line, 50), ' ', "tags: $(stringify_tags(node))")
+    end
+    println(io, line)
+    if !is_leaf(node)
+        new_indent = indent * "  "
+        p = pos
+        for x in verified_kids(node)
+            _show_green_node(io, x, new_indent, p, str, show_trivia)
+            p += x.span
         end
     end
 end

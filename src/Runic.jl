@@ -16,6 +16,7 @@ end
 
 # Debug and assert utilities
 include("debug.jl")
+include("JuliaSyntax.jl")
 
 ########
 # Node #
@@ -46,6 +47,12 @@ function Node(node::JuliaSyntax.GreenNode)
         JuliaSyntax.head(node), JuliaSyntax.span(node),
         map(Node, JuliaSyntax.children(node)), tags,
     )
+end
+
+function Base.show(io::IO, ::MIME"text/plain", node::Node)
+    show(io, node)
+    println(io)
+    _show_green_node(io, node, "", 1, nothing, true)
 end
 
 function Base.show(io::IO, node::Node)
