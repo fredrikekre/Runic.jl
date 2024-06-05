@@ -286,13 +286,21 @@ function main(argv)
         end
         if diff
             mktempdir() do dir
-                A = joinpath(dir, "A.jl")
-                B = joinpath(dir, "B.jl")
+                a = mkdir(joinpath(dir, "a"))
+                b = mkdir(joinpath(dir, "b"))
+                file = basename(inputfile)
+                A = joinpath(a, file)
+                B = joinpath(b, file)
                 write(A, ctx.src_str)
                 write(B, seekstart(ctx.fmt_io))
-                # ignorestatus because --no-index implies --exit-code
-                cmd = `$(git) --no-pager diff --no-index --color=always A.jl B.jl`
-                run(setenv(ignorestatus(cmd); dir = dir))
+                cmd = ```
+                $(git) --no-pager diff --color=always --no-index --no-prefix
+                    $(relpath(A, dir)) $(relpath(B, dir))
+                ```
+                # `ignorestatus` because --no-index implies --exit-code
+                cmd = setenv(ignorestatus(cmd); dir = dir)
+                cmd = pipeline(cmd, stdout = stderr, stderr = stderr)
+                run(cmd)
             end
         end
 
