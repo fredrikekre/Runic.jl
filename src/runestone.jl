@@ -517,9 +517,22 @@ function indent_function_or_macro(ctx::Context, node::Node)
     space_idx = 2
     space_node = kids[space_idx]
     @assert is_leaf(space_node) && kind(space_node) === K"Whitespace"
-    # Third node is the signature (call/where/::)
+    # Third node is the signature (call/where/::) for standard method definitions but just
+    # an Identifier for cases like `function f end`.
     sig_idx = 3
     sig_node = kids[sig_idx]
+    if kind(sig_node) === K"Identifier"
+        # Empty function definition like `function f end`.
+        # TODO: Make sure the spaces around are correct
+        end_idx = findnext(x -> kind(x) === K"end", kids, sig_idx + 1)::Int
+        end_node = kids[end_idx]
+        @assert is_leaf(end_node) && kind(end_node) === K"end"
+        if !has_tag(end_node, TAG_DEDENT)
+            kids[end_idx] = add_tag(end_node, TAG_DEDENT)
+            any_kid_changed = true
+        end
+        return any_kid_changed ? node : nothing
+    end
     @assert !is_leaf(sig_node) && kind(sig_node) in KSet"call where ::"
     # Fourth node is the function/macro body block.
     block_idx = 4
