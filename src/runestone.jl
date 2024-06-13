@@ -1107,6 +1107,11 @@ function indent_array_row(ctx::Context, node::Node)
     return continue_all_newlines(ctx, node)
 end
 
+function indent_comparison(ctx::Context, node::Node)
+    @assert kind(node) === K"comparison"
+    return continue_all_newlines(ctx, node)
+end
+
 function insert_delete_mark_newlines(ctx::Context, node::Node)
     if is_leaf(node)
         return nothing
@@ -1152,6 +1157,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_array(ctx, node)
     elseif kind(node) in KSet"row"
         return indent_array_row(ctx, node)
+    elseif kind(node) === K"comparison"
+        return indent_comparison(ctx, node)
     end
     return nothing
 end
