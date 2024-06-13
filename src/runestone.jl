@@ -152,7 +152,7 @@ end
 # Insert space around `x`, where `x` can be operators, assignments, etc. with the pattern:
 # `<something><space><x><space><something>`, for example the spaces around `+` and `=` in
 # `a = x + y`.
-function spaces_around_x(ctx::Context, node::Node, is_x::F) where F
+function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int = 1) where F
     # TODO: So much boilerplate here...
     @assert !is_leaf(node)
 
@@ -165,6 +165,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F) where F
     # Toggle for whether we are currently looking for whitespace or not
     looking_for_whitespace = false
     looking_for_x = false
+    n_x_leaves_visited = 0
 
     for (i, kid) in pairs(kids)
         if kind(kid) === K"NewlineWs" ||
@@ -238,22 +239,43 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F) where F
                 push!(kids′, kid)
                 accept_node!(ctx, kid)
                 looking_for_whitespace = kind(last_leaf(kid)) !== K"Whitespace"
+                # TODO: Duplicated with the branch below.
                 if looking_for_x
                     @assert is_x(kid)::Bool
+                    n_x_leaves_visited += 1
+                    if n_x_leaves_visited == n_leaves_per_x
+                        looking_for_x = false
+                        n_x_leaves_visited = 0
+                    else
+                        looking_for_whitespace = false
+                    end
+                else
+                    looking_for_x = kind(kid) !== K"Comment"
                 end
-                # Flip the switch, unless kid is a comment
-                looking_for_x = kind(kid) === K"Comment" ? looking_for_x : !looking_for_x
             end
         else # !expect_ws
-            if looking_for_x
-                @assert is_x(kid)::Bool
-            end
+            # We end up here if we look for x, or the things in between x's
             @assert kind(kid) !== K"Whitespace" # This would be weird, I think?
             any_changes && push!(kids′, kid)
             accept_node!(ctx, kid)
             looking_for_whitespace = kind(last_leaf(kid)) !== K"Whitespace"
-            # Flip the switch, unless kid is a comment
-            looking_for_x = kind(kid) === K"Comment" ? looking_for_x : !looking_for_x
+            if looking_for_x
+                # We are looking for x, check we have them all otherwise keep looking
+                @assert is_x(kid)::Bool
+                n_x_leaves_visited += 1
+                if n_x_leaves_visited == n_leaves_per_x
+                    looking_for_x = false
+                    n_x_leaves_visited = 0
+                else
+                    # Multiple x's is only for dotted operators and there should be no
+                    # whitespace in between
+                    looking_for_whitespace = false
+                end
+            else
+                # This is a thing in between, but if it is a comment we still look for the
+                # real thing in between
+                looking_for_x = kind(kid) !== K"Comment"
+            end
         end
     end
     # Reset stream
@@ -276,9 +298,10 @@ function spaces_around_operators(ctx::Context, node::Node)
         )
         return nothing
     end
-    @assert kind(node) in KSet"call comparison <: >:"
+    @assert kind(node) in KSet"call dotcall comparison <: >:"
     is_x = x -> is_operator_leaf(x) || is_comparison_leaf(x)
-    return spaces_around_x(ctx, node, is_x)
+    n_leaves_per_x = kind(node) === K"dotcall" ? 2 : 1
+    return spaces_around_x(ctx, node, is_x, n_leaves_per_x)
 end
 
 function spaces_around_assignments(ctx::Context, node::Node)

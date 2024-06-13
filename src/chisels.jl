@@ -221,9 +221,10 @@ function is_assignment(node::Node)
     # return !is_leaf(node) && JuliaSyntax.is_prec_assignment(node)
 end
 
-# Just like `JuliaSyntax.is_infix_op_call`, but also check that the node is K"call"
+# Just like `JuliaSyntax.is_infix_op_call`, but also check that the node is K"call" or
+# K"dotcall"
 function is_infix_op_call(node::Node)
-    return kind(node) === K"call" && JuliaSyntax.is_infix_op_call(node)
+    return kind(node) in KSet"call dotcall" && JuliaSyntax.is_infix_op_call(node)
 end
 
 # Extract the operator of an infix op call node

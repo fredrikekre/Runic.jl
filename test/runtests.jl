@@ -144,7 +144,7 @@ end
 
 @testset "whitespace between operators" begin
     for sp in ("", " ", "  ")
-        for op in ("+", "-", "==", "!=", "===", "!==", "<", "<=")
+        for op in ("+", "-", "==", "!=", "===", "!==", "<", "<=", ".+", ".==")
             # a op b
             @test format_string("$(sp)a$(sp)$(op)$(sp)b$(sp)") ==
                 "$(sp)a $(op) b$(sp)"
