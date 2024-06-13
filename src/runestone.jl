@@ -852,9 +852,10 @@ function indent_newlines_between_indices(
             this_kid_changed = true
         end
         # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
-        # TODO: The trailing argument should maybe depend on `indent_closing_token` or
-        #       possibly set to `false` if `i == close_idx - 1`?
-        kid′ = continue_newlines(kid; leading = true, trailing = true)
+        # Skip trailing newline of this kid if the next token is the closing one and the
+        # closing token should not be indented.
+        trailing = !(i == close_idx - 1 && !indent_closing_token)
+        kid′ = continue_newlines(kid; leading = true, trailing = trailing)
         if kid′ !== nothing
             kid = kid′
             this_kid_changed = true
@@ -1091,10 +1092,10 @@ function indent_quote(ctx::Context, node::Node)
     end
 end
 
+# Literal array nodes and also ref-nodes (which can be either a typed-array or a getindex)
 function indent_array(ctx::Context, node::Node)
-    @assert kind(node) in KSet"vect vcat ncat"
+    @assert kind(node) in KSet"vect vcat typed_vcat ncat ref"
     kids = verified_kids(node)
-    any_kid_changed = false
     opening_bracket_idx = findfirst(x -> kind(x) === K"[", kids)::Int
     closing_bracket_idx = findnext(x -> kind(x) === K"]", kids, opening_bracket_idx + 1)::Int
     return indent_newlines_between_indices(
@@ -1153,7 +1154,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_do(ctx, node)
     elseif is_paren_block(node)
         return indent_paren_block(ctx, node)
-    elseif kind(node) in KSet"vect vcat ncat"
+    elseif kind(node) in KSet"vect vcat typed_vcat ncat ref"
         return indent_array(ctx, node)
     elseif kind(node) in KSet"row"
         return indent_array_row(ctx, node)
