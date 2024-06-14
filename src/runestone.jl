@@ -849,7 +849,7 @@ function indent_if(ctx::Context, node::Node)
 end
 
 function indent_call(ctx::Context, node::Node)
-    @assert kind(node) === K"call"
+    @assert kind(node) in KSet"call dotcall"
     return indent_paren(ctx, node)
 end
 
@@ -895,7 +895,7 @@ end
 
 # Mark opening and closing parentheses, in a call or a tuple, with indent and dedent tags.
 function indent_paren(ctx::Context, node::Node)
-    @assert kind(node) in KSet"call tuple parens"
+    @assert kind(node) in KSet"call dotcall tuple parens"
     kids = verified_kids(node)
     opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)::Int
     closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
@@ -1147,7 +1147,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_let(ctx, node)
     elseif is_begin_block(node)
         return indent_begin(ctx, node)
-    elseif kind(node) === K"call" && flags(node) == 0
+    elseif kind(node) in KSet"call dotcall" && flags(node) == 0 # TODO: Why the flag check?
         return indent_call(ctx, node)
     elseif is_infix_op_call(node)
         return indent_op_call(ctx, node)

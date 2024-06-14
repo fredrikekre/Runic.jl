@@ -392,18 +392,22 @@ end
         @test format_string("(a,\n$(sp)b\n$(sp))") == "(a,\n    b\n)"
         @test format_string("(a,\n$(sp)b,\n$(sp))") == "(a,\n    b,\n)"
         @test format_string("(\n$(sp)a,\n$(sp)b,\n$(sp))") == "(\n    a,\n    b,\n)"
-        # call
-        for sep in (",", ";")
-            @test format_string("f(a$(sep)\n$(sp)b)") == "f(a$(sep)\n    b)"
-            @test format_string("f(a$(sep)\n$(sp)b\n$(sp))") == "f(a$(sep)\n    b\n)"
-            @test format_string("f(a$(sep)\n$(sp)b,\n$(sp))") == "f(a$(sep)\n    b,\n)"
-            @test format_string("f(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") == "f(\n    a$(sep)\n    b,\n)"
+        # call, dotcall
+        for sep in (",", ";"), d in ("", ".")
+            @test format_string("f$(d)(a$(sep)\n$(sp)b)") == "f$(d)(a$(sep)\n    b)"
+            @test format_string("f$(d)(a$(sep)\n$(sp)b\n$(sp))") == "f$(d)(a$(sep)\n    b\n)"
+            @test format_string("f$(d)(a$(sep)\n$(sp)b,\n$(sp))") == "f$(d)(a$(sep)\n    b,\n)"
+            @test format_string("f$(d)(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") == "f$(d)(\n    a$(sep)\n    b,\n)"
         end
-        # op-call
-        @test format_string("a +\n$(sp)b") == "a +\n    b"
-        @test format_string("a + b *\n$(sp)c") == "a + b *\n    c"
-        @test format_string("a +\n$(sp)b *\n$(sp)c") == "a +\n    b *\n    c"
-        @test format_string("a ||\n$(sp)b") == "a ||\n    b"
+        # op-call, dot-op-call
+        for d in ("", ".")
+            @test format_string("a $(d)+\n$(sp)b") == "a $(d)+\n    b"
+            @test format_string("a $(d)+ b $(d)*\n$(sp)c") == "a $(d)+ b $(d)*\n    c"
+            @test format_string("a $(d)+\n$(sp)b $(d)*\n$(sp)c") == "a $(d)+\n    b $(d)*\n    c"
+            if !(VERSION < v"1.7" && d == ".")
+                @test format_string("a $(d)||\n$(sp)b") == "a $(d)||\n    b"
+            end
+        end
         # assignment
         for op in ("=", "+=")
             @test format_string("a $(op)\n$(sp)b") == "a $(op)\n    b"
