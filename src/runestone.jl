@@ -314,6 +314,14 @@ function spaces_around_assignments(ctx::Context, node::Node)
     return spaces_around_x(ctx, node, is_x)
 end
 
+function spaces_around_anonymous_function(ctx::Context, node::Node)
+    if !(kind(node) === K"->" && !is_leaf(node))
+        return nothing
+    end
+    is_x = x -> kind(x) === K"->"
+    return spaces_around_x(ctx, node, is_x)
+end
+
 # Opposite of `spaces_around_x`: remove spaces around `x`
 function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where F
     @assert !is_leaf(node)

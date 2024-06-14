@@ -293,6 +293,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something format_float_literals(ctx, node)
     @return_something spaces_around_operators(ctx, node)
     @return_something spaces_around_assignments(ctx, node)
+    @return_something spaces_around_anonymous_function(ctx, node)
     @return_something no_spaces_around_colon_etc(ctx, node)
     @return_something for_loop_use_in(ctx, node)
     @return_something four_space_indent(ctx, node)

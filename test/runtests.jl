@@ -198,6 +198,12 @@ end
     end
 end
 
+@testset "whitespace around ->" begin
+    for sp in ("", " ", "  ")
+        @test format_string("a$(sp)->$(sp)b") == "a -> b"
+    end
+end
+
 @testset "whitespace in comparison chains" begin
     for sp in ("", " ", "  ")
         @test format_string("a$(sp)==$(sp)b") == "a == b"
