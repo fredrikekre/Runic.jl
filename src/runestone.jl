@@ -910,6 +910,14 @@ function indent_paren(ctx::Context, node::Node)
     return indent_newlines_between_indices(ctx, node, opening_paren_idx, closing_paren_idx)
 end
 
+function indent_braces(ctx::Context, node::Node)
+    @assert kind(node) === K"braces"
+    kids = verified_kids(node)
+    opening_brace_idx = findfirst(x -> kind(x) === K"{", kids)::Int
+    closing_brace_idx = findnext(x -> kind(x) === K"}", kids, opening_brace_idx + 1)::Int
+    return indent_newlines_between_indices(ctx, node, opening_brace_idx, closing_brace_idx)
+end
+
 # Insert line-continuation nodes instead of bumping the indent level.
 function indent_op_call(ctx::Context, node::Node)
     kids = verified_kids(node)
@@ -1167,6 +1175,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_struct(ctx, node)
     elseif kind(node) === K"parens"
         return indent_parens(ctx, node)
+    elseif kind(node) === K"braces"
+        return indent_braces(ctx, node)
     elseif kind(node) in KSet"|| &&"
         return indent_short_circuit(ctx, node)
     elseif kind(node) in KSet"using import export"

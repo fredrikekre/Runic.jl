@@ -449,5 +449,10 @@ end
         # comparison
         @test format_string("a == b ==\n$(sp)c") == "a == b ==\n    c"
         @test format_string("a <= b >=\n$(sp)c") == "a <= b >=\n    c"
+        # curly braces
+        @test format_string("{a,\n$(sp)b}") == "{a,\n    b}"
+        @test format_string("{a,\n$(sp)b\n$(sp)}") == "{a,\n    b\n}"
+        @test format_string("{a,\n$(sp)b,\n$(sp)}") == "{a,\n    b,\n}"
+        @test format_string("{\n$(sp)a,\n$(sp)b,\n$(sp)}") == "{\n    a,\n    b,\n}"
     end
 end
