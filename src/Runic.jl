@@ -123,6 +123,7 @@ mutable struct Context
     prev_sibling::Union{Node, Nothing}
     next_sibling::Union{Node, Nothing}
     # parent::Union{Node, Nothing}
+    lineage_kinds::Vector{JuliaSyntax.Kind}
 end
 
 function Context(
@@ -151,9 +152,10 @@ function Context(
     indent_level = 0
     call_depth = 0
     prev_sibling = next_sibling = nothing
+    lineage_kinds = JuliaSyntax.Kind[]
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, call_depth, indent_level, prev_sibling, next_sibling,
+        diff, call_depth, indent_level, prev_sibling, next_sibling, lineage_kinds,
     )
 end
 
@@ -200,6 +202,7 @@ function format_node_with_kids!(ctx::Context, node::Node)
     next_sibling = ctx.next_sibling
     ctx.prev_sibling = nothing
     ctx.next_sibling = nothing
+    push!(ctx.lineage_kinds, kind(node))
 
     # The new node parts. `kids′` aliases `kids` and only copied below if any of the
     # nodes change ("copy-on-write").
@@ -255,6 +258,7 @@ function format_node_with_kids!(ctx::Context, node::Node)
     # Reset the siblings
     ctx.prev_sibling = prev_sibling
     ctx.next_sibling = next_sibling
+    pop!(ctx.lineage_kinds)
     ctx.call_depth -= 1
     # Return a new node if any of the kids changed
     if any_kid_changed
@@ -501,8 +505,8 @@ function format_tree!(ctx::Context)
             root′ = root′′
         end
         # The root node must only change once.
-        if (itr += 1) == 2
-            error("root node modified more than once")
+        if (itr += 1) > 100
+            error("root node modified more than 100 times?")
         end
     end
     # Truncate the output at the root span

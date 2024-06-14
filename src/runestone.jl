@@ -1152,6 +1152,69 @@ function indent_comparison(ctx::Context, node::Node)
     return continue_all_newlines(ctx, node)
 end
 
+# Indent a nested module
+function indent_module(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    any_kid_changed = false
+    # First node is the module keyword
+    mod_idx = 1
+    mod_node = kids[mod_idx]
+    @assert is_leaf(mod_node) && kind(mod_node) in KSet"module baremodule"
+    if !has_tag(mod_node, TAG_INDENT)
+        kids[mod_idx] = add_tag(mod_node, TAG_INDENT)
+        any_kid_changed = true
+    end
+    # Second node is the space between keyword and name
+    # TODO: Make sure there is just a single space
+    space_idx = 2
+    space_node = kids[space_idx]
+    @assert is_leaf(space_node) && kind(space_node) === K"Whitespace"
+    # Third node is the module identifier
+    id_idx = 3
+    id_node = kids[id_idx]
+    @assert kind(id_node) === K"Identifier"
+    # Fourth node is the module body block.
+    block_idx = 4
+    block_node′ = indent_block(ctx, kids[block_idx])
+    if block_node′ !== nothing
+        kids[block_idx] = block_node′
+        any_kid_changed = true
+    end
+    # Fifth node is the closing end keyword
+    end_idx = 5
+    end_node = kids[end_idx]
+    @assert is_leaf(end_node) && kind(end_node) === K"end"
+    if !has_tag(end_node, TAG_DEDENT)
+        kids[end_idx] = add_tag(end_node, TAG_DEDENT)
+        any_kid_changed = true
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? node : nothing
+end
+
+# The only thing at top level that we need to indent are modules which don't occupy the full
+# top level expression, for example a file with an inner module followed by some code.
+function indent_toplevel(ctx::Context, node::Node)
+    @assert kind(node) === K"toplevel"
+    kids = verified_kids(node)
+    mod_idx = findfirst(x -> kind(x) === K"module", kids)
+    if mod_idx === nothing || count(!JuliaSyntax.is_whitespace, kids) == 1
+        # No module or module that is the only top level expression
+        return nothing
+    end
+    any_kid_changed = false
+    while mod_idx !== nothing
+        mod_node = kids[mod_idx]
+        mod_node′ = indent_module(ctx, mod_node)
+        if mod_node′ !== nothing
+            kids[mod_idx] = mod_node′
+            any_kid_changed = true
+        end
+        mod_idx = findnext(x -> kind(x) === K"module", kids, mod_idx + 1)
+    end
+    return any_kid_changed ? node : nothing
+end
+
 function insert_delete_mark_newlines(ctx::Context, node::Node)
     if is_leaf(node)
         return nothing
@@ -1201,6 +1264,10 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_array_row(ctx, node)
     elseif kind(node) === K"comparison"
         return indent_comparison(ctx, node)
+    elseif kind(node) === K"toplevel"
+        return indent_toplevel(ctx, node)
+    elseif kind(node) === K"module" && findlast(x -> x === K"module", ctx.lineage_kinds) !== nothing
+        return indent_module(ctx, node)
     end
     return nothing
 end

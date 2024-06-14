@@ -388,6 +388,31 @@ end
         # do-end
         @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
         @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
+        # module-end, baremodule-end
+        for b in ("", "bare")
+            # Just a module
+            @test format_string("$(b)module A\n$(sp)x\n$(sp)end") == "$(b)module A\nx\nend"
+            # Comment before
+            @test format_string("# c\n$(b)module A\n$(sp)x\n$(sp)end") ==
+                "# c\n$(b)module A\nx\nend"
+            # Docstring before
+            @test format_string("\"doc\"\n$(b)module A\n$(sp)x\n$(sp)end") ==
+                "\"doc\"\n$(b)module A\nx\nend"
+            # code before
+            @test format_string("f\n$(b)module A\n$(sp)x\n$(sp)end") ==
+                "f\n$(b)module A\n    x\nend"
+            @test format_string("f\n$(b)module A\n$(sp)x\n$(sp)end\n$(b)module B\n$(sp)x\n$(sp)end") ==
+                "f\n$(b)module A\n    x\nend\n$(b)module B\n    x\nend"
+            # code after
+            @test format_string("$(b)module A\n$(sp)x\n$(sp)end\nf") ==
+                "$(b)module A\n    x\nend\nf"
+            # nested modules
+            @test format_string("$(b)module A\n$(sp)$(b)module B\n$(sp)x\n$(sp)end\n$(sp)end") ==
+                "$(b)module A\n$(b)module B\n    x\nend\nend"
+            # nested documented modules
+            @test format_string("\"doc\"\n$(b)module A\n\"doc\"\n$(b)module B\n$(sp)x\n$(sp)end\n$(sp)end") ==
+                "\"doc\"\n$(b)module A\n\"doc\"\n$(b)module B\n    x\nend\nend"
+        end
     end
 end
 
