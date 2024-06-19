@@ -1272,7 +1272,7 @@ function indent_paren(ctx::Context, node::Node)
 end
 
 function indent_braces(ctx::Context, node::Node)
-    @assert kind(node) === K"braces"
+    @assert kind(node) in KSet"curly braces bracescat"
     kids = verified_kids(node)
     opening_brace_idx = findfirst(x -> kind(x) === K"{", kids)::Int
     closing_brace_idx = findnext(x -> kind(x) === K"}", kids, opening_brace_idx + 1)::Int
@@ -1600,7 +1600,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_struct(ctx, node)
     elseif kind(node) === K"parens"
         return indent_parens(ctx, node)
-    elseif kind(node) === K"braces"
+    elseif kind(node) in KSet"curly braces bracescat"
         return indent_braces(ctx, node)
     elseif kind(node) in KSet"|| &&"
         return indent_short_circuit(ctx, node)
