@@ -6,7 +6,7 @@
 
 # JuliaSyntax.jl overloads == for this but seems easier to just define a new function
 function nodes_equal(n1::Node, n2::Node)
-    return head(n1) == head(n2) && span(n1) == span(n2) && n1.tags == n2.tags &&
+    return head(n1) == head(n2) && span(n1) == span(n2) && # n1.tags == n2.tags &&
         all(((x, y),) -> nodes_equal(x, y), zip(n1.kids, n2.kids))
 end
 
@@ -77,9 +77,13 @@ const TAG_DEDENT = TagType(1) << 1
 const TAG_PRE_DEDENT = TagType(1) << 2
 # This (NewlineWs) node is a line continuation
 const TAG_LINE_CONT = UInt32(1) << 31
+# Parameters that should have a trailing comma after last item
+const TAG_TRAILING_COMMA = TagType(1) << 4
 
 function add_tag(node::Node, tag::TagType)
-    @assert is_leaf(node)
+    if kind(node) !== K"parameters"
+        @assert is_leaf(node)
+    end
     return Node(head(node), span(node), node.kids, node.tags | tag)
 end
 
@@ -191,18 +195,44 @@ function first_leaf(node::Node)
     end
 end
 
+function second_leaf(node::Node)
+    if is_leaf(node)
+        return nothing
+    else
+        kids = verified_kids(node)
+        if length(kids) == 0
+            return nothing
+        elseif !is_leaf(kids[1])
+            return second_leaf(kids[1])
+        elseif length(kids) > 1
+            @assert is_leaf(kids[1])
+            return first_leaf(kids[2])
+        else
+            @assert false
+        end
+    end
+end
+
 # Return number of non-whitespace kids, basically the length the equivalent
 # (expr::Expr).args
 function meta_nargs(node::Node)
     return is_leaf(node) ? 0 : count(!JuliaSyntax.is_whitespace, verified_kids(node))
 end
 
-function replace_first_leaf(node::Node, kid′::Node)
+# Replace the first leaf
+# TODO: Append the replacement bytes inside this utility function?
+function replace_first_leaf(node::Node, kid′::Union{Node, NullNode})
     if is_leaf(node)
         return kid′
     else
         kids′ = copy(verified_kids(node))
-        kids′[1] = replace_first_leaf(kids′[1], kid′)
+        kid′′ = replace_first_leaf(kids′[1], kid′)
+        if kid′′ === nullnode
+            popfirst!(kids′)
+        else
+            kids′[1] = kid′′
+        end
+        # kids′[1] = replace_first_leaf(kids′[1], kid′)
         @assert length(kids′) > 0
         return make_node(node, kids′)
     end
@@ -213,6 +243,27 @@ function last_leaf(node::Node)
         return node
     else
         return last_leaf(last(verified_kids(node)))
+    end
+end
+
+function has_newline_after_non_whitespace(node::Node)
+    if is_leaf(node)
+        @assert kind(node) !== K"NewlineWs"
+        return false
+    else
+        kids = verified_kids(node)
+        idx = findlast(!JuliaSyntax.is_whitespace, kids)
+        if idx === nothing
+            @assert false
+            # Everything is whitespace...
+            return any(x -> kind(x) === K"NewlineWs", kids)
+        end
+        return any(x -> kind(x) === K"NewlineWs", kids[idx + 1:end]) ||
+            has_newline_after_non_whitespace(kids[idx])
+        # if idx === nothing
+        #     # All is whitespace, check if any of the kids is a newline
+        #     return any(x -> kind(x) === K"NewlineWs", kids)
+        # end
     end
 end
 

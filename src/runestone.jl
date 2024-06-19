@@ -288,6 +288,362 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
     end
 end
 
+# Insert space after comma and semicolon in list-like expressions. Aim for the form
+# `<nospace><item><comma><space><item><comma><space>...<item><nospace>`.
+# TODO: Why did this function become sooo complicated?
+function spaces_in_listlike(ctx::Context, node::Node)
+    if !(
+            kind(node) === K"tuple" ||
+            (kind(node) === K"call" && flags(node) == 0) || # Flag check rules out op-calls
+            (kind(node) === K"dotcall" && flags(node) == 0) ||
+            kind(node) === K"parameters"
+        )
+        return nothing
+    end
+    if kind(node) === K"parameters"
+        # TODO: Can probably show up elsewhere but...
+        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall"
+    end
+
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    kids′ = kids
+
+    peek(i) = i < length(kids) ? kind(kids[i + 1]) : nothing
+
+    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    comma = Node(JuliaSyntax.SyntaxHead(K",", JuliaSyntax.TRIVIA_FLAG), 1)
+
+    # Find the opening and closing leafs
+    if kind(node) in KSet"tuple call dotcall"
+        opening_leaf_idx = findfirst(x -> kind(x) === K"(", kids)
+        if opening_leaf_idx === nothing
+            # TODO: Implicit tuple without (), for example arguments in a do-block
+            return nothing
+        end
+        closing_leaf_idx = findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1)::Int
+        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
+    else
+        @assert kind(node) === K"parameters"
+        opening_leaf_idx = findfirst(x -> kind(x) === K";", kids)::Int
+        closing_leaf_idx = lastindex(kids) + 1
+    end
+
+    n_items = count(
+        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K","),
+        @view(kids[opening_leaf_idx + 1:closing_leaf_idx - 1]),
+    )
+    last_item_idx = findprev(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, closing_leaf_idx - 1)
+    if last_item_idx <= opening_leaf_idx
+        last_item_idx = nothing
+    end
+    last_comma_idx = findprev(x -> kind(x) === K",", kids, closing_leaf_idx - 1)
+    if last_comma_idx !== nothing && last_comma_idx <= opening_leaf_idx
+        last_comma_idx = nothing
+    end
+
+    # A trailing comma is required if
+    #  - node is a single item tuple (Julia-requirement)
+    #  - the closing token is not on the same line as the last item (Runic-requirement)
+    require_trailing_comma = false
+    if kind(node) === K"tuple" && n_items == 1
+        require_trailing_comma = true
+    elseif kind(node) === K"parameters"
+        # For parameters the trailing comma is configured from the parent
+        require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
+    elseif n_items > 0
+        require_trailing_comma = any(
+            x -> kind(x) === K"NewlineWs", @view(kids[last_item_idx + 1:closing_leaf_idx - 1]),
+        ) || has_newline_after_non_whitespace(kids[last_item_idx])
+    end
+    expect_trailing_comma = require_trailing_comma
+
+    # Helper to compute the new state after a given item
+    function state_after_item(i)
+        @assert i <= last_item_idx
+        if i < last_item_idx
+            return :expect_comma
+        elseif i == last_item_idx && expect_trailing_comma
+            return :expect_comma
+        else
+            return :expect_closing
+        end
+    end
+
+    # Keep track of the state
+    state = kind(node) === K"parameters" ? (:expect_space) :
+        n_items > 0 ? (:expect_item) :
+        (:expect_closing)
+    any_kid_changed = false
+    pos = position(ctx.fmt_io)
+
+    # Accept kids up until the opening leaf
+    for i in 1:opening_leaf_idx
+        accept_node!(ctx, kids[i])
+    end
+
+    # Loop over the kids between the opening/closing tokens.
+    for i in (opening_leaf_idx + 1):(closing_leaf_idx - 1)
+        kid′ = kids[i]
+        this_kid_changed = false
+        if state === :expect_item
+            if kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+                # Delete whitespace unless followed by a comment
+                replace_bytes!(ctx, "", span(kid′))
+                this_kid_changed = true
+                if kids′ === kids
+                    kids′ = kids[1:i - 1]
+                end
+            elseif kind(kid′) === K"NewlineWs" ||
+                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment")
+                # Newline here can happen if this kid is just after the opening leaf or if
+                # there is an empty line between items. No state change.
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+            elseif kind(kid′) === K"Comment"
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+                state = :expect_space # To ensure space after the comment
+            else
+                # This is an item (probably?).
+                # Make sure it doesn't have leading or trailing whitespace.
+                if kind(first_leaf(kid′)) === K"Whitespace" && kind(second_leaf(kid′)) !== K"Comment"
+                    # Delete the whitespace leaf
+                    kid_ws = first_leaf(kid′)
+                    replace_bytes!(ctx, "", span(kid_ws))
+                    kid′ = replace_first_leaf(kid′, nullnode)
+                    this_kid_changed = true
+                end
+                if kind(last_leaf(kid′)) === K"Whitespace"
+                    @assert false # Unreachable?
+                end
+                # Kid is now acceptable
+                any_kid_changed |= this_kid_changed
+                if any_kid_changed
+                    if kids′ === kids
+                        kids′ = kids[1:i - 1]
+                    end
+                    push!(kids′, kid′)
+                end
+                accept_node!(ctx, kid′)
+                # Transition to the next state
+                state = state_after_item(i)
+            end
+        elseif state === :expect_comma
+            if kind(kid′) === K","
+                before_last_item = i < last_item_idx
+                if before_last_item || expect_trailing_comma
+                    # Nice, just accept it.
+                    accept_node!(ctx, kid′)
+                    any_kid_changed && push!(kids′, kid′)
+                else
+                    @assert false # Unreachable?
+                end
+                # Transition to the next state
+                state = before_last_item ? (:expect_space) : (:expect_closing)
+            elseif kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+                # Delete space (unless followed by a comment) and hope next is still comma
+                # (no state change)
+                this_kid_changed = true
+                if kids′ === kids
+                    kids′ = kids[1:i - 1]
+                end
+                replace_bytes!(ctx, "", span(kid′))
+            elseif kind(kid′) === K"NewlineWs" ||
+                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment") ||
+                    kind(kid′) === K"Comment"
+                # This branch can be reached if:
+                #  - we have passed the last item and there is no trailing comma
+                #  - there is a comma coming but it is on the next line (weird)
+                #  - there is a comment with no space before it
+                next_non_ws_idx = findnext(
+                    !JuliaSyntax.is_whitespace, @view(kids[1:closing_leaf_idx - 1]), i + 1,
+                )
+                next_kind = next_non_ws_idx === nothing ? nothing : kind(kids[next_non_ws_idx])
+                # Insert a comma
+                if next_kind !== K","
+                    @assert expect_trailing_comma
+                    this_kid_changed = true
+                    if kids′ === kids
+                        kids′ = kids[1:i - 1]
+                    end
+                    replace_bytes!(ctx, ",", 0)
+                    push!(kids′, comma)
+                    accept_node!(ctx, comma)
+                    state = :expect_closing
+                else
+                    @assert false # Unreachable?
+                end
+                any_kid_changed |= this_kid_changed
+                # Accept the newline
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+            elseif kind(kid′) === K"parameters"
+                @assert kind(node) in KSet"call dotcall" # TODO: Can this happen for named tuples?
+                @assert i === last_item_idx
+                @assert findnext(
+                    !JuliaSyntax.is_whitespace, @view(kids[1:closing_leaf_idx - 1]), i + 1,
+                ) === nothing
+                if kind(first_leaf(kid′)) === K"Whitespace"
+                    # Delete the whitespace leaf
+                    kid_ws = first_leaf(kid′)
+                    replace_bytes!(ctx, "", span(kid_ws))
+                    kid′ = replace_first_leaf(kid′, nullnode)
+                    this_kid_changed = true
+                    # if kids′ === kids
+                    #     kids′ = kids[1:i - 1]
+                    # end
+                end
+                if expect_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA)
+                    # Tag the parameters node to require a trailing comma
+                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
+                    this_kid_changed = true
+                    # if kids′ === kids
+                    #     kids′ = kids[1:i - 1]
+                    # end
+                end
+                # TODO: Tag for requiring trailing comma.
+                any_kid_changed |= this_kid_changed
+                accept_node!(ctx, kid′)
+                if any_kid_changed
+                    if kids′ === kids
+                        kids′ = kids[1:i - 1]
+                    end
+                    push!(kids′, kid′)
+                end
+                state = :expect_closing # parameters must be the last item(?)
+            else
+                @assert false # Unreachable?
+            end
+        elseif state === :expect_space
+            if (kind(kid′) === K"Whitespace" && span(kid′) == 1) ||
+                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment")
+                # Whitespace with correct span
+                # Whitespace before a comment
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+                state = :expect_item
+            elseif kind(kid′) === K"Whitespace"
+                # Wrong span, replace it
+                this_kid_changed = true
+                if kids′ === kids
+                    kids′ = kids[1:i - 1]
+                end
+                replace_bytes!(ctx, " ", span(kid′))
+                accept_node!(ctx, ws)
+                push!(kids′, ws)
+                # Transition to the next state
+                state = :expect_item
+            elseif kind(kid′) === K"NewlineWs"
+                # NewlineWs are accepted and accounts for a space
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+                state = :expect_item
+            elseif kind(kid′) === K"Comment"
+                # Comments are accepted, state stays the same
+                # TODO: Make sure there is a space before the comment? Maybe that's not the
+                # responsibility of this function though.
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+            else
+                # Probably a list item, look for leading whitespace, or insert.
+                @assert !(kind(kid′) in KSet", ;")
+                if kind(first_leaf(kid′)) === K"NewlineWs" ||
+                        kind(first_leaf(kid′)) === K"Comment" ||
+                        (kind(first_leaf(kid′)) === K"Whitespace" && kind(second_leaf(kid′)) === K"Comment")
+                    # Newline, comment, or whitespace followed by comment
+                    accept_node!(ctx, kid′)
+                    any_kid_changed && push!(kids′, kid′)
+                    state = state_after_item(i)
+                elseif kind(first_leaf(kid′)) === K"Whitespace"
+                    ws_node = first_leaf(kid′)
+                    if span(ws_node) == 1
+                        accept_node!(ctx, kid′)
+                        any_kid_changed && push!(kids′, kid′)
+                    else
+                        kid′ = replace_first_leaf(kid′, ws)
+                        this_kid_changed = true
+                        if kids′ === kids
+                            kids′ = kids[1:i - 1]
+                        end
+                        replace_bytes!(ctx, " ", span(ws_node))
+                        accept_node!(ctx, kid′)
+                        push!(kids′, kid′)
+                    end
+                    state = state_after_item(i)
+                else
+                    # Insert a standalone space kid and then accept the current node
+                    this_kid_changed = true
+                    if kids′ === kids
+                        kids′ = kids[1:i - 1]
+                    end
+                    replace_bytes!(ctx, " ", 0)
+                    push!(kids′, ws)
+                    accept_node!(ctx, ws)
+                    push!(kids′, kid′)
+                    accept_node!(ctx, kid′)
+                    # Here we inserted a space and consumed the next item, moving on to comma
+                    state = state_after_item(i)
+                end
+            end
+        else
+            @assert state === :expect_closing
+            if kind(kid′) === K"," ||
+                    (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
+                # Trailing comma (when not wanted) and space not followed by a comment are
+                # removed
+                this_kid_changed = true
+                if kids′ === kids
+                    kids′ = kids[1:i - 1]
+                end
+                replace_bytes!(ctx, "", span(kid′))
+            elseif kind(kid′) === K"NewlineWs" ||
+                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment") ||
+                    kind(kid′) === K"Comment"
+                # Newlines, whitespace followed by comment, and comments are accepted.
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+            else
+                @assert false # Unreachable?
+            end
+        end # if-state
+        any_kid_changed |= this_kid_changed
+    end
+    if state !== :expect_closing
+        if state === :expect_comma
+            # Need to add a trailing comma if it is expected
+            @assert state === :expect_comma
+            @assert expect_trailing_comma
+            any_kid_changed = true
+            if kids′ === kids
+                kids′ = kids[1:closing_leaf_idx - 1]
+            end
+            replace_bytes!(ctx, ",", 0)
+            push!(kids′, comma)
+            accept_node!(ctx, comma)
+            state = :expect_closing
+        else
+            @assert false # Unreachable?
+        end
+    end
+    @assert state === :expect_closing
+    # Accept kids after the closing leaf
+    for i in closing_leaf_idx:length(kids)
+        accept_node!(ctx, kids[i])
+        any_kid_changed && push!(kids′, kids[i])
+    end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    # Create a new node if any kids changed
+    if any_kid_changed
+        n = make_node(node, kids′)
+        return n
+    else
+        @assert kids === kids′
+        return nothing
+    end
+end
+
 # This pass handles spaces around infix operator calls, comparison chains, and
 # <: and >: operators.
 function spaces_around_operators(ctx::Context, node::Node)
@@ -1226,7 +1582,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_let(ctx, node)
     elseif is_begin_block(node)
         return indent_begin(ctx, node)
-    elseif kind(node) in KSet"call dotcall" && flags(node) == 0 # TODO: Why the flag check?
+    elseif kind(node) in KSet"call dotcall" &&
+            flags(node) == 0 # Flag check rules out op-calls
         return indent_call(ctx, node)
     elseif is_infix_op_call(node)
         return indent_op_call(ctx, node)
@@ -1266,7 +1623,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_comparison(ctx, node)
     elseif kind(node) === K"toplevel"
         return indent_toplevel(ctx, node)
-    elseif kind(node) === K"module" && findlast(x -> x === K"module", ctx.lineage_kinds) !== nothing
+    elseif kind(node) === K"module" &&
+            findlast(x -> x === K"module", ctx.lineage_kinds) !== nothing
         return indent_module(ctx, node)
     end
     return nothing

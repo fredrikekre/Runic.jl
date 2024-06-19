@@ -24,6 +24,9 @@ include("JuliaSyntax.jl")
 
 const TagType = UInt32
 
+struct NullNode end
+const nullnode = NullNode()
+
 # This is essentially just a re-packed `JuliaSyntax.GreenNode`.
 struct Node
     # The next three fields directly match JuliaSyntax.GreenNode. We can not store a
@@ -186,9 +189,6 @@ function replace_bytes!(ctx::Context, bytes::Union{String, AbstractVector{UInt8}
     return replace_bytes!(ctx.fmt_io, bytes, Int(sz))
 end
 
-struct NullNode end
-const nullnode = NullNode()
-
 function format_node_with_kids!(ctx::Context, node::Node)
     # If the node doesn't have kids there is nothing to do here
     if is_leaf(node)
@@ -301,6 +301,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something no_spaces_around_colon_etc(ctx, node)
     @return_something for_loop_use_in(ctx, node)
     @return_something four_space_indent(ctx, node)
+    @return_something spaces_in_listlike(ctx, node)
     ctx.call_depth -= 1
 
     # If none of the transformations above changed the node (and thus returned back up one

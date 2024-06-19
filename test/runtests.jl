@@ -14,7 +14,7 @@ using JuliaSyntax:
     @test sprint(show, node) == "Node({head: {kind: K\"toplevel\", flags: \"\"}, span: 10, tags: \"\"})"
 
     # JuliaSyntax duck-typing
-    for n in (node, Runic.verified_kids(node)...,)
+    for n in (node, Runic.verified_kids(node)...)
         @test Runic.head(n) === JuliaSyntax.head(n) === n.head
         @test Runic.kind(n) === JuliaSyntax.kind(n) === n.head.kind
         @test Runic.flags(n) === JuliaSyntax.flags(n) === n.head.flags
@@ -198,6 +198,63 @@ end
     end
 end
 
+@testset "spaces in lists" begin
+    for sp in ("", " ", "  "), a in ("a", "a + a", "a(x)"), b in ("b", "b + b", "b(y)")
+        # tuple, call, dotcall
+        for f in ("", "f", "f.")
+            # single line
+            @test format_string("$(f)($(sp))") == "$(f)()"
+            @test format_string("$(f)($(sp)$(a)$(sp),$(sp)$(b)$(sp))") ==
+                format_string("$(f)($(sp)$(a)$(sp),$(sp)$(b)$(sp),$(sp))") ==
+                "$(f)($(a), $(b))"
+            # line break in between items
+            @test format_string("$(f)($(sp)$(a)$(sp),\n$(sp)$(b)$(sp))") ==
+                format_string("$(f)($(sp)$(a)$(sp),\n$(sp)$(b)$(sp),$(sp))") ==
+                "$(f)($(a),\n    $(b))"
+            # line break after opening token
+            @test format_string("$(f)(\n$(sp)$(a)$(sp),$(sp)$(b)$(sp))") ==
+                format_string("$(f)(\n$(sp)$(a)$(sp),$(sp)$(b)$(sp),)") ==
+                "$(f)(\n    $(a), $(b))"
+            # line break before closing token
+            @test format_string("$(f)($(sp)$(a)$(sp),$(sp)$(b)\n)") ==
+                format_string("$(f)($(sp)$(a)$(sp),$(sp)$(b),\n)") ==
+                "$(f)($(a), $(b),\n)"
+            # line break after opening and before closing token
+            @test format_string("$(f)(\n$(sp)$(a)$(sp),$(sp)$(b)\n)") ==
+                format_string("$(f)(\n$(sp)$(a)$(sp),$(sp)$(b),\n)") ==
+                "$(f)(\n    $(a), $(b),\n)"
+            # line break after opening and before closing token and between items
+            @test format_string("$(f)(\n$(sp)$(a)$(sp),\n$(sp)$(b)\n)") ==
+                format_string("$(f)(\n$(sp)$(a)$(sp),\n$(sp)$(b),\n)") ==
+                "$(f)(\n    $(a),\n    $(b),\n)"
+            # trailing comments
+            @test format_string("$(f)($(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b)$(sp)# b\n)") ==
+                format_string("$(f)($(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n)") ==
+                "$(f)($(sp)# x\n    $(a),$(sp)# a\n    $(b),$(sp)# b\n)"
+            # comments on separate lines between items
+            @test format_string("$(f)(\n# a\n$(a)$(sp),\n# b\n$(b)\n)") ==
+                format_string("$(f)(\n# a\n$(a)$(sp),\n# b\n$(b)$(sp),\n)") ==
+                "$(f)(\n    # a\n    $(a),\n    # b\n    $(b),\n)"
+        end
+        # Single item
+        @test format_string("($(sp)$(a)$(sp),$(sp))") == "($(a),)"
+        @test format_string("f($(sp)$(a)$(sp),$(sp))") == "f($(a))"
+        # Keyword arguments
+        @test format_string("f($(sp)$(a)$(sp);$(sp)$(b)$(sp))") ==
+            format_string("f($(sp)$(a)$(sp);$(sp)$(b)$(sp),$(sp))") ==
+            "f($(a); $(b))"
+        @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp)\n)") ==
+            format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp),$(sp)\n)") ==
+            "f(\n    $(a);\n    $(b),\n)"
+    end
+    # Splatting
+    for sp in ("", " ", "  ")
+        @test format_string("($(sp)a$(sp)...,$(sp))") == "(a$(sp)...,)"
+        @test format_string("f($(sp)a$(sp)...,$(sp))") == "f(a$(sp)...)"
+        @test format_string("f($(sp)a$(sp)...;$(sp)b$(sp)...$(sp))") == "f(a$(sp)...; b$(sp)...)"
+    end
+end
+
 @testset "whitespace around ->" begin
     for sp in ("", " ", "  ")
         @test format_string("a$(sp)->$(sp)b") == "a -> b"
@@ -330,7 +387,7 @@ end
         # if-elseif-elseif-else-end
         @test format_string(
             "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)elseif " *
-            "c\n$(sp)z\n$(sp)else\n$(sp)u\n$(sp)end"
+            "c\n$(sp)z\n$(sp)else\n$(sp)u\n$(sp)end",
         ) ==
             "if a\n    x\nelseif b\n    y\nelseif c\n    z\nelse\n    u\nend"
         # begin-end
@@ -420,15 +477,17 @@ end
     for sp in ("", "  ", "    ", "      ")
         # tuple
         @test format_string("(a,\n$(sp)b)") == "(a,\n    b)"
-        @test format_string("(a,\n$(sp)b\n$(sp))") == "(a,\n    b\n)"
-        @test format_string("(a,\n$(sp)b,\n$(sp))") == "(a,\n    b,\n)"
+        @test format_string("(a,\n$(sp)b\n$(sp))") ==
+            format_string("(a,\n$(sp)b,\n$(sp))") == "(a,\n    b,\n)"
         @test format_string("(\n$(sp)a,\n$(sp)b,\n$(sp))") == "(\n    a,\n    b,\n)"
         # call, dotcall
         for sep in (",", ";"), d in ("", ".")
             @test format_string("f$(d)(a$(sep)\n$(sp)b)") == "f$(d)(a$(sep)\n    b)"
-            @test format_string("f$(d)(a$(sep)\n$(sp)b\n$(sp))") == "f$(d)(a$(sep)\n    b\n)"
-            @test format_string("f$(d)(a$(sep)\n$(sp)b,\n$(sp))") == "f$(d)(a$(sep)\n    b,\n)"
-            @test format_string("f$(d)(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") == "f$(d)(\n    a$(sep)\n    b,\n)"
+            @test format_string("f$(d)(a$(sep)\n$(sp)b\n$(sp))") ==
+                format_string("f$(d)(a$(sep)\n$(sp)b,\n$(sp))") ==
+                "f$(d)(a$(sep)\n    b,\n)"
+            @test format_string("f$(d)(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") ==
+                "f$(d)(\n    a$(sep)\n    b,\n)"
         end
         # op-call, dot-op-call
         for d in ("", ".")
