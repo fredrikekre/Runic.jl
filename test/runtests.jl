@@ -253,6 +253,15 @@ end
         @test format_string("f($(sp)a$(sp)...,$(sp))") == "f(a$(sp)...)"
         @test format_string("f($(sp)a$(sp)...;$(sp)b$(sp)...$(sp))") == "f(a$(sp)...; b$(sp)...)"
     end
+    # Curly (not as extensive testing as tuple/call/dotcall above but the code path is the
+    # same)
+    for x in ("", "X"), sp in ("", " ", "  "), a in ("A", "<:B", "C <: D"), b in ("E", "<:F", "G <: H")
+        tr = x == "" ? "" : ","
+        @test format_string("$(x){$(sp)$(a)$(sp),$(sp)$(b)$(sp)}") == "$(x){$(a), $(b)}"
+        @test format_string("$(x){$(sp)$(a)$(sp);$(sp)$(b)$(sp)}") == "$(x){$(a); $(b)}"
+        @test format_string("$(x){$(sp)$(a)$(sp);$(sp)$(b)$(sp)}") == "$(x){$(a); $(b)}"
+        @test format_string("$(x){\n$(sp)$(a)$(sp);$(sp)$(b)$(sp)\n}") == "$(x){\n$(a); $(b)$(tr)\n}"
+    end
 end
 
 @testset "whitespace around ->" begin
@@ -535,8 +544,8 @@ end
         @test format_string("a <= b >=\n$(sp)c") == "a <= b >=\n    c"
         # curly braces
         @test format_string("{a,\n$(sp)b}") == "{a,\n    b}"
-        @test format_string("{a,\n$(sp)b\n$(sp)}") == "{a,\n    b\n}"
-        @test format_string("{a,\n$(sp)b,\n$(sp)}") == "{a,\n    b,\n}"
+        @test format_string("{a,\n$(sp)b\n$(sp)}") ==
+            format_string("{a,\n$(sp)b,\n$(sp)}") == "{a,\n    b,\n}"
         @test format_string("{\n$(sp)a,\n$(sp)b,\n$(sp)}") == "{\n    a,\n    b,\n}"
     end
 end

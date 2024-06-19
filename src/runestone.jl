@@ -293,16 +293,15 @@ end
 # TODO: Why did this function become sooo complicated?
 function spaces_in_listlike(ctx::Context, node::Node)
     if !(
-            kind(node) === K"tuple" ||
+            kind(node) in KSet"tuple parameters curly braces bracescat" ||
             (kind(node) === K"call" && flags(node) == 0) || # Flag check rules out op-calls
-            (kind(node) === K"dotcall" && flags(node) == 0) ||
-            kind(node) === K"parameters"
+            (kind(node) === K"dotcall" && flags(node) == 0)
         )
         return nothing
     end
     if kind(node) === K"parameters"
         # TODO: Can probably show up elsewhere but...
-        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall"
+        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall curly"
     end
 
     @assert !is_leaf(node)
@@ -322,6 +321,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
             return nothing
         end
         closing_leaf_idx = findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1)::Int
+        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
+    elseif kind(node) in KSet"curly braces bracescat"
+        opening_leaf_idx = findfirst(x -> kind(x) === K"{", kids)::Int
+        closing_leaf_idx = findnext(x -> kind(x) === K"}", kids, opening_leaf_idx + 1)::Int
         closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
     else
         @assert kind(node) === K"parameters"
@@ -348,6 +351,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
     require_trailing_comma = false
     if kind(node) === K"tuple" && n_items == 1
         require_trailing_comma = true
+    elseif kind(node) === K"bracescat"
+        require_trailing_comma = false # Leads to parser error
     elseif kind(node) === K"parameters"
         # For parameters the trailing comma is configured from the parent
         require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
@@ -430,7 +435,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 state = state_after_item(i)
             end
         elseif state === :expect_comma
-            if kind(kid′) === K","
+            if kind(kid′) === K"," || (kind(kid′) === K";" && kind(node) === K"bracescat")
                 before_last_item = i < last_item_idx
                 if before_last_item || expect_trailing_comma
                     # Nice, just accept it.
@@ -479,7 +484,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"parameters"
-                @assert kind(node) in KSet"call dotcall" # TODO: Can this happen for named tuples?
+                @assert kind(node) in KSet"call dotcall curly" # TODO: Can this happen for named tuples?
                 @assert i === last_item_idx
                 @assert findnext(
                     !JuliaSyntax.is_whitespace, @view(kids[1:closing_leaf_idx - 1]), i + 1,
