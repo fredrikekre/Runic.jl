@@ -43,6 +43,11 @@ function Node(head::JuliaSyntax.SyntaxHead, span::Integer)
     return Node(head, span % UInt32, (), 0 % TagType)
 end
 
+function Node(head::JuliaSyntax.SyntaxHead, kids::Vector{Node})
+    spn = mapreduce(span, +, kids; init = 0)
+    return Node(head, spn % UInt32, kids, 0 % TagType)
+end
+
 # Re-package a GreenNode as a Node
 function Node(node::JuliaSyntax.GreenNode)
     tags = 0 % TagType
@@ -301,6 +306,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something spaces_around_keywords(ctx, node)
     @return_something no_spaces_around_colon_etc(ctx, node)
     @return_something for_loop_use_in(ctx, node)
+    @return_something braces_around_where_rhs(ctx, node)
     @return_something four_space_indent(ctx, node)
     @return_something spaces_in_listlike(ctx, node)
     ctx.call_depth -= 1

@@ -152,7 +152,7 @@ end
 # Insert space around `x`, where `x` can be operators, assignments, etc. with the pattern:
 # `<something><space><x><space><something>`, for example the spaces around `+` and `=` in
 # `a = x + y`.
-function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int = 1) where F
+function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int = 1) where {F}
     # TODO: So much boilerplate here...
     @assert !is_leaf(node)
 
@@ -684,7 +684,7 @@ function spaces_around_anonymous_function(ctx::Context, node::Node)
 end
 
 # Opposite of `spaces_around_x`: remove spaces around `x`
-function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where F
+function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
     @assert !is_leaf(node)
     # TODO: Can't handle NewlineWs here right now
     if any(kind(c) === K"NewlineWs" for c in verified_kids(node))
@@ -999,6 +999,48 @@ function for_loop_use_in(ctx::Context, node::Node)
     @assert position(ctx.fmt_io) == pos + span(node′)
     seek(ctx.fmt_io, pos) # reset
     return node′
+end
+
+function braces_around_where_rhs(ctx::Context, node::Node)
+    if !(kind(node) === K"where" && !is_leaf(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    kids′ = kids
+    # any_changes = false
+    pos = position(ctx.fmt_io)
+    where_idx = findfirst(x -> is_leaf(x) && kind(x) === K"where", kids)::Int
+    rhs_idx = findnext(!JuliaSyntax.is_whitespace, kids, where_idx + 1)::Int
+    rhs = kids[rhs_idx]
+    if kind(rhs) === K"braces"
+        return nothing
+    end
+    # Wrap the rhs in a braces node
+    kids′ = kids[1:rhs_idx - 1]
+    for i in 1:rhs_idx - 1
+        accept_node!(ctx, kids[i])
+    end
+    opening_brace = Node(JuliaSyntax.SyntaxHead(K"{", 0), 1)
+    closing_brace = Node(JuliaSyntax.SyntaxHead(K"}", 0), 1)
+    rhs′ = Node(
+        JuliaSyntax.SyntaxHead(K"braces", 0),
+        [opening_brace, rhs, closing_brace],
+    )
+    push!(kids′, rhs′)
+    # Write the new node
+    replace_bytes!(ctx, "{", 0)
+    accept_node!(ctx, opening_brace)
+    accept_node!(ctx, rhs)
+    replace_bytes!(ctx, "}", 0)
+    accept_node!(ctx, closing_brace)
+    # Accept any remaining kids
+    for i in rhs_idx + 1:length(kids)
+        accept_node!(ctx, kids[i])
+        push!(kids′, kids[i])
+    end
+    # Reset stream and return
+    seek(ctx.fmt_io, pos)
+    return make_node(node, kids′)
 end
 
 # This function materialized all indentations marked by `insert_delete_mark_newlines`.

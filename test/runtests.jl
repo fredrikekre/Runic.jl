@@ -379,6 +379,13 @@ end
     end
 end
 
+@testset "braces around where rhs" begin
+    @test format_string("A where B") == "A where {B}"
+    @test format_string("A where B <: C") == "A where {B <: C}"
+    @test format_string("A where B >: C") == "A where {B >: C}"
+    @test format_string("A where B where C") == "A where {B} where {C}"
+end
+
 @testset "block/hard indentation" begin
     for sp in ("", "  ", "    ", "      ")
         # function-end
