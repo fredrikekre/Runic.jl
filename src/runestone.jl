@@ -435,6 +435,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 state = state_after_item(i)
             end
         elseif state === :expect_comma
+            trailing = i > last_item_idx
             if kind(kid′) === K"," || (kind(kid′) === K";" && kind(node) === K"bracescat")
                 before_last_item = i < last_item_idx
                 if before_last_item || expect_trailing_comma
@@ -465,8 +466,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     !JuliaSyntax.is_whitespace, @view(kids[1:closing_leaf_idx - 1]), i + 1,
                 )
                 next_kind = next_non_ws_idx === nothing ? nothing : kind(kids[next_non_ws_idx])
-                # Insert a comma
-                if next_kind !== K","
+                # Insert a comma if there isn't one coming
+                if trailing && next_kind !== K","
                     @assert expect_trailing_comma
                     this_kid_changed = true
                     if kids′ === kids
@@ -476,8 +477,6 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     push!(kids′, comma)
                     accept_node!(ctx, comma)
                     state = :expect_closing
-                else
-                    @assert false # Unreachable?
                 end
                 any_kid_changed |= this_kid_changed
                 # Accept the newline

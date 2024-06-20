@@ -207,6 +207,11 @@ end
             @test format_string("$(f)($(sp)$(a)$(sp),$(sp)$(b)$(sp))") ==
                 format_string("$(f)($(sp)$(a)$(sp),$(sp)$(b)$(sp),$(sp))") ==
                 "$(f)($(a), $(b))"
+            # comments on the same line
+            @test format_string("$(f)($(sp)$(a)$(sp), #==#$(sp)$(b)$(sp))") ==
+                "$(f)($(a), #==# $(b))"
+            @test format_string("$(f)($(sp)$(a) #==#,$(sp)$(b)$(sp))") ==
+                "$(f)($(a) #==#, $(b))"
             # line break in between items
             @test format_string("$(f)($(sp)$(a)$(sp),\n$(sp)$(b)$(sp))") ==
                 format_string("$(f)($(sp)$(a)$(sp),\n$(sp)$(b)$(sp),$(sp))") ==
