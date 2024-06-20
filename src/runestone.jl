@@ -751,6 +751,144 @@ function no_spaces_around_colon_etc(ctx::Context, node::Node)
     return no_spaces_around_x(ctx, node, is_x)
 end
 
+# Single space around keywords:
+# Both sides of: `where`, `do` (if followed by arguments)
+# Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function`,
+# `if`, `elseif`, `catch` (if followed by variable)
+function spaces_around_keywords(ctx::Context, node::Node)
+    is_leaf(node) && return nothing
+    keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch"
+    if !(kind(node) in keyword_set)
+        return nothing
+    end
+    kids = verified_kids(node)
+    kids′ = kids
+    any_changes = false
+    pos = position(ctx.fmt_io)
+    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+
+    peek_kinds = KSet"where do"
+    state = kind(node) in peek_kinds ? (:peeking_for_keyword) : (:looking_for_keyword)
+    keep_looking_for_keywords = false
+    space_after = true
+
+    for i in eachindex(kids)
+        kid = kids[i]
+        if state === :peeking_for_keyword
+            nkid = kids[i + 1]
+            if kind(nkid) in peek_kinds
+                state = :looking_for_space
+                keep_looking_for_keywords = true
+                space_after = false
+            else
+                accept_node!(ctx, kid)
+                any_changes && push!(kids′, kid)
+                continue
+            end
+        end
+        if state === :looking_for_keyword
+            if kind(kid) in keyword_set
+                accept_node!(ctx, kid)
+                any_changes && push!(kids′, kid)
+                if kind(kid) in KSet"mutable abstract primitive"
+                    # These keywords are always followed by another keyword
+                    keep_looking_for_keywords = true
+                end
+                state = :looking_for_space
+                # `do` should only be followed by space if the argument-tuple is non-empty
+                if kind(node) === K"do"
+                    nkid = kids[i + 1]
+                    @assert kind(nkid) === K"tuple"
+                    if !any(!JuliaSyntax.is_whitespace, verified_kids(nkid))
+                        state = :closing
+                    end
+                end
+                # `catch` should only be followed by space if the error is caught in a var
+                if kind(node) === K"catch"
+                    nkid = kids[i + 1]
+                    if kind(nkid) === K"false" && span(nkid) == 0
+                        state = :closing
+                    end
+                end
+            else
+                accept_node!(ctx, kid)
+                any_changes && push!(kids′, kid)
+            end
+        elseif state === :looking_for_space
+            if kind(kid) === K"Whitespace" && span(kid) == 1
+                # TODO: Include NewlineWs here?
+                accept_node!(ctx, kid)
+                any_changes && push!(kids′, kid)
+            elseif kind(kid) === K"Whitespace"
+                # Replace with single space.
+                any_changes = true
+                if kids′ === kids
+                    kids′ = kids[1:i - 1]
+                end
+                replace_bytes!(ctx, " ", span(kid))
+                push!(kids′, ws)
+                accept_node!(ctx, ws)
+            elseif space_after && kind(first_leaf(kid)) === K"Whitespace"
+                kid_ws = first_leaf(kid)
+                if span(kid_ws) == 1
+                    accept_node!(ctx, kid)
+                    any_changes && push!(kids′, kid)
+                else
+                    kid′ = replace_first_leaf(kid, ws)
+                    @assert span(kid′) == span(kid) - span(kid_ws) + 1
+                    replace_bytes!(ctx, " ", span(kid_ws))
+                    accept_node!(ctx, kid′)
+                    any_changes = true
+                    if kids′ === kids
+                        kids′ = kids[1:i - 1]
+                    end
+                    push!(kids′, kid′)
+                end
+            elseif !space_after && kind(last_leaf(kid)) === K"Whitespace"
+                @assert false # Unreachable?
+            else
+                # Reachable in e.g. `T where{T}`, insert space
+                @assert kind(node) === K"where"
+                any_changes = true
+                if kids′ === kids
+                    kids′ = kids[1:i - 1]
+                end
+                # Insert the space before/after the kid depending on whether we are looking
+                # for a space before or after a keyword
+                if !space_after
+                    push!(kids′, kid)
+                    accept_node!(ctx, kid)
+                end
+                replace_bytes!(ctx, " ", 0)
+                push!(kids′, ws)
+                accept_node!(ctx, ws)
+                if space_after
+                    push!(kids′, kid)
+                    accept_node!(ctx, kid)
+                end
+            end
+            state = keep_looking_for_keywords ? (:looking_for_keyword) : (:closing)
+            keep_looking_for_keywords = false
+            space_after = true
+        else
+            @assert state === :closing
+            accept_node!(ctx, kid)
+            any_changes && push!(kids′, kid)
+        end
+    end
+
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    # Return
+    if any_changes
+        # Construct the new node
+        node′ = make_node(node, kids′)
+        return node′
+    else
+        return nothing
+    end
+end
+
 # Replace the K"=" operator with `in`
 function replace_with_in(ctx::Context, node::Node)
     @assert kind(node) === K"=" && !is_leaf(node) && meta_nargs(node) == 3

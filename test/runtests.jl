@@ -339,6 +339,26 @@ end
     @test format_string("a >:  T   >:    S") == "a >: T >: S"
 end
 
+@testset "spaces around keywords" begin
+    for sp in (" ", "  ")
+        @test format_string("struct$(sp)A end") == "struct A end"
+        @test format_string("mutable$(sp)struct$(sp)A end") == "mutable struct A end"
+        @test format_string("abstract$(sp)type$(sp)A end") == "abstract type A end"
+        @test format_string("primitive$(sp)type$(sp)A 64 end") == "primitive type A 64 end"
+        @test format_string("function$(sp)A() end") == "function A() end"
+        @test format_string("if$(sp)a\nelseif$(sp)b\nend") == "if a\nelseif b\nend"
+        @test format_string("if$(sp)a && b\nelseif$(sp)c || d\nend") == "if a && b\nelseif c || d\nend"
+        @test format_string("try\nerror()\ncatch$(sp)e\nend") == "try\n    error()\ncatch e\nend"
+        @test format_string("A$(sp)where$(sp){T}") == "A where {T}"
+        @test format_string("A$(sp)where$(sp){T}$(sp)where$(sp){S}") == "A where {T} where {S}"
+        @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
+        @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
+    end
+    @test format_string("try\nerror()\ncatch\nend") == "try\n    error()\ncatch\nend"
+    @test format_string("A where{T}") == "A where {T}"
+    @test format_string("A{T}where{T}") == "A{T} where {T}"
+end
+
 @testset "replace ∈ and = with in in for loops and generators" begin
     for sp in ("", " ", "  "), op in ("∈", "=", "in")
         op == "in" && sp == "" && continue
