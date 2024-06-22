@@ -839,8 +839,12 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 any_changes && push!(kids′, kid)
             end
         elseif state === :looking_for_space
-            if kind(kid) === K"Whitespace" && span(kid) == 1
-                # TODO: Include NewlineWs here?
+            if (kind(kid) === K"Whitespace" && span(kid) == 1) ||
+                    kind(kid) === K"NewlineWs"
+                if kind(kid) === K"NewlineWs"
+                    # Is a newline instead of a space accepted for any other case?
+                    @assert kind(node) === K"where"
+                end
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)
             elseif kind(kid) === K"Whitespace"
