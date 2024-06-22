@@ -685,8 +685,8 @@ end
 # Opposite of `spaces_around_x`: remove spaces around `x`
 function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
     @assert !is_leaf(node)
-    # TODO: Can't handle NewlineWs here right now
-    if any(kind(c) === K"NewlineWs" for c in verified_kids(node))
+    # TODO: Can't handle NewlineWs and comments here right now
+    if any(kind(c) in KSet"NewlineWs Comment" for c in verified_kids(node))
         return nothing
     end
 
@@ -696,6 +696,8 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
     pos = position(ctx.fmt_io)
 
     looking_for_x = false
+    first_x_idx = findfirst(is_x, kids)::Int
+    last_x_idx = findlast(is_x, kids)::Int
 
     # K"::", K"<:", and K">:" are special cases here since they can be used without an LHS
     # in e.g. `f(::Int) = ...` and `Vector{<:Real}`.
@@ -705,6 +707,7 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
 
     for (i, kid) in pairs(kids)
         if (i == 1 || i == length(kids)) && kind(kid) === K"Whitespace"
+            # Leave any leading and trailing whitespace
             accept_node!(ctx, kid)
             any_changes && push!(kids′, kid)
         elseif kind(kid) === K"Whitespace"
@@ -715,11 +718,33 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
             end
             replace_bytes!(ctx, "", span(kid))
         else
-            @assert kind(kid) !== K"Whitespace"
+            @assert !JuliaSyntax.is_whitespace(kid) # Filtered out above
             if looking_for_x
                 @assert is_x(kid)::Bool
+            else
+                if i > first_x_idx
+                    # Remove leading whitespace
+                    ws_kid = first_leaf(kid)
+                    if kind(ws_kid) === K"Whitespace"
+                        kid = replace_first_leaf(kid, nullnode)
+                        replace_bytes!(ctx, "", span(ws_kid))
+                        any_changes = true
+                    end
+                end
+                if i < last_x_idx
+                    # Remove trailing whitespace
+                    ws_kid = last_leaf(kid)
+                    if kind(ws_kid) === K"Whitespace"
+                        @assert false # Hope this doesn't happen often...
+                    end
+                end
             end
-            any_changes && push!(kids′, kid)
+            if any_changes
+                if kids === kids′
+                    kids′ = kids[1:i - 1]
+                end
+                push!(kids′, kid)
+            end
             accept_node!(ctx, kid)
             looking_for_x = !looking_for_x
         end

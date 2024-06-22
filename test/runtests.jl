@@ -176,6 +176,7 @@ end
         # Exceptions to the rule: `:` and `^`
         # a:b
         @test format_string("$(sp)a$(sp):$(sp)b$(sp)") == "$(sp)a:b$(sp)"
+        @test format_string("$(sp)a + a$(sp):$(sp)b + b$(sp)") == "$(sp)a + a:b + b$(sp)"
         @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") ==
             "$(sp)(1 + 2):(1 + 3)$(sp)"
         # a:b:c
