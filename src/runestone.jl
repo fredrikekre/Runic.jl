@@ -187,7 +187,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
                 # Whitespace node but replace since not single space
                 any_changes = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 push!(kids′, ws)
                 replace_bytes!(ctx, " ", span(kid))
@@ -213,7 +213,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
                     accept_node!(ctx, kid′)
                     any_changes = true
                     if kids′ === kids
-                        kids′ = kids[1:i - 1]
+                        kids′ = kids[1:(i - 1)]
                     end
                     push!(kids′, kid′)
                 end
@@ -230,7 +230,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
                 # Not a whitespace node, insert one
                 any_changes = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 push!(kids′, ws)
                 replace_bytes!(ctx, " ", 0)
@@ -334,7 +334,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
 
     n_items = count(
         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K","),
-        @view(kids[opening_leaf_idx + 1:closing_leaf_idx - 1]),
+        @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)]),
     )
     last_item_idx = findprev(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, closing_leaf_idx - 1)
     if last_item_idx <= opening_leaf_idx
@@ -358,7 +358,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
         require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
     elseif n_items > 0
         require_trailing_comma = any(
-            x -> kind(x) === K"NewlineWs", @view(kids[last_item_idx + 1:closing_leaf_idx - 1]),
+            x -> kind(x) === K"NewlineWs", @view(kids[(last_item_idx + 1):(closing_leaf_idx - 1)]),
         ) || has_newline_after_non_whitespace(kids[last_item_idx])
     end
     expect_trailing_comma = require_trailing_comma
@@ -397,7 +397,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 replace_bytes!(ctx, "", span(kid′))
                 this_kid_changed = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
             elseif kind(kid′) === K"NewlineWs" ||
                     (kind(kid′) === K"Whitespace" && peek(i) === K"Comment")
@@ -426,7 +426,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 any_kid_changed |= this_kid_changed
                 if any_kid_changed
                     if kids′ === kids
-                        kids′ = kids[1:i - 1]
+                        kids′ = kids[1:(i - 1)]
                     end
                     push!(kids′, kid′)
                 end
@@ -452,7 +452,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # (no state change)
                 this_kid_changed = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 replace_bytes!(ctx, "", span(kid′))
             elseif kind(kid′) === K"NewlineWs" ||
@@ -463,7 +463,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 #  - there is a comma coming but it is on the next line (weird)
                 #  - there is a comment with no space before it
                 next_non_ws_idx = findnext(
-                    !JuliaSyntax.is_whitespace, @view(kids[1:closing_leaf_idx - 1]), i + 1,
+                    !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1,
                 )
                 next_kind = next_non_ws_idx === nothing ? nothing : kind(kids[next_non_ws_idx])
                 # Insert a comma if there isn't one coming
@@ -471,7 +471,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     @assert expect_trailing_comma
                     this_kid_changed = true
                     if kids′ === kids
-                        kids′ = kids[1:i - 1]
+                        kids′ = kids[1:(i - 1)]
                     end
                     replace_bytes!(ctx, ",", 0)
                     push!(kids′, comma)
@@ -486,7 +486,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 @assert kind(node) in KSet"call dotcall curly" # TODO: Can this happen for named tuples?
                 @assert i === last_item_idx
                 @assert findnext(
-                    !JuliaSyntax.is_whitespace, @view(kids[1:closing_leaf_idx - 1]), i + 1,
+                    !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1,
                 ) === nothing
                 if kind(first_leaf(kid′)) === K"Whitespace"
                     # Delete the whitespace leaf
@@ -511,7 +511,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 accept_node!(ctx, kid′)
                 if any_kid_changed
                     if kids′ === kids
-                        kids′ = kids[1:i - 1]
+                        kids′ = kids[1:(i - 1)]
                     end
                     push!(kids′, kid′)
                 end
@@ -531,7 +531,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # Wrong span, replace it
                 this_kid_changed = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 replace_bytes!(ctx, " ", span(kid′))
                 accept_node!(ctx, ws)
@@ -568,7 +568,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                         kid′ = replace_first_leaf(kid′, ws)
                         this_kid_changed = true
                         if kids′ === kids
-                            kids′ = kids[1:i - 1]
+                            kids′ = kids[1:(i - 1)]
                         end
                         replace_bytes!(ctx, " ", span(ws_node))
                         accept_node!(ctx, kid′)
@@ -579,7 +579,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     # Insert a standalone space kid and then accept the current node
                     this_kid_changed = true
                     if kids′ === kids
-                        kids′ = kids[1:i - 1]
+                        kids′ = kids[1:(i - 1)]
                     end
                     replace_bytes!(ctx, " ", 0)
                     push!(kids′, ws)
@@ -598,7 +598,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # removed
                 this_kid_changed = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 replace_bytes!(ctx, "", span(kid′))
             elseif kind(kid′) === K"NewlineWs" ||
@@ -620,7 +620,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             @assert expect_trailing_comma
             any_kid_changed = true
             if kids′ === kids
-                kids′ = kids[1:closing_leaf_idx - 1]
+                kids′ = kids[1:(closing_leaf_idx - 1)]
             end
             replace_bytes!(ctx, ",", 0)
             push!(kids′, comma)
@@ -714,7 +714,7 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
             # Ignore it but need to copy kids and re-write bytes
             any_changes = true
             if kids′ === kids
-                kids′ = kids[1:i - 1]
+                kids′ = kids[1:(i - 1)]
             end
             replace_bytes!(ctx, "", span(kid))
         else
@@ -741,7 +741,7 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
             end
             if any_changes
                 if kids === kids′
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 push!(kids′, kid)
             end
@@ -847,7 +847,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 # Replace with single space.
                 any_changes = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 replace_bytes!(ctx, " ", span(kid))
                 push!(kids′, ws)
@@ -864,7 +864,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                     accept_node!(ctx, kid′)
                     any_changes = true
                     if kids′ === kids
-                        kids′ = kids[1:i - 1]
+                        kids′ = kids[1:(i - 1)]
                     end
                     push!(kids′, kid′)
                 end
@@ -875,7 +875,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 @assert kind(node) === K"where"
                 any_changes = true
                 if kids′ === kids
-                    kids′ = kids[1:i - 1]
+                    kids′ = kids[1:(i - 1)]
                 end
                 # Insert the space before/after the kid depending on whether we are looking
                 # for a space before or after a keyword
@@ -1040,8 +1040,8 @@ function braces_around_where_rhs(ctx::Context, node::Node)
         return nothing
     end
     # Wrap the rhs in a braces node
-    kids′ = kids[1:rhs_idx - 1]
-    for i in 1:rhs_idx - 1
+    kids′ = kids[1:(rhs_idx - 1)]
+    for i in 1:(rhs_idx - 1)
         accept_node!(ctx, kids[i])
     end
     opening_brace = Node(JuliaSyntax.SyntaxHead(K"{", 0), 1)
@@ -1058,13 +1058,73 @@ function braces_around_where_rhs(ctx::Context, node::Node)
     replace_bytes!(ctx, "}", 0)
     accept_node!(ctx, closing_brace)
     # Accept any remaining kids
-    for i in rhs_idx + 1:length(kids)
+    for i in (rhs_idx + 1):length(kids)
         accept_node!(ctx, kids[i])
         push!(kids′, kids[i])
     end
     # Reset stream and return
     seek(ctx.fmt_io, pos)
     return make_node(node, kids′)
+end
+
+function parens_around_op_calls_in_colon(ctx::Context, node::Node)
+    if !(is_infix_op_call(node) && kind(infix_op_call_op(node)) === K":")
+        return nothing
+    end
+
+    kids = verified_kids(node)
+    kids′ = kids
+    any_changes = false
+    pos = position(ctx.fmt_io)
+
+    for i in eachindex(kids)
+        kid = kids[i]
+        if is_infix_op_call(kid)
+            if kids′ === kids
+                kids′ = kids[1:(i - 1)]
+            end
+            grandkids = verified_kids(kid)
+            first_non_ws = findfirst(!JuliaSyntax.is_whitespace, grandkids)::Int
+            last_non_ws = findlast(!JuliaSyntax.is_whitespace, grandkids)::Int
+            # Extract whitespace grandkids to become kids
+            for j in 1:(first_non_ws - 1)
+                accept_node!(ctx, grandkids[j])
+                push!(kids′, grandkids[j])
+            end
+            # Create the parens node
+            opening_paren = Node(JuliaSyntax.SyntaxHead(K"(", 0), 1)
+            replace_bytes!(ctx, "(", 0)
+            accept_node!(ctx, opening_paren)
+            parens_kids = [opening_paren]
+            kid′_kids = grandkids[first_non_ws:last_non_ws]
+            kid′ = make_node(kid, kid′_kids)
+            accept_node!(ctx, kid′)
+            push!(parens_kids, kid′)
+            closing_paren = Node(JuliaSyntax.SyntaxHead(K")", 0), 1)
+            replace_bytes!(ctx, ")", 0)
+            accept_node!(ctx, closing_paren)
+            push!(parens_kids, closing_paren)
+            parens = Node(JuliaSyntax.SyntaxHead(K"parens", 0), parens_kids)
+            push!(kids′, parens)
+            for j in (last_non_ws + 1):length(grandkids)
+                accept_node!(ctx, grandkids[j])
+                push!(kids′, grandkids[j])
+            end
+            any_changes = true
+        else
+            accept_node!(ctx, kid)
+            any_changes && push!(kids′, kid)
+        end
+    end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    # Rebuild node and return
+    if any_changes
+        node′ = make_node(node, kids′)
+        return node′
+    else
+        return nothing
+    end
 end
 
 # This function materialized all indentations marked by `insert_delete_mark_newlines`.

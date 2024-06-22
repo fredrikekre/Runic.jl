@@ -258,7 +258,7 @@ function has_newline_after_non_whitespace(node::Node)
             # Everything is whitespace...
             return any(x -> kind(x) === K"NewlineWs", kids)
         end
-        return any(x -> kind(x) === K"NewlineWs", kids[idx + 1:end]) ||
+        return any(x -> kind(x) === K"NewlineWs", kids[(idx + 1):end]) ||
             has_newline_after_non_whitespace(kids[idx])
         # if idx === nothing
         #     # All is whitespace, check if any of the kids is a newline

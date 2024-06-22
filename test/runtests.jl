@@ -176,7 +176,7 @@ end
         # Exceptions to the rule: `:` and `^`
         # a:b
         @test format_string("$(sp)a$(sp):$(sp)b$(sp)") == "$(sp)a:b$(sp)"
-        @test format_string("$(sp)a + a$(sp):$(sp)b + b$(sp)") == "$(sp)a + a:b + b$(sp)"
+        @test format_string("$(sp)a + a$(sp):$(sp)b + b$(sp)") == "$(sp)(a + a):(b + b)$(sp)"
         @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp)") ==
             "$(sp)(1 + 2):(1 + 3)$(sp)"
         # a:b:c
@@ -593,4 +593,20 @@ end
         end
 
     end
+end
+
+@testset "parens around op calls in colon" begin
+    for a in ("a + a", "a + a * a"), sp in ("", " ", "  ")
+        @test format_string("$(a)$(sp):$(sp)$(a)") == "($(a)):($(a))"
+        @test format_string("$(a)$(sp):$(sp)$(a)$(sp):$(sp)$(a)") == "($(a)):($(a)):($(a))"
+        @test format_string("$(a)$(sp):$(sp)$(a)$(sp):$(sp)$(a):$(a)") == "(($(a)):($(a)):($(a))):($(a))"
+    end
+    # No-ops
+    for p in ("", "()"), sp in ("", " ", "  ")
+        @test format_string("a$(p)$(sp):$(sp)b$(p)") == "a$(p):b$(p)"
+        @test format_string("a$(p)$(sp):$(sp)b$(p)$(sp):$(sp)c$(p)") == "a$(p):b$(p):c$(p)"
+    end
+    # Edgecase: leading whitespace so that the paren have to be inserted in the middle of
+    # the node
+    Runic.format_string("i in a + b:c") == "i in (a + b):c"
 end
