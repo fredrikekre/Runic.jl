@@ -277,6 +277,17 @@ end
     end
 end
 
+@testset "whitespace around ternary" begin
+    for sp in (" ", "  ")
+        @test format_string("a$(sp)?$(sp)b$(sp):$(sp)c") == "a ? b : c"
+        @test format_string("a$(sp)?\nb$(sp):\nc") == "a ?\n    b :\n    c"
+        @test format_string("a$(sp)?$(sp)b$(sp):$(sp)c$(sp)?$(sp)d$(sp):$(sp)e") ==
+            "a ? b : c ? d : e"
+        @test format_string("a$(sp)?\nb$(sp):\nc$(sp)?\nd$(sp):\ne") ==
+            "a ?\n    b :\n    c ?\n    d :\n    e"
+    end
+end
+
 @testset "whitespace in comparison chains" begin
     for sp in ("", " ", "  ")
         @test format_string("a$(sp)==$(sp)b") == "a == b"
