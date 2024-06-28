@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: MIT
 
-function dumpnode(node)
-    println("node: {kind: $(kind(node)), span: $(span(node)), flags: $(flags(node)), nkids: $(length(verified_kids(node)))}")
-end
-
 # This is the runestone where all the formatting transformations are implemented.
 
 function trim_trailing_whitespace(ctx::Context, node::Node)
