@@ -99,9 +99,11 @@ include("chisels.jl")
 
 # Return the result of expr if it doesn't evaluate to `nothing`
 macro return_something(expr)
-    return :(let node = $(esc(expr))
-        node === nothing || return node
-    end)
+    return :(
+        let node = $(esc(expr))
+            node === nothing || return node
+        end
+    )
 end
 
 #######################################################

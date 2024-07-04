@@ -238,6 +238,22 @@ function replace_first_leaf(node::Node, kid′::Union{Node, NullNode})
     end
 end
 
+function replace_last_leaf(node::Node, kid′::Union{Node, NullNode})
+    if is_leaf(node)
+        return kid′
+    else
+        kids′ = copy(verified_kids(node))
+        kid′′ = replace_last_leaf(kids′[end], kid′)
+        if kid′′ === nullnode
+            pop!(kids′)
+        else
+            kids′[end] = kid′′
+        end
+        @assert length(kids′) > 0
+        return make_node(node, kids′)
+    end
+end
+
 function last_leaf(node::Node)
     if is_leaf(node)
         return node
@@ -270,6 +286,33 @@ end
 function is_assignment(node::Node)
     return JuliaSyntax.is_prec_assignment(node)
     # return !is_leaf(node) && JuliaSyntax.is_prec_assignment(node)
+end
+
+function unwrap_to_call_or_tuple(x)
+    is_leaf(x) && return nothing
+    @assert !is_leaf(x)
+    if kind(x) in KSet"call tuple"
+        return x
+    end
+    xkids = verified_kids(x)
+    xi = findfirst(x -> !JuliaSyntax.is_whitespace(x), xkids)::Int
+    return unwrap_to_call_or_tuple(xkids[xi])
+end
+
+function is_longform_anon_function(node::Node)
+    is_leaf(node) && return false
+    kind(node) === K"function" || return false
+    kids = verified_kids(node)
+    kw = findfirst(x -> kind(x) === K"function", kids)
+    @assert kw !== nothing
+    sig = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, kw + 1)::Int
+    sigkid = kids[sig]
+    maybe_tuple = unwrap_to_call_or_tuple(sigkid)
+    if maybe_tuple === nothing
+        return false
+    else
+        return kind(maybe_tuple) === K"tuple"
+    end
 end
 
 # Just like `JuliaSyntax.is_infix_op_call`, but also check that the node is K"call" or
@@ -317,6 +360,72 @@ end
 
 function is_paren_block(node::Node)
     return kind(node) === K"block" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
+end
+
+function first_leaf_predicate(node::Node, pred::F) where {F}
+    if is_leaf(node)
+        return pred(node) ? node : nothing
+    else
+        kids = verified_kids(node)
+        for k in kids
+            r = first_leaf_predicate(k, pred)
+            if r !== nothing
+                return r
+            end
+        end
+        return nothing
+    end
+end
+
+function last_leaf_predicate(node::Node, pred::F) where {F}
+    if is_leaf(node)
+        return pred(node) ? node : nothing
+    else
+        kids = verified_kids(node)
+        for k in Iterators.reverse(kids)
+            r = first_leaf_predicate(k, pred)
+            if r !== nothing
+                return r
+            end
+        end
+        return nothing
+    end
+end
+
+function contains_outer_newline(kids::Vector{Node}, oidx::Int, cidx::Int; recurse = true)
+    pred = x -> kind(x) === K"NewlineWs" || !JuliaSyntax.is_whitespace(x)
+    for i in (oidx + 1):(cidx - 1)
+        kid = kids[i]
+        r = first_leaf_predicate(kid, pred)
+        if r !== nothing && kind(r) === K"NewlineWs"
+            return true
+        end
+        r = last_leaf_predicate(kid, pred)
+        if r !== nothing && kind(r) === K"NewlineWs"
+            return true
+        end
+        if kind(kid) === K"parameters"
+            grandkids = verified_kids(kid)
+            semiidx = findfirst(x -> kind(x) === K";", grandkids)::Int
+            r = contains_outer_newline(verified_kids(kid), semiidx, length(grandkids) + 1)
+            if r === true # r can be nothing so `=== true` is intentional
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function any_leaf(pred::F, node::Node) where {F}
+    if is_leaf(node)
+        return pred(node)::Bool
+    else
+        kids = verified_kids(node)
+        for k in kids
+            any_leaf(pred, k) && return true
+        end
+        return false
+    end
 end
 
 ##########################

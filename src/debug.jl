@@ -22,8 +22,8 @@ function Base.showerror(io::IO, err::AssertionError)
     print(
         io,
         "Runic.AssertionError: `", err.msg, "`. This is unexpected, " *
-        "please file an issue with a reproducible example at " *
-        "https://github.com/fredrikekre/Runic.jl/issues/new.",
+            "please file an issue with a reproducible example at " *
+            "https://github.com/fredrikekre/Runic.jl/issues/new.",
     )
 end
 

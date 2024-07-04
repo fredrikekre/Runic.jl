@@ -139,7 +139,7 @@ function main(argv)
     if !(inplace || check || diff || outputfile !== nothing)
         return panic(
             "at least one of options `-c, --check`, `-d, --diff`, `-i, --inplace`, " *
-            "or `-o, --output` must be specified",
+                "or `-o, --output` must be specified",
         )
     end
 
