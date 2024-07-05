@@ -801,6 +801,7 @@ end
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
 # named function), `if`, `elseif`, `catch` (if followed by variable)
+# TODO: local, const
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch"

@@ -2,6 +2,25 @@
 
 *A code formatter with rules set in stone.*
 
+Runic is a formatter for the [Julia programming language](https://julialang.org/) built on
+top of [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl).
+
+
+Similarly to [`gofmt`](https://pkg.go.dev/cmd/gofmt), Runic have *no configuration*. The
+formatting rules are set in stone (although not yet complete). The following
+[quote](https://www.youtube.com/watch?v=PAAkCSZUG1c&t=523s) about `gofmt` is relevant also
+to Runic:
+
+> Gofmt's style is no one's favorite, yet gofmt is everyone's favorite.
+
+
+### Table of contents
+
+ - [Installation](#installation)
+ - [Usage](#usage)
+ - [CI configuration](#ci-configuration)
+ - [Formatting specification](#formatting-specification)
+
 ## Installation
 
 ```julia
@@ -67,14 +86,376 @@ OPTIONS
 In addition to the CLI there is also the two function `Runic.format_file` and
 `Runic.format_string`. See their respective docstrings for details.
 
+
+## CI configuration
+
+To run Runic in a CI environment you can execute the following command:
+
+```sh
+julia -m Runic --check --diff $(git ls-files -- '*.jl')
+```
+
+This will run Runic's check mode (`--check`) on all `.jl` files in the repository and print
+the diff (`--diff`) if the files are not formatted correctly. If any file is incorrectly
+formatted the exit code will be non-zero.
+
+
+### Github Actions
+
+Here is a complete example of how to run Runic in a Github Actions workflow:
+
+```yaml
+name: Code checks
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'release-'
+    tags:
+      - '*'
+  pull_request:
+
+jobs:
+  runic:
+    name: Runic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "nightly" # Only nightly have the -m flag currently
+      - uses: julia-actions/cache@v2
+      - name: Install Runic
+        run: |
+          julia --color=yes -e 'using Pkg; Pkg.add("Runic")'
+      - name: Run Runic
+        run: |
+          julia --color=yes -m Runic --check --diff $(git ls-files -- '*.jl')
+```
+
 ## Formatting specification
 
-This is a list of the rules and formatting transformations performed by Runic:
+This is a list of things that Runic currently is doing:
 
- - No trailing whitespace
- - Normalized line endings (`\r\n` -> `\n`) (TODO: Is this bad on Windows with Git's autocrlf? gofmt does it...)
- - Hex/octal/binary literals are padded with zeroes to better highlight the resulting UInt
-   type
- - Floating point literals are normalized to always have an integral and fractional part.
-   `E`-exponents are normalized to `e`-exponents. Unnecessary trailing/leading zeros from
-   integral, fractional, and exponent parts are removed.
+ - [Indentation](#indentation)
+ - [Spaces around operators, assignment, etc](#spaces-around-operators-assignment-etc)
+ - [Spaces around keywords](#spaces-around-keywords)
+ - [Multiline listlike expressions](#multiline-listlike-expressions)
+ - [Spacing in listlike expressions](#spacing-in-listlike-expressions)
+ - [Literal floating point numbers](#literal-floating-point-numbers)
+ - [Literal hex and oct numbers](#literal-hex-and-oct-numbers)
+ - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
+ - [`in` instead of `∈` and `=`]()#in-instead-of--and-
+ - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
+ - [Trailing whitespace](#trailing-whitespace)
+
+
+### Indentation
+
+Consistently four spaces for each indentation level.
+
+Standard code blocks (`function`, `for`, `while`, ...) all result an increase of the
+indentation level until the closing `end`. Examples:
+```diff
+ function f()
+-  for i in 1:2
+-    # loop
+-  end
+-  while rand() < 0.5
+-    # loop
+-  end
++    for i in 1:2
++        # loop
++    end
++    while rand() < 0.5
++        # loop
++    end
+ end
+```
+
+Listlike expressions like e.g. tuples, function calls, array literals, etc. also increase
+the indentation level until the closing token. This only has an effect if the list span
+multiple lines. Examples:
+```diff
+ x = (
+-  a, b, c, d,
++    a, b, c, d,
+ )
+
+ foo(
+-  a, b, c, d,
++    a, b, c, d,
+ )
+
+ [
+-  a, b, c, d,
++    a, b, c, d,
+ ]
+```
+
+The examples above both result in "hard" indentation levels. Other expressions that span
+multiple lines result in "soft" indentation levels. The difference between the two is that
+soft indentation levels don't nest (this is really only applicable to multiline operator
+call chains).
+
+```diff
+ using Foo:
+-  foo, bar
++    foo, bar
+
+ x = a + b +
+-  c
++    c
+
+ x = a ? b :
+-  c
++    c
+```
+
+Without soft indentation levels operators chains can result in ugly (but logically correct)
+indentation levels. For example, the following code:
+```julia
+x = a + b *
+        c +
+    d
+```
+would be "correct". Such a chain looks better the way it is currently formatted:
+```julia
+x = a + b *
+    c +
+    d
+```
+
+### Spaces around operators, assignment, etc
+
+Runic formats spaces around infix operators, assignments, comparison chains, and type
+comparisons (binary `<:` and `>:`), and some other operator-like things. If the space is
+missing it will be inserted, if there are multiple spaces it will be reduced to one.
+Examples:
+```diff
+-1+2*3
+-1  +  2  *  3
++1 + 2 * 3
++1 + 2 * 3
+
+-x=1
+-x=+1
+-x+=1
+-x.+=1
++x = 1
++x = +1
++x += 1
++x .+= 1
+-1<2>3
+-1  <  2  >  3
++1 < 2 > 3
++1 < 2 > 3
+
+-T<:Integer
+-T  >:  Integer
++T <: Integer
++T >: Integer
+
+-x->x
+-a  ?  b  :  c
++x -> x
++a ? b : c
+```
+
+Exceptions to this rule are `:`, `^`, `::`, and unary `<:` and `>:`. These are formatted
+*without* spaces around them. Examples:
+```diff
+-a : b
++a:b
+
+-a ^ 5
++a^5
+
+-a :: Int
++a::Int
+
+-<: Integer
+->:  Integer
++<:Integer
++>:Integer
+```
+
+#### Potential changes
+ - Perhaps the rule for some of these should be "at least one space" instead. This could
+   help with alignment issues. Discussed in issue #12.
+
+### Spaces around keywords
+
+Consistently use single space around keywords. Examples:
+```diff
+-struct  Foo
++struct Foo
+
+-mutable  struct  Bar
++mutable struct Bar
+
+-function  foo(x::T)  where  {T}
++function foo(x::T) where {T}
+```
+
+### Multiline listlike expressions
+
+Listlike expressions (tuples, function calls/definitions, array literals, etc.) that
+*already* span multiple lines are formatted to consistently have a leading and a trailing
+newline. Examples:
+```diff
+-(a,
+-    b)
++(
++    a,
++    b,
++)
+
+-foo(a,
+-    b)
++foo(
++    a,
++    b,
++)
+
+-[1 2
+- 3 4]
++[
++    1 2
++    3 4
++]
+```
+
+Note that currently there is no line-length limit employed so expressions that only take up
+a single line, even if they are long, are not formatted like the above. Thus, only
+expressions where the original author have "committed" to mulitples lines are affected by
+this rule.
+
+### Spacing in listlike expressions
+
+Listlike expressions (tuples, function calls/definitions, array literals, etc.) use a
+consistent rule of no space before `,` and a single space after `,`. In single line
+expressions there is no trailing `,`. In multiline expressions there is a trailing `,`.
+Leading/trailing spaces are removed. Examples:
+```diff
+-f(a,b)
+-(a,b)
+-[a,  b]
++f(a, b)
++(a, b)
++[a, b]
+
+
+-(a,b,)
++(a, b)
+ (
+     a,
+-    b
++    b,
+ )
+
+-( a, b )
++(a, b)
+```
+
+#### Potential changes
+ - Perhaps the rule for some of these should be "at least one space" instead. This could
+   help with alignment issues. Discussed in issue #12.
+
+### Literal floating point numbers
+
+Floating point literals are normalized so that they:
+ - always have a decimal point
+ - always have a digit before and after the decimal point
+ - never have leading zeros in the integral and exponent part
+ - never have trailing zeros in the fractional part
+ - always use `e` instead of `E` for the exponent
+
+Examples:
+```diff
+-1.
+-.1
++1.0
++0.1
+
+-01.2
+-1.0e01
+-0.10
++1.2
++1.0e1
++0.1
+
+-1.2E5
++1.2e5
+```
+
+#### Potential changes
+ - Always add the implicit `+` for the exponent part, i.e. `1.0e+1` instead of `1.0e1`.
+   Discussed in issue #13.
+ - Allow multiple trailing zeros in the fractional part, i.e. don't change `1.00` to `1.0`.
+   Such trailing zeros are sometimes used to align numbers in literal array expressions.
+   Discussed in issue #14.
+
+### Literal hex and oct numbers
+
+Hex literals are padded with zeros to better highlight the resulting type of the literal:
+`UInt8` to 2 characters, `UInt16` to 4 characters, `UInt32` to 8 characters etc. Examples:
+```diff
+-0x1
+-0x123
+-0x12345
++0x01
++0x0123
++0x00012345
+```
+
+Similarly, oct literals are also padded:
+```diff
+-0o644
+-0o644644
++0o000644
++0o00000644644
+```
+
+### Parentheses around operator calls in colon
+
+Add parentheses around operator calls in colon expressions to better highlight the low
+precedence of `:`. Examples:
+```diff
+-1 + 2:3 * 4
+-1 + 2:3
+-1:3 * 4
++(1 + 2):(3 * 4)
++(1 + 2):3
++1:(3 * 4)
+```
+
+### `in` instead of `∈` and `=`
+
+The keyword `in` is used consistently instead of `∈` and `=` in `for` loops. Examples:
+```diff
+-for i = 1:2
++for i in 1:2
+
+-for i ∈ 1:2
++for i in 1:2
+```
+
+### Braces around right hand side of `where`
+
+Braces are consistently used around the right hand side of `where` expressions. Examples:
+```diff
+-T where T
+-T where T <: S where S <: Any
++T where {T}
++T where {T <: S} where {S <: Any}
+```
+
+### Trailing whitespace
+
+Trailing spaces are removed. Example:
+```diff
+-1 + 1 
++1 + 1
+```
