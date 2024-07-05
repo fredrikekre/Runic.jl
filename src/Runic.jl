@@ -137,7 +137,7 @@ mutable struct Context
 end
 
 function Context(
-        src_str; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
+        src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
         diff::Bool = false, check::Bool = false, quiet::Bool = false,
     )
     src_io = IOBuffer(src_str)
@@ -366,9 +366,9 @@ function format_tree!(ctx::Context)
 end
 
 """
-    format_string(str::AbstractString) -> String
+    Runic.format_string(str::AbstractString) -> String
 
-Format a string.
+Format string `str` and return the formatted string.
 """
 function format_string(str::AbstractString)
     ctx = Context(str)
@@ -376,15 +376,22 @@ function format_string(str::AbstractString)
     return String(take!(ctx.fmt_io))
 end
 
+# TODO: Implement the check and diff options here too.
 """
-    format_file(inputfile::AbstractString, outputfile::AbstractString; inplace::Bool=false)
+    Runic.format_file(
+        inputfile::AbstractString, outputfile::AbstractString = inputfile;
+        inplace::Bool=false,
+    )
 
-Format a file.
+Format file `inputfile` and write the formatted text to `outputfile`.
+
+Setting the keyword argument `inplace = true` is required if `inputfile` and `outputfile`
+are the same file.
 """
 function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool = false)
     # Argument handling
-    inputfile = normpath(abspath(inputfile))
-    outputfile = normpath(abspath(outputfile))
+    inputfile = normpath(abspath(String(inputfile)))
+    outputfile = normpath(abspath(String(outputfile)))
     str = read(inputfile, String)
     if !inplace && (outputfile == inputfile || (isfile(outputfile) && samefile(inputfile, outputfile)))
         error("input and output must not be the same when `inplace = false`")

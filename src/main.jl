@@ -111,6 +111,9 @@ function main(argv)
         x = popfirst!(argv)
         if x == "-i" || x == "--inplace"
             inplace = true
+        elseif x == "--help"
+            print_help()
+            return errno
         elseif x == "-q" || x == "--quiet"
             quiet = true
         elseif x == "-v" || x == "--verbose"
