@@ -1,15 +1,15 @@
 # TODOs, notes, and various thoughts
 
 ## TODOs
- - [ ] `=` and `\in` should be `in` in for loops
- - [ ] Space after `,` in tuples, function calls, function definitions, `{}` etc.
- - [ ] No leading/trailing space in tuples etc `( a, b )` -> `(a, b)`
+ - [x] `=` and `\in` should be `in` in for loops
+ - [x] Space after `,` in tuples, function calls, function definitions, `{}` etc.
+ - [x] No leading/trailing space in tuples etc `( a, b )` -> `(a, b)`
  - [ ] Disallow putting kwargs before all positional args when calling functions
  - [ ] Space after `;` in named tuples, keyword arguments (callsite and definitions)
- - [ ] Indentation
+ - [x] Indentation
  - [ ] Trim trailing `;` togheter with ws.
- - [ ] Whitespace in ternaries
- - [ ] Parenteses around expressions in `:` operator (e.g. `1 + 2:3` -> `(1 + 2):3)`)
+ - [x] Whitespace in ternaries
+ - [x] Parenteses around expressions in `:` operator (e.g. `1 + 2:3` -> `(1 + 2):3)`)
 
 
 ## Ideas
