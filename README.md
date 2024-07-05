@@ -7,9 +7,9 @@ top of [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl).
 
 
 Similarly to [`gofmt`](https://pkg.go.dev/cmd/gofmt), Runic have *no configuration*. The
-formatting rules are set in stone (although not yet complete). The following
-[quote](https://www.youtube.com/watch?v=PAAkCSZUG1c&t=523s) about `gofmt` is relevant also
-to Runic:
+formatting rules are set in stone (although not yet complete). This approach is something
+that is appreciated by most Go programmers, see for example the following
+[quote](https://www.youtube.com/watch?v=PAAkCSZUG1c&t=523s):
 
 > Gofmt's style is no one's favorite, yet gofmt is everyone's favorite.
 
@@ -18,14 +18,14 @@ to Runic:
 
  - [Installation](#installation)
  - [Usage](#usage)
- - [CI configuration](#ci-configuration)
+ - [Checking formatting](#checking-formatting)
  - [Formatting specification](#formatting-specification)
 
 ## Installation
 
 ```julia
 using Pkg
-Pkg.add("Runic")
+Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")
 ```
 
 ## Usage
@@ -40,7 +40,7 @@ invoked with the `-m` flag. See the output of `julia -m Runic --help` for detail
 > julia -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
 > ```
 
-```sh
+```
 $ julia-master -m Runic --help
 NAME
        Runic.main - format Julia source code
@@ -87,9 +87,12 @@ In addition to the CLI there is also the two function `Runic.format_file` and
 `Runic.format_string`. See their respective docstrings for details.
 
 
-## CI configuration
+## Checking formatting
 
-To run Runic in a CI environment you can execute the following command:
+Runic has a check-mode that verifies whether files are correctly formatted or not. This mode
+is enabled with the `--check` flag. In check mode Runic will exit with a non-zero code if
+any of the input files are incorrectly formatted. As an example, the following invocation
+can be used:
 
 ```sh
 julia -m Runic --check --diff $(git ls-files -- '*.jl')
@@ -102,11 +105,10 @@ formatted the exit code will be non-zero.
 
 ### Github Actions
 
-Here is a complete example of how to run Runic in a Github Actions workflow:
+Here is a complete workflow file for running Runic on Github Actions:
 
 ```yaml
-name: Code checks
-
+name: Runic formatting
 on:
   push:
     branches:
@@ -115,7 +117,6 @@ on:
     tags:
       - '*'
   pull_request:
-
 jobs:
   runic:
     name: Runic
@@ -128,10 +129,28 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Install Runic
         run: |
-          julia --color=yes -e 'using Pkg; Pkg.add("Runic")'
+          julia --color=yes -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
       - name: Run Runic
         run: |
           julia --color=yes -m Runic --check --diff $(git ls-files -- '*.jl')
+```
+
+### Git Hooks
+
+Runic can be run in a
+[Git pre-commit hook](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks)
+to automatically check formatting before committing. Here is an example hook
+(`.git/hooks/pre-commit`):
+
+```sh
+#!/usr/bin/env bash
+
+# Redirect output to stderr.
+exec 1>&2
+
+# Run Runic on added and modified files
+mapfile -t files < <(git diff-index --name-only --diff-filter=AM master | grep '\.jl$')
+julia-master --project -m Runic --check --diff "${files[@]}"
 ```
 
 ## Formatting specification
@@ -149,7 +168,6 @@ This is a list of things that Runic currently is doing:
  - [`in` instead of `∈` and `=`]()#in-instead-of--and-
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [Trailing whitespace](#trailing-whitespace)
-
 
 ### Indentation
 
@@ -263,8 +281,18 @@ Examples:
 +a ? b : c
 ```
 
-Exceptions to this rule are `:`, `^`, `::`, and unary `<:` and `>:`. These are formatted
-*without* spaces around them. Examples:
+Note that since Runic's rules are applied consistently, no matter the context or surrounding
+code, the "spaces around assignment" rule also means that there will be spaces in keyword
+arguments in function definitions and calls. Examples:
+```diff
+-foo(; a=1) = a
+-foo(a=1)
++foo(; a = 1) = a
++foo(a = 1)
+```
+
+Exceptions to the rule above are `:`, `^`, `::`, and unary `<:` and `>:`. These are
+formatted *without* spaces around them. Examples:
 ```diff
 -a : b
 +a:b
