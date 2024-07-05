@@ -54,6 +54,10 @@ function print_help()
                     Print the diff between the input and formatted output to stderr.
                     Requires `git` or `diff` to be installed.
 
+                --fail-fast
+                    Exit immediately after the first error. Only applicable when formatting
+                    multiple files in the same invocation.
+
                 --help
                     Print this message.
 
@@ -100,6 +104,7 @@ function main(argv)
     inplace = false
     diff = false
     check = false
+    fail_fast = false
 
     # Parse the arguments
     while length(argv) > 0
@@ -110,6 +115,8 @@ function main(argv)
             quiet = true
         elseif x == "-v" || x == "--verbose"
             verbose = true
+        elseif x == "-v" || x == "--fail-fast"
+            fail_fast = true
         elseif x == "-d" || x == "--diff"
             diff = true
         elseif x == "-c" || x == "--check"
@@ -262,7 +269,10 @@ function main(argv)
             # Limit stacktrace to 5 frames because Runic uses recursion a lot and 5 should
             # be enough to see where the error occurred.
             bt = stacktrace(catch_backtrace())[1:5]
-            panic(err, bt)
+            rc = panic(err, bt)
+            if fail_fast
+                return rc
+            end
             continue
         end
 
