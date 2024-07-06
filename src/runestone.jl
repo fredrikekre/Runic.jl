@@ -1299,9 +1299,10 @@ function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
         any_kid_changed = true
     end
     # Second node is the newline
-    ln_idx = 2
-    ln_node = kids[ln_idx]
-    @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
+    # TODO: Require newline?
+    # ln_idx = 2
+    # ln_node = kids[ln_idx]
+    # @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
     # After the NewlineWs node we skip over all kids until the end
     end_idx = findlast(x -> kind(x) === K"end", kids)
     @assert end_idx == lastindex(kids) # ??

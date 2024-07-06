@@ -567,8 +567,11 @@ end
             @test format_string("$(t)[a b\n$(sp)c d]") == "$(t)[\n    a b\n    c d\n]"
             @test format_string("$(t)[\n$(sp)a b\n$(sp)c d\n$(sp)]") == "$(t)[\n    a b\n    c d\n]"
         end
+        # Single line begin-end
+        @test format_string("begin x\n$(sp)end") == "begin x\nend"
+        @test format_string("begin x end") == "begin x end"
+        @test format_string("begin\n    x end") == "begin\n    x end"
     end
-
 end
 
 @testset "continuation/soft indentation" begin
