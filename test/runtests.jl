@@ -201,7 +201,7 @@ end
     end
 end
 
-@testset "spaces in lists" begin
+@testset "spaces in listlike" begin
     for sp in ("", " ", "  "), a in ("a", "a + a", "a(x)"), b in ("b", "b + b", "b(y)")
         # tuple, call, dotcall, vect, ref
         for (o, c) in (("(", ")"), ("f(", ")"), ("f.(", ")"), ("[", "]"), ("T[", "]"))
@@ -271,6 +271,10 @@ end
         @test format_string("$(x){\n$(sp)$(a)$(sp);$(sp)$(b)$(sp)\n}") ==
             "$(x){\n    $(a); $(b)$(tr)\n}"
     end
+    # Trailing `;` in paren-block
+    @test format_string("(a = A;)") == "(a = A)"
+    @test format_string("cond && (a = A;)") == "cond && (a = A)"
+    @test format_string("(a = A; b = B;)") == "(a = A; b = B)"
 end
 
 @testset "whitespace around ->" begin

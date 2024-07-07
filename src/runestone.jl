@@ -607,7 +607,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             end
         else
             @assert state === :expect_closing
-            if kind(kid′) === K"," ||
+            if kind(kid′) === K"," || kind(kid′) === K";" ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
                 # Trailing comma (when not wanted) and space not followed by a comment are
                 # removed
