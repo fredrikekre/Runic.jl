@@ -392,6 +392,9 @@ end
     @test format_string("try\nerror()\ncatch\nend") == "try\n    error()\ncatch\nend"
     @test format_string("A where{T}") == "A where {T}"
     @test format_string("A{T}where{T}") == "A{T} where {T}"
+    # Some keywords can have a parenthesized expression directly after without the space...
+    @test format_string("if(a)\nelseif(b)\nend") == "if (a)\nelseif (b)\nend"
+    @test format_string("while(a)\nend") == "while (a)\nend"
 end
 
 @testset "replace ∈ and = with in in for loops and generators" begin

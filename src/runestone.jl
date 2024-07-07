@@ -809,7 +809,7 @@ end
 # TODO: local, const
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
-    keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch"
+    keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch while"
     if !(kind(node) in keyword_set)
         return nothing
     end
@@ -907,8 +907,8 @@ function spaces_around_keywords(ctx::Context, node::Node)
             elseif !space_after && kind(last_leaf(kid)) === K"Whitespace"
                 @assert false # Unreachable?
             else
-                # Reachable in e.g. `T where{T}`, insert space
-                @assert kind(node) === K"where"
+                # Reachable in e.g. `T where{T}`, `if(`, ... insert space
+                @assert kind(node) in KSet"where if elseif while"
                 any_changes = true
                 if kids′ === kids
                     kids′ = kids[1:(i - 1)]
