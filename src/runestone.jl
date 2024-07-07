@@ -945,6 +945,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
 end
 
 # Replace the K"=" operator with `in`
+# TODO: This method doesn't reset the stream so callers should not accept_node??
 function replace_with_in(ctx::Context, node::Node)
     @assert kind(node) === K"=" && !is_leaf(node) && meta_nargs(node) == 3
     kids = verified_kids(node)
@@ -980,6 +981,28 @@ function replace_with_in(ctx::Context, node::Node)
         accept_node!(ctx, kids′[i])
     end
     return make_node(node, kids′)
+end
+
+function replace_with_in_filter(ctx::Context, node::Node)
+    @assert kind(node) === K"filter" && !is_leaf(node)
+    pos = position(ctx.fmt_io)
+    kids = verified_kids(node)
+    idx = findfirst(x -> kind(x) === K"=" && !is_leaf(x), kids)::Int
+    for i in 1:(idx - 1)
+        accept_node!(ctx, kids[i])
+    end
+    kid = kids[idx]
+    kid′ = replace_with_in(ctx, kid)
+    if kid′ === nothing
+        seek(ctx.fmt_io, pos)
+        return nothing
+    end
+    kids = copy(kids)
+    kids[idx] = kid′
+    for i in (idx + 1):length(kids)
+        accept_node!(ctx, kids[i])
+    end
+    return make_node(node, kids)
 end
 
 function replace_with_in_cartesian(ctx::Context, node::Node)
@@ -1029,9 +1052,11 @@ function for_loop_use_in(ctx::Context, node::Node)
     # The for loop specification node can be either K"=" or K"cartesian_iterator"
     for_spec_index = for_index + 1
     for_spec_node = kids[for_spec_index]
-    @assert kind(for_spec_node) in KSet"= cartesian_iterator"
+    @assert kind(for_spec_node) in KSet"= cartesian_iterator filter"
     if kind(for_spec_node) === K"="
         for_spec_node′ = replace_with_in(ctx, for_spec_node)
+    elseif kind(for_spec_node) === K"filter"
+        for_spec_node′ = replace_with_in_filter(ctx, for_spec_node)
     else
         @assert kind(for_spec_node) === K"cartesian_iterator"
         for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)

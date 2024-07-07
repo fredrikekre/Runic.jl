@@ -389,13 +389,18 @@ end
             "for i in I, j in J\nend"
         @test format_string("for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K\nend") ==
             "for i in I, j in J, k in K\nend"
-        # for generators
+        # for generators, filter
         for (l, r) in (("[", "]"), ("(", ")"))
             @test format_string("$(l)i for i$(sp)$(op)$(sp)I$(r)") == "$(l)i for i in I$(r)"
             @test format_string("$(l)(i, j) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J$(r)") ==
                 "$(l)(i, j) for i in I, j in J$(r)"
             @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K$(r)") ==
                 "$(l)(i, j, k) for i in I, j in J, k in K$(r)"
+        end
+        # K"filter"
+        for (l, r) in (("[", "]"), ("(", ")"))
+            @test format_string("$(l)i for i$(sp)$(op)$(sp)I if i < 2$(r)") ==
+                "$(l)i for i in I if i < 2$(r)"
         end
     end
 end
