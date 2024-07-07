@@ -261,6 +261,16 @@ end
         @test format_string("f($(sp)a$(sp)...,$(sp))") == "f(a$(sp)...)"
         @test format_string("f($(sp)a$(sp)...;$(sp)b$(sp)...$(sp))") == "f(a$(sp)...; b$(sp)...)"
     end
+    # Named tuples
+    for sp in ("", " ", "  "), a in ("a", "a = 1")
+        @test format_string("($(sp);$(sp)$(a)$(sp))") ==
+            format_string("($(sp);$(sp)$(a)$(sp),$(sp))") == "(; $(a))"
+        for b in ("b", "b = 2")
+            @test format_string("($(sp);$(sp)$(a)$(sp),$(sp)$(b)$(sp))") ==
+                format_string("($(sp);$(sp)$(a)$(sp),$(sp)$(b)$(sp),$(sp))") ==
+                "(; $(a), $(b))"
+        end
+    end
     # Curly (not as extensive testing as tuple/call/dotcall above but the code path is the
     # same)
     for x in ("", "X"), sp in ("", " ", "  "), a in ("A", "<:B", "C <: D"), b in ("E", "<:F", "G <: H")

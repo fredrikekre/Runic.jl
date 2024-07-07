@@ -337,6 +337,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K","),
         @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)]),
     )
+    first_item_idx = findnext(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, opening_leaf_idx + 1)
+    if first_item_idx >= closing_leaf_idx
+        first_item_idx = nothing
+    end
     last_item_idx = findprev(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, closing_leaf_idx - 1)
     if last_item_idx <= opening_leaf_idx
         last_item_idx = nothing
@@ -354,7 +358,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
     #  - node is a single item tuple which is not from an anonymous fn (Julia-requirement)
     #  - the closing token is not on the same line as the last item (Runic-requirement)
     require_trailing_comma = false
-    if kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function"
+    if kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
+            kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
         require_trailing_comma = true
     elseif kind(node) in KSet"bracescat block"
