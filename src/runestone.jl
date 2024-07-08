@@ -106,7 +106,7 @@ function format_float_literals(ctx::Context, node::Node)
     if occursin(r, str)
         return nothing
     end
-    if occursin('_', str) || startswith(str, "0x")
+    if occursin('_', str) || occursin("0x", str)
         # TODO: Hex floats and floats with underscores are ignored
         return nothing
     end
