@@ -317,6 +317,10 @@ end
             "a ? b : c ? d : e"
         @test format_string("a$(sp)?\nb$(sp):\nc$(sp)?\nd$(sp):\ne") ==
             "a ?\n    b :\n    c ?\n    d :\n    e"
+        # Comment in x-position
+        @test format_string("a$(sp)?$(sp)b$(sp)#==#$(sp):\nc") == "a ? b #==# :\n    c"
+        # Comment in other-position
+        @test format_string("a$(sp)?$(sp)#==#$(sp)b$(sp):\nc") == "a ? #==# b :\n    c"
     end
 end
 

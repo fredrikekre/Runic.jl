@@ -255,7 +255,9 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
             any_changes && push!(kids′, kid)
             accept_node!(ctx, kid)
             looking_for_whitespace = kind(last_leaf(kid)) !== K"Whitespace"
-            if looking_for_x
+            if kind(kid) === K"Comment"
+                # Just skip through and keep the state?
+            elseif looking_for_x
                 # We are looking for x, check we have them all otherwise keep looking
                 @assert is_x(kid)::Bool
                 n_x_leaves_visited += 1
