@@ -454,6 +454,7 @@ end
         # macro-end
         @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
             "macro f()\n    x\nend"
+        @test format_string("macro f() x end") == "macro f() x end"
         # let-end
         @test format_string("let a = 1\n$(sp)x\n$(sp)end") == "let a = 1\n    x\nend"
         @test format_string("let\n$(sp)x\n$(sp)end") == "let\n    x\nend"

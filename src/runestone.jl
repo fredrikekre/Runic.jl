@@ -1347,7 +1347,7 @@ function indent_function_or_macro(ctx::Context, node::Node)
         any_kid_changed = true
     end
     # Fifth node is the closing end keyword
-    end_idx = block_idx + 1
+    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)::Int
     end_node = kids[end_idx]
     @assert is_leaf(end_node) && kind(end_node) === K"end"
     if !has_tag(end_node, TAG_DEDENT)
