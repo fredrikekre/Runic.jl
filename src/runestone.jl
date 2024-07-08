@@ -2137,7 +2137,7 @@ function indent_module(ctx::Context, node::Node)
     # Third node is the module identifier
     id_idx = 3
     id_node = kids[id_idx]
-    @assert kind(id_node) === K"Identifier"
+    @assert kind(id_node) in KSet"Identifier var"
     # Fourth node is the module body block.
     block_idx = 4
     block_node′ = indent_block(ctx, kids[block_idx])

@@ -571,6 +571,9 @@ end
             # nested documented modules
             @test format_string("\"doc\"\n$(b)module A\n\"doc\"\n$(b)module B\n$(sp)x\n$(sp)end\n$(sp)end") ==
                 "\"doc\"\n$(b)module A\n\"doc\"\n$(b)module B\n    x\nend\nend"
+            # var"" as module name
+            @test format_string("$(b)module var\"A\"\n$(sp)x\n$(sp)end\nf") ==
+                "$(b)module var\"A\"\n    x\nend\nf"
         end
         # tuple
         @test format_string("(a,\n$(sp)b)") == "(\n    a,\n    b,\n)"
