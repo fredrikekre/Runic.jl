@@ -311,14 +311,27 @@ function spaces_in_listlike(ctx::Context, node::Node)
     comma = Node(JuliaSyntax.SyntaxHead(K",", JuliaSyntax.TRIVIA_FLAG), 1)
 
     # Find the opening and closing leafs
+    implicit_tuple = false
     if kind(node) in KSet"tuple call dotcall" || is_paren_block(node)
         opening_leaf_idx = findfirst(x -> kind(x) === K"(", kids)
         if opening_leaf_idx === nothing
-            # TODO: Implicit tuple without (), for example arguments in a do-block
-            return nothing
+            # Implicit tuple without (), for example arguments in a do-block
+            implicit_tuple = true
+            opening_leaf_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
+            if opening_leaf_idx === nothing
+                # All whitespace... return?
+                return nothing
+            else
+                closing_leaf_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
+                opening_leaf_idx == closing_leaf_idx && return nothing # empty
+                opening_leaf_idx -= 1
+                closing_leaf_idx += 1
+            end
+            @assert findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1) === nothing
+        else
+            closing_leaf_idx = findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1)::Int
+            closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
         end
-        closing_leaf_idx = findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1)::Int
-        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
     elseif kind(node) in KSet"curly braces bracescat"
         opening_leaf_idx = findfirst(x -> kind(x) === K"{", kids)::Int
         closing_leaf_idx = findnext(x -> kind(x) === K"}", kids, opening_leaf_idx + 1)::Int
@@ -338,11 +351,11 @@ function spaces_in_listlike(ctx::Context, node::Node)
         @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)]),
     )
     first_item_idx = findnext(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, opening_leaf_idx + 1)
-    if first_item_idx >= closing_leaf_idx
+    if first_item_idx !== nothing && first_item_idx >= closing_leaf_idx
         first_item_idx = nothing
     end
     last_item_idx = findprev(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, closing_leaf_idx - 1)
-    if last_item_idx <= opening_leaf_idx
+    if last_item_idx !== nothing && last_item_idx <= opening_leaf_idx
         last_item_idx = nothing
     end
     last_comma_idx = findprev(x -> kind(x) === K",", kids, closing_leaf_idx - 1)
@@ -358,7 +371,9 @@ function spaces_in_listlike(ctx::Context, node::Node)
     #  - node is a single item tuple which is not from an anonymous fn (Julia-requirement)
     #  - the closing token is not on the same line as the last item (Runic-requirement)
     require_trailing_comma = false
-    if kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
+    if implicit_tuple
+        require_trailing_comma = false
+    elseif kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
         require_trailing_comma = true
@@ -408,8 +423,14 @@ function spaces_in_listlike(ctx::Context, node::Node)
     for i in (opening_leaf_idx + 1):(closing_leaf_idx - 1)
         kid′ = kids[i]
         this_kid_changed = false
+        first_item_in_implicit_tuple = implicit_tuple && i == opening_leaf_idx + 1
         if state === :expect_item
-            if kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+            if first_item_in_implicit_tuple && kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+                # Not allowed to touch this one I think?
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+            elseif kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+                @assert !first_item_in_implicit_tuple # Unreachable?
                 # Delete whitespace unless followed by a comment
                 replace_bytes!(ctx, "", span(kid′))
                 this_kid_changed = true
@@ -418,18 +439,20 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 end
             elseif kind(kid′) === K"NewlineWs" ||
                     (kind(kid′) === K"Whitespace" && peek(i) === K"Comment")
+                @assert !first_item_in_implicit_tuple # Unreachable?
                 # Newline here can happen if this kid is just after the opening leaf or if
                 # there is an empty line between items. No state change.
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"Comment"
+                @assert !first_item_in_implicit_tuple # Unreachable?
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
                 state = :expect_space # To ensure space after the comment
             else
                 # This is an item (probably?).
                 # Make sure it doesn't have leading or trailing whitespace.
-                if kind(first_leaf(kid′)) === K"Whitespace" && kind(second_leaf(kid′)) !== K"Comment"
+                if kind(first_leaf(kid′)) === K"Whitespace" && kind(second_leaf(kid′)) !== K"Comment" && !first_item_in_implicit_tuple
                     # Delete the whitespace leaf
                     kid_ws = first_leaf(kid′)
                     replace_bytes!(ctx, "", span(kid_ws))
@@ -1833,6 +1856,12 @@ function indent_loop(ctx::Context, node::Node)
     return any_kid_changed ? node : nothing
 end
 
+function indent_implicit_tuple(ctx::Context, node::Node)
+    # TODO: This should probably be hard indent?
+    @assert kind(node) === K"tuple"
+    return continue_all_newlines(ctx, node)
+end
+
 function indent_tuple(ctx::Context, node::Node)
     @assert kind(node) === K"tuple"
     kids = verified_kids(node)
@@ -1840,15 +1869,7 @@ function indent_tuple(ctx::Context, node::Node)
     # e.g. `a, b`. Implicit tuples only show up in do-blocks(?).
     opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)
     if opening_paren_idx === nothing
-        # Implicit tuple: don't indent the closing token
-        first_item_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
-        if first_item_idx === nothing
-            # Empty implicit tuple can happen in e.g. a do-block without arguments
-            return nothing
-        end
-        last_item_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
-        # TODO: Closing token indent?
-        return indent_listlike(ctx, node, first_item_idx, last_item_idx)
+        return indent_implicit_tuple(ctx, node)
     else
         # Explicit tuple: indent the closing token
         closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int

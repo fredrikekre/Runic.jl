@@ -244,6 +244,18 @@ end
                 format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)$(sp),\n$(c)") ==
                 "$(o)\n    # a\n    $(a),\n    # b\n    $(b),\n$(c)"
         end
+        # Implicit tuple (no parens)
+        begin
+            @test format_string("$(a)$(sp),$(sp)$(b)") == "$(a), $(b)"
+            @test format_string("$(a)$(sp), #==#$(sp)$(b)") == "$(a), #==# $(b)"
+            @test format_string("$(a) #==#,$(sp)$(b)") == "$(a) #==#, $(b)"
+            @test format_string("$(a)$(sp),\n$(sp)$(b)") == "$(a),\n    $(b)"
+            # trailing comments
+            @test format_string("$(a)$(sp),$(sp)# a\n$(sp)$(b)$(sp)# b") ==
+                "$(a),$(sp)# a\n    $(b)$(sp)# b"
+            @test format_string("# a\n$(a)$(sp),\n# b\n$(b)") ==
+                "# a\n$(a),\n    # b\n    $(b)"
+        end
         # Single item
         @test format_string("($(sp)$(a)$(sp),$(sp))") == "($(a),)"
         @test format_string("f($(sp)$(a)$(sp),$(sp))") == "f($(a))"
@@ -629,6 +641,9 @@ end
         # comparison
         @test format_string("a == b ==\n$(sp)c") == "a == b ==\n    c"
         @test format_string("a <= b >=\n$(sp)c") == "a <= b >=\n    c"
+        # implicit tuple
+        @test format_string("a,\n$(sp)b") == "a,\n    b"
+        @test format_string("a,\n$(sp)b + \nb") == "a,\n    b +\n    b"
     end
 end
 
