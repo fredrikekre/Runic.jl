@@ -100,7 +100,7 @@ function format_float_literals(ctx::Context, node::Node)
     (?:(?:[1-9]\d*)|0)   # Non-zero followed by any digit, or just a single zero
     \.                   # Decimal point
     (?:(?:\d*[1-9])|0)   # Any digit with a final nonzero, or just a single zero
-    (?:[ef][+-]?[1-9]\d*)?
+    (?:[ef][+-]?(?:[1-9]\d*|0))?
     $
     """x
     if occursin(r, str)
