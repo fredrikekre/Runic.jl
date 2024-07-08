@@ -293,7 +293,7 @@ end
 # TODO: Why did this function become sooo complicated?
 function spaces_in_listlike(ctx::Context, node::Node)
     if !(
-            kind(node) in KSet"tuple parameters curly braces bracescat vect ref" ||
+            kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens" ||
                 (kind(node) === K"call" && flags(node) == 0) || # Flag check rules out op-calls
                 (kind(node) === K"dotcall" && flags(node) == 0) ||
                 is_paren_block(node)
@@ -316,7 +316,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
 
     # Find the opening and closing leafs
     implicit_tuple = false
-    if kind(node) in KSet"tuple call dotcall" || is_paren_block(node)
+    if kind(node) in KSet"tuple call dotcall parens" || is_paren_block(node)
         opening_leaf_idx = findfirst(x -> kind(x) === K"(", kids)
         if opening_leaf_idx === nothing
             # Implicit tuple without (), for example arguments in a do-block
@@ -383,7 +383,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
         require_trailing_comma = true
-    elseif kind(node) in KSet"bracescat block"
+    elseif kind(node) in KSet"bracescat parens block"
         require_trailing_comma = false # Leads to parser error
     elseif kind(node) === K"parameters"
         # For parameters the trailing comma is configured from the parent
@@ -770,7 +770,7 @@ function spaces_around_operators(ctx::Context, node::Node)
 end
 
 function spaces_around_assignments(ctx::Context, node::Node)
-    if !(is_assignment(node) && !is_leaf(node) )
+    if !(is_assignment(node) && !is_leaf(node))
         return nothing
     end
     # for-loop nodes are of kind K"=" even when `in` or `∈` is used so we need to

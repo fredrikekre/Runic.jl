@@ -156,9 +156,9 @@ end
             # a op b other_op c
             @test format_string("$(sp)a$(sp)$(op)$(sp)b$(sp)*$(sp)c$(sp)") ==
                 "$(sp)a $(op) b * c$(sp)"
-            # a op (b other_op c) (TODO: leading and trailing spaces should be removed in ()
+            # a op (b other_op c)
             @test format_string("$(sp)a$(sp)$(op)$(sp)($(sp)b$(sp)*$(sp)c$(sp))$(sp)") ==
-                "$(sp)a $(op) ($(sp)b * c$(sp))$(sp)"
+                "$(sp)a $(op) (b * c)$(sp)"
             # call() op call()
             @test format_string("$(sp)sin(α)$(sp)$(op)$(sp)cos(β)$(sp)") ==
                 "$(sp)sin(α) $(op) cos(β)$(sp)"
@@ -214,6 +214,8 @@ end
                 "$(o)$(a), #==# $(b)$(c)"
             @test format_string("$(o)$(sp)$(a) #==#,$(sp)$(b)$(sp)$(c)") ==
                 "$(o)$(a) #==#, $(b)$(c)"
+            @test format_string("$(o)$(sp)$(a)#==# = 1$(sp)$(c)") ==
+                "$(o)$(a) #==# = 1$(c)"
             # line break in between items
             @test format_string("$(o)$(sp)$(a)$(sp),\n$(sp)$(b)$(sp)$(c)") ==
                 format_string("$(o)$(sp)$(a)$(sp),\n$(sp)$(b)$(sp),$(sp)$(c)") ==
@@ -246,6 +248,10 @@ end
             @test format_string("$(o)\n$(a)$(sp)\n,$(sp)$(b)\n$(c)") ==
                 "$(o)\n    $(a)\n    , $(b),\n$(c)"
         end
+        # parens (but not block)
+        @test format_string("($(sp)$(a)$(sp))") == "($(a))"
+        @test format_string("($(sp)\n$(sp)$(a)$(sp)\n$(sp))") == "(\n    $(a)\n)"
+        @test format_string("($(sp)\n$(sp)$(a)$(sp);$(sp)$(b)\n$(sp))") == "(\n    $(a); $(b)\n)"
         # Implicit tuple (no parens)
         begin
             @test format_string("$(a)$(sp),$(sp)$(b)") == "$(a), $(b)"
@@ -348,7 +354,7 @@ end
         @test format_string("  a$(a) b  ") == "  a $(a) b  "
         @test format_string("a$(a)   b") == "a $(a) b"
         @test format_string("a$(a)   b  *  x") == "a $(a) b * x"
-        @test format_string("a$(a)( b *  x)") == "a $(a) ( b * x)"
+        @test format_string("a$(a)( b *  x)") == "a $(a) (b * x)"
     end
     # Chained assignments
     @test format_string("x=a= b  ") == "x = a = b  "
