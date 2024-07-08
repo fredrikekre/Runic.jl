@@ -594,6 +594,8 @@ end
             # var"" as module name
             @test format_string("$(b)module var\"A\"\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module var\"A\"\n    x\nend\nf"
+            # single line module
+            @test format_string("$(b)module A; x; end\nf") == "$(b)module A; x; end\nf"
         end
         # tuple
         @test format_string("(a,\n$(sp)b)") == "(\n    a,\n    b,\n)"

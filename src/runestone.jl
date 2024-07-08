@@ -2176,8 +2176,8 @@ function indent_module(ctx::Context, node::Node)
         kids[block_idx] = block_node′
         any_kid_changed = true
     end
-    # Fifth node is the closing end keyword
-    end_idx = 5
+    # Skip until the closing end keyword
+    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)
     end_node = kids[end_idx]
     @assert is_leaf(end_node) && kind(end_node) === K"end"
     if !has_tag(end_node, TAG_DEDENT)
