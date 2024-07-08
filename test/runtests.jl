@@ -242,6 +242,9 @@ end
             @test format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)\n$(c)") ==
                 format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)$(sp),\n$(c)") ==
                 "$(o)\n    # a\n    $(a),\n    # b\n    $(b),\n$(c)"
+            # comma on next line (TODO: move them up?)
+            @test format_string("$(o)\n$(a)$(sp)\n,$(sp)$(b)\n$(c)") ==
+                "$(o)\n    $(a)\n    , $(b),\n$(c)"
         end
         # Implicit tuple (no parens)
         begin
@@ -281,6 +284,8 @@ end
                 format_string("($(sp);$(sp)$(a)$(sp),$(sp)$(b)$(sp),$(sp))") ==
                 "(; $(a), $(b))"
         end
+        @test format_string("($(sp);$(sp))") == "(;)"
+        @test format_string("($(sp); #= a =#$(sp))") == "(; #= a =#)"
     end
     # Curly (not as extensive testing as tuple/call/dotcall above but the code path is the
     # same)
@@ -454,6 +459,7 @@ end
         @test format_string("let\n$(sp)x\n$(sp)end") == "let\n    x\nend"
         @test format_string("let a = 1 # a\n$(sp)x\n$(sp)end") ==
             "let a = 1 # a\n    x\nend"
+        @test format_string("let a = 1; x end") == "let a = 1; x end"
         # begin-end
         @test format_string("begin\n$(sp)x\n$(sp)end") ==
             "begin\n    x\nend"

@@ -367,6 +367,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
     # multiline = contains_outer_newline(kids, opening_leaf_idx, closing_leaf_idx)
     multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (opening_leaf_idx + 1):(closing_leaf_idx - 1))
 
+    is_named_tuple = kind(node) === K"tuple" && n_items == 1 && kind(kids[first_item_idx]) === K"parameters"
+
     # A trailing comma is required if
     #  - node is a single item tuple which is not from an anonymous fn (Julia-requirement)
     #  - the closing token is not on the same line as the last item (Runic-requirement)
@@ -403,7 +405,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
     end
 
     # Keep track of the state
-    state = if kind(node) === K"parameters"
+    state = if kind(node) === K"parameters" && n_items > 0
         # @assert !multiline # TODO
         :expect_space
     elseif n_items > 0
@@ -460,17 +462,48 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     this_kid_changed = true
                 end
                 if kind(last_leaf(kid′)) === K"Whitespace"
-                    @assert false # Unreachable?
+                    # Delete the whitespace leaf
+                    kid_ws = last_leaf(kid′)
+                    let pos = position(ctx.fmt_io)
+                        seek(ctx.fmt_io, pos + span(kid′) - span(kid_ws))
+                        replace_bytes!(ctx, "", span(kid_ws))
+                        seek(ctx.fmt_io, pos)
+                    end
+                    kid′ = replace_last_leaf(kid′, nullnode)
+                    this_kid_changed = true
                 end
-                # Kid is now acceptable
-                any_kid_changed |= this_kid_changed
-                if any_kid_changed
+                if kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
+                        count(
+                        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
+                        verified_kids(kid′),
+                    ) == 0
+                    # If kid is K"parameters" without items and we don't want a trailing
+                    # comma/semicolon we need to eat any whitespace kids (e.g. comments)
+                    grandkids = verified_kids(kid′)
+                    semi_idx = 1
+                    @assert kind(grandkids[semi_idx]) === K";"
+                    ws_idx = something(findnext(x -> kind(x) !== K"Whitespace", grandkids, semi_idx + 1), lastindex(grandkids) + 1)
+                    any_kid_changed = true
                     if kids′ === kids
                         kids′ = kids[1:(i - 1)]
                     end
-                    push!(kids′, kid′)
+                    replace_bytes!(ctx, "", mapreduce(span, +, grandkids[1:(ws_idx - 1)]; init = 0))
+                    for j in ws_idx:length(grandkids)
+                        grandkid = grandkids[j]
+                        accept_node!(ctx, grandkid)
+                        push!(kids′, grandkid)
+                    end
+                else
+                    # Kid is now acceptable
+                    any_kid_changed |= this_kid_changed
+                    if any_kid_changed
+                        if kids′ === kids
+                            kids′ = kids[1:(i - 1)]
+                        end
+                        push!(kids′, kid′)
+                    end
+                    accept_node!(ctx, kid′)
                 end
-                accept_node!(ctx, kid′)
                 # Transition to the next state
                 state = state_after_item(i)
             end
@@ -518,9 +551,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     accept_node!(ctx, comma)
                     state = :expect_closing
                 end
-                if kind(kid′) === K"NewlineWs"
-                    state = :expect_closing
-                end
+                # TODO: Why is this needed?
+                # if kind(kid′) === K"NewlineWs"
+                #     state = :expect_closing
+                # end
                 any_kid_changed |= this_kid_changed
                 # Accept the newline
                 accept_node!(ctx, kid′)
@@ -549,14 +583,39 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     #     kids′ = kids[1:i - 1]
                     # end
                 end
-                # TODO: Tag for requiring trailing comma.
-                any_kid_changed |= this_kid_changed
-                accept_node!(ctx, kid′)
-                if any_kid_changed
-                    if kids′ === kids
-                        kids′ = kids[1:(i - 1)]
+                if !require_trailing_comma &&
+                        count(
+                        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
+                        verified_kids(kid′),
+                    ) == 0
+                    # If kid is K"parameters" without items and we don't want a trailing
+                    # comma/semicolon we need to eat any whitespace kids (e.g. comments)
+                    grandkids = verified_kids(kid′)
+                    semi_idx = 1
+                    @assert kind(grandkids[semi_idx]) === K";"
+                    ws_idx = findnext(x -> kind(x) !== K"Whitespace", grandkids, semi_idx + 1)
+                    if ws_idx !== nothing
+                        any_kid_changed = true
+                        if kids′ === kids
+                            kids′ = kids[1:(i - 1)]
+                        end
+                        replace_bytes!(ctx, "", mapreduce(span, +, grandkids[1:(ws_idx - 1)]; init = 0))
+                        for j in ws_idx:length(grandkids)
+                            grandkid = grandkids[j]
+                            accept_node!(ctx, grandkid)
+                            push!(kids′, grandkid)
+                        end
                     end
-                    push!(kids′, kid′)
+                else
+                    # TODO: Tag for requiring trailing comma.
+                    any_kid_changed |= this_kid_changed
+                    accept_node!(ctx, kid′)
+                    if any_kid_changed
+                        if kids′ === kids
+                            kids′ = kids[1:(i - 1)]
+                        end
+                        push!(kids′, kid′)
+                    end
                 end
                 state = :expect_closing # parameters must be the last item(?)
             else
@@ -1330,8 +1389,8 @@ function indent_let(ctx::Context, node::Node)
         kids[block_idx] = block_node′
         any_kid_changed = true
     end
-    # Next node is the closing end keyword
-    end_idx = block_idx + 1
+    # Look for the end node
+    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)::Int
     @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
     if !has_tag(kids[end_idx], TAG_DEDENT)
         kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
