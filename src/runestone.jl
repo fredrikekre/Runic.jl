@@ -937,7 +937,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 if kind(node) === K"do"
                     nkid = kids[i + 1]
                     @assert kind(nkid) === K"tuple"
-                    if !any(!JuliaSyntax.is_whitespace, verified_kids(nkid))
+                    if !any(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K";"), verified_kids(nkid))
                         state = :closing
                     end
                 end
@@ -990,7 +990,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 @assert false # Unreachable?
             else
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
-                @assert kind(node) in KSet"where if elseif while"
+                @assert kind(node) in KSet"where if elseif while do"
                 any_changes = true
                 if kids′ === kids
                     kids′ = kids[1:(i - 1)]

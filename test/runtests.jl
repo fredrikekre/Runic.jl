@@ -402,6 +402,7 @@ end
         @test format_string("A$(sp)where$(sp){T}$(sp)where$(sp){S}") == "A where {T} where {S}"
         @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
         @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
+        @test format_string("f()$(sp)do; y end") == "f() do; y end"
         # After `where` (anywhere else?) a newline can be used instead of a space
         @test format_string("A$(sp)where$(sp)\n{A}") == "A where\n{A}"
     end
