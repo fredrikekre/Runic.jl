@@ -307,6 +307,9 @@ end
     @test format_string("(a = A;)") == "(a = A)"
     @test format_string("cond && (a = A;)") == "cond && (a = A)"
     @test format_string("(a = A; b = B;)") == "(a = A; b = B)"
+    @test format_string("(a = A;;)") == "(a = A)"
+    @test format_string("(;;)") == format_string("( ; ; )") == "(;;)"
+    @test format_string("(;)") == format_string("( ; )") == "(;)"
 end
 
 @testset "whitespace around ->" begin

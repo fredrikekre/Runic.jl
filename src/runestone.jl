@@ -351,7 +351,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
     end
 
     n_items = count(
-        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K","),
+        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
         @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)]),
     )
     first_item_idx = findnext(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, opening_leaf_idx + 1)
@@ -377,14 +377,18 @@ function spaces_in_listlike(ctx::Context, node::Node)
     #  - node is a single item tuple which is not from an anonymous fn (Julia-requirement)
     #  - the closing token is not on the same line as the last item (Runic-requirement)
     require_trailing_comma = false
+    allow_trailing_semi = false
     if implicit_tuple
         require_trailing_comma = false
     elseif kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
         require_trailing_comma = true
-    elseif kind(node) in KSet"bracescat parens block"
+    elseif kind(node) in KSet"bracescat parens"
         require_trailing_comma = false # Leads to parser error
+    elseif kind(node) in KSet"block"
+        require_trailing_comma = false
+        allow_trailing_semi = n_items == 0
     elseif kind(node) === K"parameters"
         # For parameters the trailing comma is configured from the parent
         require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
@@ -698,7 +702,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             end
         else
             @assert state === :expect_closing
-            if kind(kid′) === K"," || kind(kid′) === K";" ||
+            if kind(kid′) === K"," || (kind(kid′) === K";" && !allow_trailing_semi) ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
                 # Trailing comma (when not wanted) and space not followed by a comment are
                 # removed
@@ -707,6 +711,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     kids′ = kids[1:(i - 1)]
                 end
                 replace_bytes!(ctx, "", span(kid′))
+            elseif kind(node) === K"block" && kind(kid′) === K";" && allow_trailing_semi ||
+                    (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"NewlineWs" ||
                     (kind(kid′) === K"Whitespace" && peek(i) === K"Comment") ||
                     kind(kid′) === K"Comment"
