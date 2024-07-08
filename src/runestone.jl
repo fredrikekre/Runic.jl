@@ -1317,12 +1317,12 @@ function indent_let(ctx::Context, node::Node)
     if span(vars_node) > 0 && length(verified_kids(vars_node)) > 0
         @assert kind(last_leaf(vars_node)) !== "NewlineWs"
     end
-    # Third node is the NewlineWs before the block
-    ln_idx = 3
-    ln_node = kids[ln_idx]
-    @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
+    # # Third node is the NewlineWs before the block
+    # ln_idx = 3
+    # ln_node = kids[ln_idx]
+    # @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
     # Fourth node is the function body block.
-    block_idx = 4
+    block_idx = findnext(x -> kind(x) === K"block", kids, vars_idx + 1)::Int
     block_node = kids[block_idx]
     @assert !is_leaf(block_node) && kind(block_node) === K"block"
     block_node′ = indent_block(ctx, block_node)
@@ -1330,8 +1330,8 @@ function indent_let(ctx::Context, node::Node)
         kids[block_idx] = block_node′
         any_kid_changed = true
     end
-    # Fifth node is the closing end keyword
-    end_idx = 5
+    # Next node is the closing end keyword
+    end_idx = block_idx + 1
     @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
     if !has_tag(kids[end_idx], TAG_DEDENT)
         kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
