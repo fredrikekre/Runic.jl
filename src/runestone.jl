@@ -1127,42 +1127,59 @@ end
 function for_loop_use_in(ctx::Context, node::Node)
     if !(
             (kind(node) === K"for" && !is_leaf(node) && meta_nargs(node) == 4) ||
-                (kind(node) === K"generator" && meta_nargs(node) == 3) # TODO: Unsure about 3.
+                kind(node) === K"generator"
         )
         return nothing
     end
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
+    kids′ = kids
     for_index = findfirst(c -> kind(c) === K"for" && is_leaf(c), kids)::Int
-    for_node = kids[for_index]
-    @assert kind(for_node) === K"for" && span(for_node) == 3 &&
-        is_leaf(for_node) && JuliaSyntax.is_trivia(for_node)
-    for i in 1:for_index
-        accept_node!(ctx, kids[i])
+    next_index = 1
+    any_for_changed = false
+    # generator can have multiple for nodes
+    while for_index !== nothing
+        for_node = kids[for_index]
+        @assert kind(for_node) === K"for" && span(for_node) == 3 &&
+            is_leaf(for_node) && JuliaSyntax.is_trivia(for_node)
+        for i in next_index:for_index
+            accept_node!(ctx, kids[i])
+        end
+        while_pos = position(ctx.fmt_io)
+        # The for loop specification node can be either K"=" or K"cartesian_iterator"
+        for_spec_index = for_index + 1
+        for_spec_node = kids[for_spec_index]
+        @assert kind(for_spec_node) in KSet"= cartesian_iterator filter"
+        if kind(for_spec_node) === K"="
+            for_spec_node′ = replace_with_in(ctx, for_spec_node)
+        elseif kind(for_spec_node) === K"filter"
+            for_spec_node′ = replace_with_in_filter(ctx, for_spec_node)
+        else
+            @assert kind(for_spec_node) === K"cartesian_iterator"
+            for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)
+        end
+        if for_spec_node′ !== nothing
+            @assert position(ctx.fmt_io) == while_pos + span(for_spec_node′)
+            any_for_changed = true
+            # Insert the new for spec node
+            if kids′ === kids
+                kids′ = copy(kids)
+            end
+            kids′[for_spec_index] = for_spec_node′
+        end
+        for_index = findnext(c -> kind(c) === K"for" && is_leaf(c), kids, for_spec_index + 1)
+        if for_index !== nothing
+            @assert kind(node) === K"generator"
+        end
+        next_index = for_spec_index + 1
     end
-    # The for loop specification node can be either K"=" or K"cartesian_iterator"
-    for_spec_index = for_index + 1
-    for_spec_node = kids[for_spec_index]
-    @assert kind(for_spec_node) in KSet"= cartesian_iterator filter"
-    if kind(for_spec_node) === K"="
-        for_spec_node′ = replace_with_in(ctx, for_spec_node)
-    elseif kind(for_spec_node) === K"filter"
-        for_spec_node′ = replace_with_in_filter(ctx, for_spec_node)
-    else
-        @assert kind(for_spec_node) === K"cartesian_iterator"
-        for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)
-    end
-    if for_spec_node′ === nothing
+    if !any_for_changed
         seek(ctx.fmt_io, pos)
         return nothing
     end
-    @assert position(ctx.fmt_io) == pos + mapreduce(span, +, @view(kids[1:for_index])) + span(for_spec_node′)
-    # Insert the new for spec node
-    kids′ = copy(kids)
-    kids′[for_spec_index] = for_spec_node′
-    # At this point the eq node is done, just accept any remaining nodes
+    # At this point the eq nodes are done, just accept any remaining nodes
     # TODO: Don't need to do this...
-    for i in (for_spec_index + 1):length(kids′)
+    for i in next_index:length(kids′)
         accept_node!(ctx, kids′[i])
     end
     # Construct the full node and return

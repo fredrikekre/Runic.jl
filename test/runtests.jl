@@ -426,10 +426,16 @@ end
         # for generators, filter
         for (l, r) in (("[", "]"), ("(", ")"))
             @test format_string("$(l)i for i$(sp)$(op)$(sp)I$(r)") == "$(l)i for i in I$(r)"
+            # cartesian
             @test format_string("$(l)(i, j) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J$(r)") ==
                 "$(l)(i, j) for i in I, j in J$(r)"
             @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K$(r)") ==
                 "$(l)(i, j, k) for i in I, j in J, k in K$(r)"
+            # multiple for
+            @test format_string("$(l)(i, j) for i$(sp)$(op)$(sp)I for j$(sp)$(op)$(sp)J$(r)") ==
+                "$(l)(i, j) for i in I for j in J$(r)"
+            @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I for j$(sp)$(op)$(sp)J for k$(sp)$(op)$(sp)K$(r)") ==
+                "$(l)(i, j, k) for i in I for j in J for k in K$(r)"
         end
         # K"filter"
         for (l, r) in (("[", "]"), ("(", ")"))
