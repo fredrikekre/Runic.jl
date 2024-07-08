@@ -464,6 +464,7 @@ end
         @test format_string("function f()\n$(sp)x\n$(sp)end") ==
             "function f()\n    x\nend"
         @test format_string("function f end") == "function f end"
+        @test format_string("function ∉ end") == "function ∉ end"
         # macro-end
         @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
             "macro f()\n    x\nend"

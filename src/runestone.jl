@@ -1348,7 +1348,9 @@ function indent_function_or_macro(ctx::Context, node::Node)
         @assert is_longform_anon_function(node)
     end
     sig_node = kids[sig_idx]
-    if kind(sig_node) === K"Identifier"
+    # Identifier for regular names but "not function call" for empty functions with Unicode
+    # symbols??
+    if kind(sig_node) === K"Identifier" || !(kind(sig_node) in KSet"call where :: tuple")
         # Empty function definition like `function f end`.
         # TODO: Make sure the spaces around are correct
         end_idx = findnext(x -> kind(x) === K"end", kids, sig_idx + 1)::Int
