@@ -59,7 +59,7 @@ function format_oct_literals(ctx::Context, node::Node)
     # Padding depends on the value of the literal...
     str = String(read_bytes(ctx, node))
     n = tryparse(UInt128, str)
-    if n === nothing
+    if n === nothing || spn > 45
         # Do nothing: BigInt oct literal
         return nothing
     end
