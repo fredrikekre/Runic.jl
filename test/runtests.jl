@@ -453,6 +453,8 @@ end
         # let-end
         @test format_string("let a = 1\n$(sp)x\n$(sp)end") ==
             "let a = 1\n    x\nend"
+        @test format_string("let\n$(sp)x\n$(sp)end") ==
+            "let\n    x\nend"
         # begin-end
         @test format_string("begin\n$(sp)x\n$(sp)end") ==
             "begin\n    x\nend"

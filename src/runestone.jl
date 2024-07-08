@@ -1314,7 +1314,9 @@ function indent_let(ctx::Context, node::Node)
     vars_idx = 2
     vars_node = kids[vars_idx]
     @assert !is_leaf(vars_node) && kind(vars_node) === K"block"
-    @assert kind(last_leaf(vars_node)) !== "NewlineWs"
+    if span(vars_node) > 0 && length(verified_kids(vars_node)) > 0
+        @assert kind(last_leaf(vars_node)) !== "NewlineWs"
+    end
     # Third node is the NewlineWs before the block
     ln_idx = 3
     ln_node = kids[ln_idx]
