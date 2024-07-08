@@ -1074,12 +1074,16 @@ function replace_with_in_filter(ctx::Context, node::Node)
     @assert kind(node) === K"filter" && !is_leaf(node)
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
-    idx = findfirst(x -> kind(x) === K"=" && !is_leaf(x), kids)::Int
+    idx = findfirst(x -> kind(x) in KSet"= cartesian_iterator" && !is_leaf(x), kids)::Int
     for i in 1:(idx - 1)
         accept_node!(ctx, kids[i])
     end
     kid = kids[idx]
-    kid′ = replace_with_in(ctx, kid)
+    if kind(kid) === K"="
+        kid′ = replace_with_in(ctx, kid)
+    else
+        kid′ = replace_with_in_cartesian(ctx, kid)
+    end
     if kid′ === nothing
         seek(ctx.fmt_io, pos)
         return nothing

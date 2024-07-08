@@ -434,6 +434,8 @@ end
         for (l, r) in (("[", "]"), ("(", ")"))
             @test format_string("$(l)i for i$(sp)$(op)$(sp)I if i < 2$(r)") ==
                 "$(l)i for i in I if i < 2$(r)"
+            @test format_string("$(l)i for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J if i < j$(r)") ==
+                "$(l)i for i in I, j in J if i < j$(r)"
         end
     end
 end
