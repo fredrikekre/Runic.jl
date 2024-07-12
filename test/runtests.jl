@@ -722,3 +722,16 @@ end
             "$(o)\n    a, # a\n    b,\n$(c)"
     end
 end
+
+@testset "max three consecutive newlines" begin
+    f, g = "f() = 1", "g() = 2"
+    for n in 1:5
+        nl = "\n"
+        m = min(n, 3)
+        @test format_string(f * nl^n * g) == f * nl^m * g
+        @test format_string("module A" * nl^n * "end") == "module A" * nl^m * "end"
+        @test format_string("function f()" * nl^n * "end") == "function f()" * nl^m * "end"
+        @test format_string("function f()" * nl^2 * "x = 1" * nl^n * "end") ==
+            "function f()" * nl^2 * "    x = 1" * nl^m * "end"
+    end
+end

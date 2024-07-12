@@ -299,6 +299,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     ctx.call_depth += 1
     @return_something insert_delete_mark_newlines(ctx, node)
     @return_something trim_trailing_whitespace(ctx, node)
+    @return_something max_three_consecutive_newlines(ctx, node)
     @return_something format_hex_literals(ctx, node)
     @return_something format_oct_literals(ctx, node)
     @return_something format_float_literals(ctx, node)

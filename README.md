@@ -164,6 +164,7 @@ julia-master --project -m Runic --check --diff "${files[@]}"
 
 This is a list of things that Runic currently is doing:
 
+ - [Line width limit](#line-width-limit)
  - [Indentation](#indentation)
  - [Spaces around operators, assignment, etc](#spaces-around-operators-assignment-etc)
  - [Spaces around keywords](#spaces-around-keywords)
@@ -172,7 +173,7 @@ This is a list of things that Runic currently is doing:
  - [Literal floating point numbers](#literal-floating-point-numbers)
  - [Literal hex and oct numbers](#literal-hex-and-oct-numbers)
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
- - [`in` instead of `∈` and `=`]()#in-instead-of--and-
+ - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [Trailing whitespace](#trailing-whitespace)
 
@@ -254,6 +255,26 @@ would be "correct". Such a chain looks better the way it is currently formatted:
 x = a + b *
     c +
     d
+```
+
+### Vertical spacing
+
+Runic removes empty vertical spacing so that there are at maximum two empty lines between
+expressions. Examples:
+```diff
+-function f()
+-     x = 1
+-
+-
+-
+-    return x
+-end
++function f()
++     x = 1
++
++
++    return x
++end
 ```
 
 ### Spaces around operators, assignment, etc

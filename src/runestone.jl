@@ -1312,6 +1312,31 @@ function parens_around_op_calls_in_colon(ctx::Context, node::Node)
     end
 end
 
+
+# Remove more than two newlines in a row
+function max_three_consecutive_newlines(ctx::Context, node::Node)
+    is_leaf(node) && return nothing
+    kids = verified_kids(node)
+    idx = findfirst(x -> kind(x) === K"NewlineWs", kids)
+    while idx !== nothing
+        if idx + 3 <= length(kids) &&
+                (kind(kids[idx + 1]) == kind(kids[idx + 2]) == kind(kids[idx + 3]) == K"NewlineWs")
+            kids′ = Vector{Node}(undef, length(kids) - 1)
+            for (i, kid) in pairs(kids)
+                if i == idx
+                    replace_bytes!(ctx, "", span(kids[idx]))
+                else
+                    accept_node!(ctx, kid)
+                    kids′[i < idx ? i : (i - 1)] = kid
+                end
+            end
+            return make_node(node, kids′)
+        end
+        idx = findnext(x -> kind(x) === K"NewlineWs", kids, idx + 1)
+    end
+    return nothing
+end
+
 # This function materialized all indentations marked by `insert_delete_mark_newlines`.
 function four_space_indent(ctx::Context, node::Node)
     kind(node) === K"NewlineWs" || return nothing
