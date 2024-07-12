@@ -264,9 +264,10 @@ end
             @test format_string("# a\n$(a)$(sp),\n# b\n$(b)") ==
                 "# a\n$(a),\n    # b\n    $(b)"
         end
-        # Single item
+        # Single item with trailing `,` and `;`
         @test format_string("($(sp)$(a)$(sp),$(sp))") == "($(a),)"
-        @test format_string("f($(sp)$(a)$(sp),$(sp))") == "f($(a))"
+        @test format_string("f($(sp)$(a)$(sp),$(sp))") ==
+            format_string("f($(sp)$(a)$(sp);$(sp))") == "f($(a))"
         # Keyword arguments
         @test format_string("f($(sp)$(a)$(sp);$(sp)$(b)$(sp))") ==
             format_string("f($(sp)$(a)$(sp);$(sp)$(b)$(sp),$(sp))") ==

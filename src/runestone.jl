@@ -612,7 +612,13 @@ function spaces_in_listlike(ctx::Context, node::Node)
                         end
                     else
                         # Nothing in the parameter node needed, overwrite it fully
+                        any_kid_changed = true
                         replace_bytes!(ctx, "", span(kid′))
+                        if any_kid_changed
+                            if kids′ === kids
+                                kids′ = kids[1:(i - 1)]
+                            end
+                        end
                     end
                 else
                     # TODO: Tag for requiring trailing comma.
