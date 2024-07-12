@@ -33,6 +33,10 @@ Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")
 The main interface to Runic is the command line interface (CLI) through the `main` function
 invoked with the `-m` flag. See the output of `julia -m Runic --help` for details:
 
+> [!TIP]
+> Add `alias runic="julia -m Runic""` to your shell startup file to make the CLI easier to
+> invoke.
+
 > [!NOTE]
 > The `-m` command line flag is only available in Julia 1.12 and later. In earlier versions
 > you have to invoke the `main` function explicitly, for example:
