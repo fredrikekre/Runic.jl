@@ -2169,17 +2169,23 @@ function indent_module(ctx::Context, node::Node)
         kids[mod_idx] = add_tag(mod_node, TAG_INDENT)
         any_kid_changed = true
     end
-    # Second node is the space between keyword and name
-    # TODO: Make sure there is just a single space
+    # Next we expect whitespace + identifier, but can also be expression with whitespace
+    # hidden inside...
     space_idx = 2
     space_node = kids[space_idx]
-    @assert is_leaf(space_node) && kind(space_node) === K"Whitespace"
-    # Third node is the module identifier
-    id_idx = 3
-    id_node = kids[id_idx]
-    @assert kind(id_node) in KSet"Identifier var"
-    # Fourth node is the module body block.
-    block_idx = 4
+    if kind(space_node) === K"Whitespace"
+        # Now we need an identifier or var"
+        id_idx = 3
+        id_node = kids[id_idx]
+        @assert kind(id_node) in KSet"Identifier var"
+        block_idx = 4
+    else
+        # This can be reached if the module name is interpolated for example
+        @assert kind(first_leaf(space_node)) === K"Whitespace"
+        @assert !JuliaSyntax.is_whitespace(space_node)
+        block_idx = 3
+    end
+    # Next node is the module body block.
     block_node′ = indent_block(ctx, kids[block_idx])
     if block_node′ !== nothing
         kids[block_idx] = block_node′
