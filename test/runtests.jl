@@ -276,6 +276,9 @@ end
             "f(\n    $(a);\n    $(b),\n)"
         # vect with parameter (not valid Julia syntax, but parses)
         @test format_string("[$(sp)1,$(sp)2$(sp);$(sp)]") == "[1, 2]"
+        # Multple `;` in argument list (lowering error but parses....)
+        @test format_string("f($(sp)x$(sp);$(sp)y$(sp)=$(sp)$(a)$(sp);$(sp)z$(sp)=$(sp)$(b)$(sp))") ==
+            "f(x; y = $(a); z = $(b))"
     end
     # Splatting
     for sp in ("", " ", "  ")

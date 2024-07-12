@@ -570,10 +570,6 @@ function spaces_in_listlike(ctx::Context, node::Node)
             elseif kind(kid′) === K"parameters"
                 # Note that some of these are not valid Julia syntax still parse
                 @assert kind(node) in KSet"call dotcall curly tuple vect"
-                @assert i === last_item_idx
-                @assert findnext(
-                    !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1,
-                ) === nothing
                 if kind(first_leaf(kid′)) === K"Whitespace"
                     # Delete the whitespace leaf
                     kid_ws = first_leaf(kid′)
@@ -629,7 +625,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
                         push!(kids′, kid′)
                     end
                 end
-                state = :expect_closing # parameters must be the last item(?)
+                # K"parameter" is always the last item in valid Julia code but we need to
+                # handle all expression that parses and there might be multiple
+                # K"parameters"...
+                state = i == last_item_idx ? (:expect_closing) : (:expect_item)
             else
                 @assert false # Unreachable?
             end
