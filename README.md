@@ -169,6 +169,10 @@ This is a list of things that Runic currently is doing:
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [Trailing whitespace](#trailing-whitespace)
 
+### Line width limit
+
+No. Use your <kbd>Enter</kbd> key or refactor your code.
+
 ### Indentation
 
 Consistently four spaces for each indentation level.
