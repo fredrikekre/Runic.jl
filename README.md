@@ -34,8 +34,11 @@ The main interface to Runic is the command line interface (CLI) through the `mai
 invoked with the `-m` flag. See the output of `julia -m Runic --help` for details:
 
 > [!TIP]
-> Add `alias runic="julia -m Runic""` to your shell startup file to make the CLI easier to
-> invoke.
+> You can add the following snippet to your shell startup file so that you can invoke the
+> CLI a bit simpler:
+> ```sh
+> alias runic="julia -m Runic"
+> ```
 
 > [!NOTE]
 > The `-m` command line flag is only available in Julia 1.12 and later. In earlier versions
