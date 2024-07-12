@@ -301,8 +301,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
         return nothing
     end
     if kind(node) === K"parameters"
-        # TODO: Can probably show up elsewhere but...
-        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall curly"
+        # Note that some of these are not valid Julia syntax but still parse
+        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall curly vect"
     end
 
     @assert !is_leaf(node)
@@ -568,7 +568,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"parameters"
-                @assert kind(node) in KSet"call dotcall curly tuple" # TODO: Can this happen for named tuples?
+                # Note that some of these are not valid Julia syntax still parse
+                @assert kind(node) in KSet"call dotcall curly tuple vect"
                 @assert i === last_item_idx
                 @assert findnext(
                     !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1,
@@ -613,6 +614,9 @@ function spaces_in_listlike(ctx::Context, node::Node)
                             accept_node!(ctx, grandkid)
                             push!(kids′, grandkid)
                         end
+                    else
+                        # Nothing in the parameter node needed, overwrite it fully
+                        replace_bytes!(ctx, "", span(kid′))
                     end
                 else
                     # TODO: Tag for requiring trailing comma.

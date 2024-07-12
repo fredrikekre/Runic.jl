@@ -274,6 +274,8 @@ end
         @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp)\n)") ==
             format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp),$(sp)\n)") ==
             "f(\n    $(a);\n    $(b),\n)"
+        # vect with parameter (not valid Julia syntax, but parses)
+        @test format_string("[$(sp)1,$(sp)2$(sp);$(sp)]") == "[1, 2]"
     end
     # Splatting
     for sp in ("", " ", "  ")
