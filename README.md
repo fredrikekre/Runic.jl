@@ -189,8 +189,8 @@ No. Use your <kbd>Enter</kbd> key or refactor your code.
 
 Consistently four spaces for each indentation level.
 
-Standard code blocks (`function`, `for`, `while`, ...) all result an increase of the
-indentation level until the closing `end`. Examples:
+Standard code blocks (`function`, `for`, `while`, ...) all increase the indentation level by
+one until the closing `end`. Examples:
 ```diff
  function f()
 -  for i in 1:2
@@ -209,22 +209,28 @@ indentation level until the closing `end`. Examples:
 ```
 
 Listlike expressions like e.g. tuples, function calls, array literals, etc. also increase
-the indentation level until the closing token. This only has an effect if the list span
-multiple lines. Examples:
+the indentation level by one until the closing token. This only has an effect if the list
+span multiple lines. Examples:
 ```diff
  x = (
 -  a, b, c, d,
+-  e, f, g, h,
 +    a, b, c, d,
++    e, f, g, h,
  )
 
  foo(
 -  a, b, c, d,
+-  e, f, g, h,
 +    a, b, c, d,
++    e, f, g, h,
  )
 
  [
 -  a, b, c, d,
+-  e, f, g, h,
 +    a, b, c, d,
++    e, f, g, h,
  ]
 ```
 
