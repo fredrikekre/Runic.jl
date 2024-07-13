@@ -353,7 +353,8 @@ formatted *without* spaces around them. Examples:
 
 #### Potential changes
  - Perhaps the rule for some of these should be "at least one space" instead. This could
-   help with alignment issues. Discussed in issue #12.
+   help with alignment issues. Discussed in issue
+   [#12](https://github.com/fredrikekre/Runic.jl/issues/12).
 
 ### Spaces around keywords
 
@@ -431,7 +432,8 @@ Leading/trailing spaces are removed. Examples:
 
 #### Potential changes
  - Perhaps the rule for some of these should be "at least one space" instead. This could
-   help with alignment issues. Discussed in issue #12.
+   help with alignment issues. Discussed in issue
+   [#12](https://github.com/fredrikekre/Runic.jl/issues/12).
 
 ### Literal floating point numbers
 
@@ -462,10 +464,10 @@ Examples:
 
 #### Potential changes
  - Always add the implicit `+` for the exponent part, i.e. `1.0e+1` instead of `1.0e1`.
-   Discussed in issue #13.
+   Discussed in issue [#13](https://github.com/fredrikekre/Runic.jl/issues/13).
  - Allow multiple trailing zeros in the fractional part, i.e. don't change `1.00` to `1.0`.
    Such trailing zeros are sometimes used to align numbers in literal array expressions.
-   Discussed in issue #14.
+   Discussed in issue [#14](https://github.com/fredrikekre/Runic.jl/issues/14).
 
 ### Literal hex and oct numbers
 
@@ -511,6 +513,11 @@ The keyword `in` is used consistently instead of `∈` and `=` in `for` loops. E
 -for i ∈ 1:2
 +for i in 1:2
 ```
+
+#### Potential changes
+ - Since `∉` exists the formatted code may become asymmetric, when both `∈` and `∉` are
+   used, since `∉` is left alone and not replaced by e.g. `!(...)`. See discussion in issue
+   [#17](https://github.com/fredrikekre/Runic.jl/issues/17).
 
 ### Braces around right hand side of `where`
 
