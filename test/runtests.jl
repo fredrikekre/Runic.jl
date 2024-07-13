@@ -688,6 +688,10 @@ end
         @test format_string("a ?\n$(sp)b :\n$(sp)c") == "a ?\n    b :\n    c"
         @test format_string("a ?\n$(sp)b :\n$(sp)c ?\n$(sp)d : e") ==
             "a ?\n    b :\n    c ?\n    d : e"
+        @test format_string("(\n$(sp)a ? b : c,\n)") ==
+            "(\n    a ? b : c,\n)"
+        @test format_string("f(\n$(sp)a ? b : c,\n)") ==
+            "f(\n    a ? b : c,\n)"
         # comparison
         @test format_string("a == b ==\n$(sp)c") == "a == b ==\n    c"
         @test format_string("a <= b >=\n$(sp)c") == "a <= b >=\n    c"

@@ -2061,10 +2061,14 @@ end
 # with a max_depth parameter.
 function continue_all_newlines(
         ctx::Context, node::Node; skip_last::Bool = true, is_last::Bool = is_leaf(node),
+        skip_first::Bool = true, is_first::Bool = true,
     )
+    # Not sure these need to arguments since they should always(?) be `true`.
+    @assert skip_last
+    @assert skip_first
     if is_leaf(node)
         if kind(node) === K"NewlineWs" && !has_tag(node, TAG_LINE_CONT) &&
-                !(skip_last && is_last)
+                !((skip_last && is_last) || (skip_first && is_first))
             return add_tag(node, TAG_LINE_CONT)
         else
             return nothing
@@ -2075,6 +2079,7 @@ function continue_all_newlines(
         for (i, kid) in pairs(kids)
             kid′ = continue_all_newlines(
                 ctx, kid; skip_last = skip_last, is_last = i == lastindex(kids),
+                skip_first = skip_first, is_first = is_first && i == firstindex(kids),
             )
             if kid′ !== nothing
                 kids[i] = kid′
