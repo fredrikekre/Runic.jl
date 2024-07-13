@@ -46,6 +46,10 @@ invoked with the `-m` flag. See the output of `julia -m Runic --help` for detail
 > ```sh
 > julia -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
 > ```
+> For this incantation the following shell alias can be used:
+> ```sh
+> alias runic="julia -e 'using Runic; exit(Runic.main(ARGS))' --"
+> ```
 
 ```
 $ julia-master -m Runic --help
@@ -363,7 +367,7 @@ Consistently use single space around keywords. Examples:
 
 Listlike expressions (tuples, function calls/definitions, array literals, etc.) that
 *already* span multiple lines are formatted to consistently have a leading and a trailing
-newline. Examples:
+newline, as well as a trailing comma where applicable. Examples:
 ```diff
 -(a,
 -    b)
