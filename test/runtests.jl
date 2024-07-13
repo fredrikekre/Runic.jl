@@ -316,6 +316,9 @@ end
     @test format_string("(a = A;;)") == "(a = A)"
     @test format_string("(;;)") == format_string("( ; ; )") == "(;;)"
     @test format_string("(;)") == format_string("( ; )") == "(;)"
+    # https://github.com/fredrikekre/Runic.jl/issues/16
+    @test format_string("(i for i in\nI)") == "(\n    i for i in\n        I\n)"
+    @test format_string("f(i for i in\nI)") == "f(\n    i for i in\n        I\n)"
 end
 
 @testset "whitespace around ->" begin

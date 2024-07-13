@@ -384,6 +384,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
         require_trailing_comma = true
+    elseif kind(node) in KSet"call" && n_items == 1 && kind(kids[first_item_idx::Int]) === K"generator"
+        # https://github.com/fredrikekre/Runic.jl/issues/16
+        # TODO: There is probably a more generic pattern for the check above.
+        require_trailing_comma = false
     elseif kind(node) in KSet"bracescat parens"
         require_trailing_comma = false # Leads to parser error
     elseif kind(node) in KSet"block"
