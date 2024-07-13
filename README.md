@@ -514,10 +514,9 @@ The keyword `in` is used consistently instead of `∈` and `=` in `for` loops. E
 +for i in 1:2
 ```
 
-#### Potential changes
- - Since `∉` exists the formatted code may become asymmetric, when both `∈` and `∉` are
-   used, since `∉` is left alone and not replaced by e.g. `!(...)`. See discussion in issue
-   [#17](https://github.com/fredrikekre/Runic.jl/issues/17).
+Note that `∈` not replaced when used as an operator outside of loop contexts in
+order to be symmetric with `∉` which doesn't have a direct ASCII equivalent.
+See [#17](https://github.com/fredrikekre/Runic.jl/issues/17) for more details.
 
 ### Braces around right hand side of `where`
 

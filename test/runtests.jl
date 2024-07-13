@@ -467,6 +467,11 @@ end
                 "$(l)i for i in I, j in J if i < j$(r)"
         end
     end
+    # ∈ is still allowed when used as an operator outside of loop contexts in order to keep
+    # symmetry with ∉ which doesn't have a direct ascii equivalent.
+    # See https://github.com/fredrikekre/Runic.jl/issues/17
+    @test format_string("a ∈ A") == "a ∈ A"
+    @test format_string("a ∉ A") == "a ∉ A"
 end
 
 @testset "braces around where rhs" begin
