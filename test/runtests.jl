@@ -749,3 +749,11 @@ end
             "function f()" * nl^2 * "    x = 1" * nl^m * "end"
     end
 end
+
+@testset "leading and trailing newlines in filemode" begin
+    for n in 0:5
+        nl = "\n"^n
+        @test format_string("$(nl)f()$(nl)"; filemode = true) == "f()\n"
+        @test format_string("$(nl)"; filemode = true) == "\n"
+    end
+end

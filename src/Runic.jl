@@ -125,6 +125,7 @@ mutable struct Context
     debug::Bool
     check::Bool
     diff::Bool
+    filemode::Bool
     # Global state
     indent_level::Int # track (hard) indentation level
     call_depth::Int # track call-depth level for debug printing
@@ -138,7 +139,7 @@ end
 
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
-        diff::Bool = false, check::Bool = false, quiet::Bool = false,
+        diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
     )
     src_io = IOBuffer(src_str)
     src_tree = Node(
@@ -165,7 +166,7 @@ function Context(
     lineage_kinds = JuliaSyntax.Kind[]
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, call_depth, indent_level, prev_sibling, next_sibling, lineage_kinds,
+        diff, filemode, call_depth, indent_level, prev_sibling, next_sibling, lineage_kinds,
     )
 end
 
@@ -297,9 +298,10 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
 
     # Go through the runestone and apply transformations.
     ctx.call_depth += 1
+    @return_something no_leading_and_single_trailing_newline(ctx, node)
+    @return_something max_three_consecutive_newlines(ctx, node)
     @return_something insert_delete_mark_newlines(ctx, node)
     @return_something trim_trailing_whitespace(ctx, node)
-    @return_something max_three_consecutive_newlines(ctx, node)
     @return_something format_hex_literals(ctx, node)
     @return_something format_oct_literals(ctx, node)
     @return_something format_float_literals(ctx, node)
@@ -371,8 +373,8 @@ end
 
 Format string `str` and return the formatted string.
 """
-function format_string(str::AbstractString)
-    ctx = Context(str)
+function format_string(str::AbstractString; filemode::Bool = false)
+    ctx = Context(str; filemode = filemode)
     format_tree!(ctx)
     return String(take!(ctx.fmt_io))
 end

@@ -1316,8 +1316,49 @@ function parens_around_op_calls_in_colon(ctx::Context, node::Node)
     end
 end
 
+# No newline at the beginning and single newline at the end of the file
+function no_leading_and_single_trailing_newline(ctx::Context, node::Node)
+    if !(ctx.filemode && length(ctx.lineage_kinds) == 0)
+        return nothing
+    end
+    @assert kind(node) === K"toplevel"
+    @assert !is_leaf(node)
+    @assert position(ctx.fmt_io) == 0
+    changed = false
+    while (l = first_leaf(node); l !== nothing && kind(l) === K"NewlineWs" && length(verified_kids(node)) > 1)
+        changed = true
+        replace_bytes!(ctx, "", span(l))
+        node = replace_first_leaf(node, nullnode)
+    end
+    accept_node!(ctx, node)
+    l = last_leaf(node)
+    if l === nothing || kind(l) !== K"NewlineWs"
+        kids′ = copy(verified_kids(node))
+        push!(kids′, Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1))
+        replace_bytes!(ctx, "\n", 0)
+        changed = true
+        node = make_node(node, kids′)
+    else
+        ll = second_last_leaf(node)
+        while ll !== nothing && kind(l) === kind(ll) === K"NewlineWs"
+            changed = true
+            seek(ctx.fmt_io, position(ctx.fmt_io) - span(l))
+            # replace_bytes!(ctx, "", span(l))
+            node = replace_last_leaf(node, nullnode)
+            @assert last_leaf(node) === ll
+            l = ll
+            ll = second_last_leaf(node)
+        end
+    end
+    if changed
+        return node
+    else
+        seek(ctx.fmt_io, 0)
+        return nothing
+    end
+end
 
-# Remove more than two newlines in a row
+# Remove more than three newlines in a row
 function max_three_consecutive_newlines(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     kids = verified_kids(node)

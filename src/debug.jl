@@ -31,4 +31,3 @@ function macroexpand_assert(expr)
     msg = string(expr)
     return :($(esc(expr)) || throw(AssertionError($msg)))
 end
-

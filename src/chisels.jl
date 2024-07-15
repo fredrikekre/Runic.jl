@@ -187,30 +187,30 @@ function make_node(node::Node, kids′::Vector{Node}, tags = node.tags)
     return Node(head(node), span′, kids′, tags)
 end
 
-function first_leaf(node::Node)
+# TODO: Remove?
+first_leaf(node::Node) = nth_leaf(node, 1)
+
+function nth_leaf(node::Node, nth::Int)
+    leaf, n_seen = nth_leaf(node, nth, 0)
+    return n_seen == nth ? leaf : nothing
+end
+function nth_leaf(node::Node, nth::Int, n_seen::Int)
     if is_leaf(node)
-        return node
+        return node, n_seen + 1
     else
-        return first_leaf(first(verified_kids(node)))
+        kids = verified_kids(node)
+        for kid in kids
+            leaf, n_seen = nth_leaf(kid, nth, n_seen)
+            if n_seen == nth
+                return leaf, n_seen
+            end
+        end
+        return nothing, n_seen
     end
 end
 
 function second_leaf(node::Node)
-    if is_leaf(node)
-        return nothing
-    else
-        kids = verified_kids(node)
-        if length(kids) == 0
-            return nothing
-        elseif !is_leaf(kids[1])
-            return second_leaf(kids[1])
-        elseif length(kids) > 1
-            @assert is_leaf(kids[1])
-            return first_leaf(kids[2])
-        else
-            @assert false
-        end
-    end
+    return nth_leaf(node, 2)
 end
 
 # Return number of non-whitespace kids, basically the length the equivalent
@@ -258,8 +258,33 @@ function last_leaf(node::Node)
     if is_leaf(node)
         return node
     else
-        return last_leaf(last(verified_kids(node)))
+        kids = verified_kids(node)
+        if length(kids) == 0
+            return nothing
+        else
+            return last_leaf(last(kids))
+        end
     end
+end
+
+function second_last_leaf(node::Node)
+    node, n = second_last_leaf(node, 0)
+    return n == 2 ? node : nothing
+end
+
+function second_last_leaf(node::Node, n_seen::Int)
+    if is_leaf(node)
+        return node, n_seen + 1
+    else
+        kids = verified_kids(node)
+        for i in reverse(1:length(kids))
+            kid, n_seen = second_last_leaf(kids[i], n_seen)
+            if n_seen == 2
+                return kid, n_seen
+            end
+        end
+    end
+    return nothing, n_seen
 end
 
 function has_newline_after_non_whitespace(node::Node)
