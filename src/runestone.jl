@@ -1976,7 +1976,8 @@ function indent_loop(ctx::Context, node::Node)
         kids[for_idx] = add_tag(kids[for_idx], TAG_INDENT)
         any_kid_changed = true
     end
-    block_idx = findnext(x -> kind(x) === K"block", kids, for_idx + 1)::Int
+    # findlast because the condition can also be a block
+    block_idx = findlast(x -> kind(x) === K"block", kids)::Int
     block_node′ = indent_block(ctx, kids[block_idx])
     if block_node′ !== nothing
         kids[block_idx] = block_node′

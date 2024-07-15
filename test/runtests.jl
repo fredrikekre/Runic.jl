@@ -538,6 +538,8 @@ end
         @test format_string("for i in I, j in J\n$(sp)x\n$(sp)end") == "for i in I, j in J\n    x\nend"
         # while-end
         @test format_string("while x\n$(sp)y\n$(sp)end") == "while x\n    y\nend"
+        @test format_string("while (x = 1; x == 1)\n$(sp)y\n$(sp)end") ==
+            "while (x = 1; x == 1)\n    y\nend"
         # try-catch-end
         @test format_string("try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)end") ==
             "try\n    x\ncatch\n    y\nend"
