@@ -177,6 +177,9 @@ function stringify_tags(node::Node)
     if has_tag(node, TAG_LINE_CONT)
         write(io, "line-cont.,")
     end
+    if has_tag(node, TAG_TRAILING_COMMA)
+        write(io, "trail-comma.,")
+    end
     truncate(io, max(0, position(io) - 1)) # Remove trailing comma
     return String(take!(io))
 end

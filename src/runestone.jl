@@ -410,7 +410,12 @@ function spaces_in_listlike(ctx::Context, node::Node)
         if i < last_item_idx
             return :expect_comma
         elseif i == last_item_idx && require_trailing_comma
-            return :expect_comma
+            if kind(kids[last_item_idx]) === K"parameters"
+                # If the last kid is K"parameters" it will handle a trailing comma
+                return :expect_closing
+            else
+                return :expect_comma
+            end
         else
             return :expect_closing
         end
@@ -482,6 +487,12 @@ function spaces_in_listlike(ctx::Context, node::Node)
                         seek(ctx.fmt_io, pos)
                     end
                     kid′ = replace_last_leaf(kid′, nullnode)
+                    this_kid_changed = true
+                end
+                if kind(kid′) === K"parameters" && require_trailing_comma &&
+                        i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA)
+                    # Tag the node to require a trailing comma
+                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
                     this_kid_changed = true
                 end
                 if kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
@@ -742,6 +753,9 @@ function spaces_in_listlike(ctx::Context, node::Node)
     end
     if state !== :expect_closing
         if state === :expect_comma
+            # K"parameters" should aleays handle the trailing comma and got to
+            # :expect_closing directly
+            @assert kind(kids[last_item_idx]) !== K"parameters"
             # Need to add a trailing comma if it is expected
             @assert require_trailing_comma
             any_kid_changed = true
