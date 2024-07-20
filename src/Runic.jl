@@ -39,8 +39,8 @@ struct Node
     tags::TagType
 end
 
-function Node(head::JuliaSyntax.SyntaxHead, span::Integer)
-    return Node(head, span % UInt32, (), 0 % TagType)
+function Node(head::JuliaSyntax.SyntaxHead, span::Integer, tags::Integer = 0)
+    return Node(head, span % UInt32, (), tags % TagType)
 end
 
 function Node(head::JuliaSyntax.SyntaxHead, kids::Vector{Node})
@@ -78,6 +78,7 @@ JuliaSyntax.span(node::Node) = span(node)
 # Matching JuliaSyntax.(head|span|flags|kind)
 head(node::Node) = node.head
 span(node::Node) = node.span
+tags(node::Node) = node.tags
 flags(node::Node) = JuliaSyntax.flags(node)
 kind(node::Node) = JuliaSyntax.kind(node)
 
@@ -298,6 +299,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
 
     # Go through the runestone and apply transformations.
     ctx.call_depth += 1
+    @return_something replace_tabs_with_four_spaces(ctx, node)
     @return_something no_leading_and_single_trailing_newline(ctx, node)
     @return_something max_three_consecutive_newlines(ctx, node)
     @return_something insert_delete_mark_newlines(ctx, node)

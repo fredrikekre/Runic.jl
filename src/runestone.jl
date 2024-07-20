@@ -25,6 +25,23 @@ function trim_trailing_whitespace(ctx::Context, node::Node)
     return node′
 end
 
+function replace_tabs_with_four_spaces(ctx::Context, node::Node)
+    kind(node) in KSet"Whitespace NewlineWs" || return nothing
+    @assert is_leaf(node)
+    bytes = read_bytes(ctx, node)
+    tabidx = findfirst(x -> x == UInt8('\t'), bytes)
+    tabidx === nothing && return nothing
+    while tabidx !== nothing
+        bytes[tabidx] = UInt8(' ')
+        for _ in 1:3
+            insert!(bytes, tabidx, UInt8(' '))
+        end
+        tabidx = findnext(x -> x == UInt8('\t'), bytes, tabidx + 4)
+    end
+    nb = replace_bytes!(ctx, bytes, span(node))
+    return Node(head(node), nb, tags(node))
+end
+
 function format_hex_literals(ctx::Context, node::Node)
     kind(node) === K"HexInt" || return nothing
     @assert flags(node) == 0

@@ -769,3 +769,8 @@ end
         @test format_string("$(nl)"; filemode = true) == "\n"
     end
 end
+
+@testset "https://youtu.be/SsoOG6ZeyUI?si=xpKpnczuqsOThtFP" begin
+    @test format_string("f(a,\tb)") == "f(a, b)"
+    @test format_string("begin\n\tx = 1\nend") == "begin\n    x = 1\nend"
+end
