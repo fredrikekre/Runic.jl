@@ -412,5 +412,6 @@ end
 
 include("runestone.jl")
 include("main.jl")
+include("precompiletools.jl")
 
 end # module
