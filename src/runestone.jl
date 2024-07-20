@@ -296,6 +296,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens" ||
                 (kind(node) === K"call" && flags(node) == 0) || # Flag check rules out op-calls
                 (kind(node) === K"dotcall" && flags(node) == 0) ||
+                (kind(node) === K"macrocall" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)) ||
                 is_paren_block(node)
         )
         return nothing
@@ -316,7 +317,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
 
     # Find the opening and closing leafs
     implicit_tuple = false
-    if kind(node) in KSet"tuple call dotcall parens" || is_paren_block(node)
+    if kind(node) in KSet"tuple call dotcall parens macrocall" || is_paren_block(node)
         opening_leaf_idx = findfirst(x -> kind(x) === K"(", kids)
         if opening_leaf_idx === nothing
             # Implicit tuple without (), for example arguments in a do-block
@@ -2045,7 +2046,7 @@ end
 
 # Mark opening and closing parentheses, in a call or a tuple, with indent and dedent tags.
 function indent_paren(ctx::Context, node::Node)
-    @assert kind(node) in KSet"call dotcall tuple parens"
+    @assert kind(node) in KSet"call dotcall tuple parens macrocall"
     kids = verified_kids(node)
     opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)::Int
     closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
@@ -2378,6 +2379,9 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
     elseif kind(node) in KSet"call dotcall" &&
             flags(node) == 0 # Flag check rules out op-calls
         return indent_call(ctx, node)
+    elseif kind(node) === K"macrocall" &&
+            JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
+        return indent_paren(ctx, node)
     elseif is_infix_op_call(node)
         return indent_op_call(ctx, node)
     elseif kind(node) in KSet"for while"

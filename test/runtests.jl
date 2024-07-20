@@ -203,7 +203,7 @@ end
 @testset "spaces in listlike" begin
     for sp in ("", " ", "  "), a in ("a", "a + a", "a(x)"), b in ("b", "b + b", "b(y)")
         # tuple, call, dotcall, vect, ref
-        for (o, c) in (("(", ")"), ("f(", ")"), ("f.(", ")"), ("[", "]"), ("T[", "]"))
+        for (o, c) in (("(", ")"), ("f(", ")"), ("@f(", ")"), ("f.(", ")"), ("[", "]"), ("T[", "]"))
             # single line
             @test format_string("$(o)$(sp)$(c)") == "$(o)$(c)"
             @test format_string("$(o)$(sp)$(a)$(sp),$(sp)$(b)$(sp)$(c)") ==
@@ -737,7 +737,7 @@ end
 end
 
 @testset "leading and trailing newline in multiline listlike" begin
-    for (o, c) in (("f(", ")"), ("(", ")"), ("{", "}"))
+    for (o, c) in (("f(", ")"), ("@f(", ")"), ("(", ")"), ("{", "}"))
         @test format_string("$(o)a,\nb$(c)") ==
             format_string("$(o)\na,\nb$(c)") ==
             format_string("$(o)\na,\nb\n$(c)") ==
