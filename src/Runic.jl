@@ -415,4 +415,9 @@ end
 include("runestone.jl")
 include("main.jl")
 
+# Precompile the entry points
+@assert precompile(main, (Vector{String},))
+@assert precompile(format_file, (String, String))
+@assert precompile(format_string, (String,))
+
 end # module
