@@ -1879,6 +1879,54 @@ function indent_listlike(
             any_kid_changed = true
             push!(kids′, kid)
             accept_node!(ctx, kid)
+        elseif kind(kid) === K"parameters"
+            # For parameters we want the newline after the semi-colon
+            grandkids = verified_kids(kid)
+            semi_idx = findfirst(x -> kind(x) === K";", grandkids)::Int
+            next_idx = semi_idx + 1
+            if kind(grandkids[next_idx]) === K"NewlineWs"
+                # Nothing to do
+                any_kid_changed && push!(kids′, kid)
+                accept_node!(ctx, kid)
+            elseif kind(grandkids[next_idx]) === K"Whitespace"
+                # Merge with the newline
+                let pos = position(ctx.fmt_io)
+                    for k in 1:(next_idx - 1)
+                        accept_node!(ctx, grandkids[k])
+                    end
+                    replace_bytes!(ctx, "\n", 0)
+                    seek(ctx.fmt_io, pos)
+                end
+                grandkid = grandkids[next_idx]
+                grandkid′ = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1 + span(grandkid))
+                grandkids′ = copy(grandkids)
+                grandkids′[next_idx] = grandkid′
+                kid = make_node(kid, grandkids′)
+                if kids′ === kids
+                    kids′ = kids[1:(open_idx - 1)]
+                end
+                any_kid_changed = true
+                push!(kids′, kid)
+                accept_node!(ctx, kid)
+            else
+                # Insert a newline as the first grandchild
+                let pos = position(ctx.fmt_io)
+                    for k in 1:semi_idx
+                        accept_node!(ctx, grandkids[k])
+                    end
+                    replace_bytes!(ctx, "\n", 0)
+                    seek(ctx.fmt_io, pos)
+                end
+                grandkids′ = copy(grandkids)
+                insert!(grandkids′, next_idx, Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1))
+                kid = make_node(kid, grandkids′)
+                if kids′ === kids
+                    kids′ = kids[1:(open_idx - 1)]
+                end
+                any_kid_changed = true
+                push!(kids′, kid)
+                accept_node!(ctx, kid)
+            end
         else
             nlws = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1)
             replace_bytes!(ctx, "\n", 0)

@@ -275,6 +275,18 @@ end
         @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp)\n)") ==
             format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp),$(sp)\n)") ==
             "f(\n    $(a);\n    $(b),\n)"
+        @test format_string("f($(sp)$(a)$(sp);$(sp)b$(sp)=$(sp)$(b)$(sp))") ==
+            format_string("f($(sp)$(a)$(sp);$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp))") ==
+            "f($(a); b = $(b))"
+        @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
+            format_string("f(\n$(sp)$(a)$(sp);\n$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
+            "f(\n    $(a);\n    b = $(b),\n)"
+        # Keyword arguments only with semi-colon on the same line as opening paren
+        @test format_string("f(;\n$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
+            format_string("f(;\n$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
+            format_string("f(;$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
+            format_string("f(;$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
+            "f(;\n    b = $(b),\n)"
         # vect with parameter (not valid Julia syntax, but parses)
         @test format_string("[$(sp)1,$(sp)2$(sp);$(sp)]") == "[1, 2]"
         # Multple `;` in argument list (lowering error but parses....)
