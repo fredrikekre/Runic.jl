@@ -670,6 +670,13 @@ end
             @test format_string("$(t)[a b\n$(sp)c d]") == "$(t)[\n    a b\n    c d\n]"
             @test format_string("$(t)[\n$(sp)a b\n$(sp)c d\n$(sp)]") == "$(t)[\n    a b\n    c d\n]"
         end
+        # array comprehension
+        for t in ("", "T")
+            @test format_string("$(t)[$(sp)a for a in b$(sp)\n$(sp)]") ==
+                format_string("$(t)[$(sp)\n$(sp)a for a in b$(sp)]") ==
+                format_string("$(t)[$(sp)\n$(sp)a for a in b$(sp)\n$(sp)]") ==
+                "$(t)[\n    a for a in b\n]"
+        end
         # Single line begin-end
         @test format_string("begin x\n$(sp)end") == "begin x\nend"
         @test format_string("begin x end") == "begin x end"

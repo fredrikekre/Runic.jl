@@ -2295,7 +2295,7 @@ end
 
 # Literal array nodes and also ref-nodes (which can be either a typed-array or a getindex)
 function indent_array(ctx::Context, node::Node)
-    @assert kind(node) in KSet"vect vcat typed_vcat ncat ref"
+    @assert kind(node) in KSet"vect vcat typed_vcat ncat ref comprehension typed_comprehension"
     kids = verified_kids(node)
     opening_bracket_idx = findfirst(x -> kind(x) === K"[", kids)::Int
     closing_bracket_idx = findnext(x -> kind(x) === K"]", kids, opening_bracket_idx + 1)::Int
@@ -2429,7 +2429,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_do(ctx, node)
     elseif is_paren_block(node)
         return indent_paren_block(ctx, node)
-    elseif kind(node) in KSet"vect vcat typed_vcat ncat ref"
+    elseif kind(node) in KSet"vect vcat typed_vcat ncat ref comprehension typed_comprehension"
         return indent_array(ctx, node)
     elseif kind(node) in KSet"row"
         return indent_array_row(ctx, node)
