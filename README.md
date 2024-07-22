@@ -25,9 +25,17 @@ that is appreciated by most Go programmers, see for example the following
 
 ## Installation
 
-```julia
-using Pkg
-Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")
+Runic can be installed with Julia's package manager:
+
+```sh
+julia -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
+```
+
+For CLI usage and editor integration (see [Usage](#usage)) it is recommended to install
+Runic in a separate project such as e.g. the shared project `@runic`:
+
+```sh
+julia --project=@runic -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
 ```
 
 ## Usage
@@ -35,14 +43,17 @@ Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")
 ### CLI
 
 The main interface to Runic is the command line interface (CLI) through the `main` function
-invoked with the `-m` flag. See the output of `julia -m Runic --help` for details:
+invoked with the `-m` flag. See the output of `julia -m Runic --help` below for usage
+details.
 
-> [!TIP]
-> You can add the following snippet to your shell startup file so that you can invoke the
-> CLI a bit simpler:
-> ```sh
-> alias runic="julia -m Runic"
-> ```
+The following snippet can be added to your shell startup file so that the CLI can be invoked
+a bit more ergonomically. This assumes Runic is installed in the `@runic` shared project as
+suggested in the [Installation](#installation) section above. Adjust the `--project` flag if
+you installed Runic elsewhere.
+
+```sh
+alias runic="julia --project=@runic -m Runic"
+```
 
 > [!NOTE]
 > The `-m` command line flag is only available in Julia 1.12 and later. In earlier versions
@@ -52,11 +63,11 @@ invoked with the `-m` flag. See the output of `julia -m Runic --help` for detail
 > ```
 > For this incantation the following shell alias can be used:
 > ```sh
-> alias runic="julia -e 'using Runic; exit(Runic.main(ARGS))' --"
+> alias runic="julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' --"
 > ```
 
 ```
-$ julia-master -m Runic --help
+$ julia -m Runic --help
 NAME
        Runic.main - format Julia source code
 
@@ -71,7 +82,7 @@ OPTIONS
        <path>...
            Input path(s) (files and/or directories) to process. For directories,
            all files (recursively) with the '*.jl' suffix are used as input files.
-           If path is `-` input is read from stdin.
+           If path is `-` input is read from stdin and output written to stdout.
 
        -c, --check
            Do not write output and exit with a non-zero code if the input is not
@@ -105,32 +116,38 @@ In addition to the CLI there is also the two function `Runic.format_file` and
 
 #### Neovim
 
-Runic can be as a formatter in [Neovim](https://neovim.io/) using
+Runic can be used as a formatter in [Neovim](https://neovim.io/) using
 [`conform.nvim`](https://github.com/stevearc/conform.nvim). Refer to the `conform.nvim`
 repository for installation and setup instructions.
 
 Runic is not (yet) available directly in `conform.nvim` so the following configuration needs
-to be passed to the setup function:
+to be passed to the setup function. This assumes Runic is installed in the `@runic` shared
+project as suggested in the [Installation](#installation) section above. Adjust the
+`--project` flag if you installed Runic elsewhere.
 
 ```lua
 require("conform").setup({
     formatters = {
         runic = {
             command = "julia",
-            args = {"--project=@conform.nvim", "-e", "using Runic; exit(Runic.main(ARGS))", "--", "-o", "-", "-"},
+            args = {"--project=@runic", "-e", "using Runic; exit(Runic.main(ARGS))", "--", "-"},
         },
     },
     formatters_by_ft = {
         julia = {"runic"},
     },
+    default_format_opts = {
+        -- Increase the timeout in case Runic needs to precompile
+        -- (e.g. after upgrading Julia and/or Runic).
+        timeout_ms = 10000,
+    },
 })
 ```
 
-Finally, Runic needs to be installed in the package environment that the command above uses
-(`@conform.nvim`). This can be done with the following command:
-
-```sh
-julia --project=@conform.nvim -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
+Note that conform (and thus Runic) can be used as `formatexpr` for the `gq` command. This is
+enabled by adding the following to your configuration:
+```lua
+vim.o.formatexpr = "v:lua.require('conform').formatexpr()"
 ```
 
 ## Checking formatting
@@ -196,7 +213,7 @@ exec 1>&2
 
 # Run Runic on added and modified files
 mapfile -t files < <(git diff-index --name-only --diff-filter=AM master | grep '\.jl$')
-julia-master --project -m Runic --check --diff "${files[@]}"
+julia --project=@runic -m Runic --check --diff "${files[@]}"
 ```
 
 ## Formatting specification
