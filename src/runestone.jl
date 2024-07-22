@@ -1357,12 +1357,14 @@ function no_leading_and_single_trailing_newline(ctx::Context, node::Node)
     @assert !is_leaf(node)
     @assert position(ctx.fmt_io) == 0
     changed = false
-    while (l = first_leaf(node); l !== nothing && kind(l) === K"NewlineWs" && length(verified_kids(node)) > 1)
+    # Remove leading newlines and whitespace
+    while (l = first_leaf(node); l !== nothing && kind(l) in KSet"NewlineWs Whitespace" && length(verified_kids(node)) > 1)
         changed = true
         replace_bytes!(ctx, "", span(l))
         node = replace_first_leaf(node, nullnode)
     end
     accept_node!(ctx, node)
+    # Remove trailing newlines
     l = last_leaf(node)
     if l === nothing || kind(l) !== K"NewlineWs"
         kids′ = copy(verified_kids(node))

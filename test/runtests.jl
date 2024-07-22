@@ -775,6 +775,7 @@ end
         @test format_string("$(nl)f()$(nl)"; filemode = true) == "f()\n"
         @test format_string("$(nl)"; filemode = true) == "\n"
     end
+    @test format_string(" x\n"; filemode = true) == "x\n"
 end
 
 @testset "https://youtu.be/SsoOG6ZeyUI?si=xpKpnczuqsOThtFP" begin
