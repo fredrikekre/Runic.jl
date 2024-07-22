@@ -18,6 +18,8 @@ that is appreciated by most Go programmers, see for example the following
 
  - [Installation](#installation)
  - [Usage](#usage)
+    - [CLI](#cli)
+    - [Editor integration](#editor-integration)
  - [Checking formatting](#checking-formatting)
  - [Formatting specification](#formatting-specification)
 
@@ -29,6 +31,8 @@ Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")
 ```
 
 ## Usage
+
+### CLI
 
 The main interface to Runic is the command line interface (CLI) through the `main` function
 invoked with the `-m` flag. See the output of `julia -m Runic --help` for details:
@@ -97,6 +101,37 @@ OPTIONS
 In addition to the CLI there is also the two function `Runic.format_file` and
 `Runic.format_string`. See their respective docstrings for details.
 
+### Editor integration
+
+#### Neovim
+
+Runic can be as a formatter in [Neovim](https://neovim.io/) using
+[`conform.nvim`](https://github.com/stevearc/conform.nvim). Refer to the `conform.nvim`
+repository for installation and setup instructions.
+
+Runic is not (yet) available directly in `conform.nvim` so the following configuration needs
+to be passed to the setup function:
+
+```lua
+require("conform").setup({
+    formatters = {
+        runic = {
+            command = "julia",
+            args = {"--project=@conform.nvim", "-e", "using Runic; exit(Runic.main(ARGS))", "--", "-o", "-", "-"},
+        },
+    },
+    formatters_by_ft = {
+        julia = {"runic"},
+    },
+})
+```
+
+Finally, Runic needs to be installed in the package environment that the command above uses
+(`@conform.nvim`). This can be done with the following command:
+
+```sh
+julia --project=@conform.nvim -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
+```
 
 ## Checking formatting
 
