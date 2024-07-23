@@ -625,6 +625,9 @@ end
             # interpolated module name
             @test format_string("$(b)module \$A\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module \$A\n    x\nend\nf"
+            # parenthesized module name (Why....)
+            @test format_string("$(b)module(A)\n$(sp)x\n$(sp)end\nf") ==
+                "$(b)module(A)\n    x\nend\nf"
             @test format_string("$(b)module \$(A)\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module \$(A)\n    x\nend\nf"
             # single line module

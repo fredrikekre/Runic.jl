@@ -2509,8 +2509,9 @@ function indent_module(ctx::Context, node::Node)
         @assert kind(id_node) in KSet"Identifier var"
         block_idx = 4
     else
-        # This can be reached if the module name is interpolated for example
-        @assert kind(first_leaf(space_node)) === K"Whitespace"
+        # This can be reached if the module name is interpolated or parenthesized, for
+        # example.
+        @assert kind(first_leaf(space_node)) in KSet"Whitespace ("
         @assert !JuliaSyntax.is_whitespace(space_node)
         block_idx = 3
     end
