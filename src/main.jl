@@ -44,7 +44,7 @@ function print_help()
                 <path>...
                     Input path(s) (files and/or directories) to process. For directories,
                     all files (recursively) with the '*.jl' suffix are used as input files.
-                    If path is `-` input is read from stdin.
+                    If path is `-` input is read from stdin and output written to stdout.
 
                 -c, --check
                     Do not write output and exit with a non-zero code if the input is not
@@ -146,7 +146,9 @@ function main(argv)
     end
 
     # one of --check, --diff, --inplace, or --output must be specified
-    if !(inplace || check || diff || outputfile !== nothing)
+    stdio_mode = length(inputfiles) == 1 && inputfiles[1] == "-" &&
+        (outputfile === nothing || outputfile == "-")
+    if !(inplace || check || diff || stdio_mode)
         return panic(
             "at least one of options `-c, --check`, `-d, --diff`, `-i, --inplace`, " *
                 "or `-o, --output` must be specified",
@@ -230,10 +232,10 @@ function main(argv)
             output = devnull
         else
             @assert length(inputfiles) == 1
-            if outputfile === nothing
-                return panic("no output file specified")
-            elseif outputfile == "-"
+            if stdio_mode
                 output = stdout
+            elseif outputfile === nothing
+                return panic("no output file specified")
             elseif isfile(outputfile) && input_is_file && samefile(outputfile, inputfile)
                 return panic("can not use same file for input and output, use `-i` to modify a file in place")
             else
