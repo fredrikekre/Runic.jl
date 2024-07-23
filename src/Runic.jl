@@ -144,7 +144,7 @@ function Context(
     )
     src_io = IOBuffer(src_str)
     src_tree = Node(
-        JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true),
+        JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true, version = v"2-"),
     )
     fmt_io = IOBuffer()
     fmt_tree = nothing
