@@ -973,13 +973,16 @@ function spaces_in_export_public(ctx::Context, node::Node)
             end
             state = :expect_identifier
         elseif state === :expect_identifier
-            if kind(kid) === K"Identifier"
+            state = :expect_comma
+            if kind(kid) in KSet"Identifier @ MacroName"
                 any_changes && push!(kids′, kid)
                 accept_node!(ctx, kid)
+                if kind(kid) === K"@"
+                    state = :expect_identifier
+                end
             else
                 @assert false
             end
-            state = :expect_comma
         else
             @assert state === :expect_comma
             state = :expect_space

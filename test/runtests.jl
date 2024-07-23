@@ -799,12 +799,12 @@ end
 end
 
 @testset "spaces in export/public" begin
-    for sp in ("", " ", "  ", "\t"), verb in ("export", "public")
-        @test format_string("$(verb) $(sp)a") == "$(verb) a"
-        @test format_string("$(verb)\na") == "$(verb)\n    a"
-        @test format_string("$(verb) $(sp)a$(sp),$(sp)b") == "$(verb) a, b"
-        @test format_string("$(verb) a$(sp),\nb") == "$(verb) a,\n    b"
-        @test format_string("$(verb) \na$(sp),\nb") == "$(verb)\n    a,\n    b"
+    for sp in ("", " ", "  ", "\t"), verb in ("export", "public"), (a, b) in (("a", "@b"), ("@a", "b"))
+        @test format_string("$(verb) $(sp)$(a)") == "$(verb) $(a)"
+        @test format_string("$(verb)\n$(a)") == "$(verb)\n    $(a)"
+        @test format_string("$(verb) $(sp)$(a)$(sp),$(sp)$(b)") == "$(verb) $(a), $(b)"
+        @test format_string("$(verb) $(a)$(sp),\n$(b)") == "$(verb) $(a),\n    $(b)"
+        @test format_string("$(verb) \n$(a)$(sp),\n$(b)") == "$(verb)\n    $(a),\n    $(b)"
     end
 end
 
