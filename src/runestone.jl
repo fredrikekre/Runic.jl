@@ -927,6 +927,84 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
     end
 end
 
+function spaces_in_export_public(ctx::Context, node::Node)
+    if !(kind(node) in KSet"export public" && !is_leaf(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    kids′ = kids
+    any_changes = false
+    pos = position(ctx.fmt_io)
+
+    spacenode = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+
+    @assert is_leaf(kids[1]) && kind(kids[1]) in KSet"export public"
+    accept_node!(ctx, kids[1])
+
+    # space -> identifier -> comma
+    state = :expect_space
+    i = 2
+    while i <= length(kids)
+        kid = kids[i]
+        if state === :expect_space
+            if kind(kid) === K"NewlineWs" || (kind(kid) === K"Whitespace" && span(kid) == 1)
+                any_changes && push!(kids′, kid)
+                accept_node!(ctx, kid)
+            elseif kind(kid) === K"Whitespace"
+                kid′ = replace_first_leaf(kid, spacenode)
+                replace_bytes!(ctx, " ", span(first_leaf(kid)))
+                any_changes = true
+                if kids′ === kids
+                    kids′ = kids[1:(i - 1)]
+                end
+                accept_node!(ctx, kid′)
+                push!(kids′, kid′)
+            else
+                # Insert a space
+                any_changes = true
+                if kids′ === kids
+                    kids′ = kids[1:(i - 1)]
+                end
+                replace_bytes!(ctx, " ", 0)
+                push!(kids′, spacenode)
+                accept_node!(ctx, spacenode)
+                state = :expect_identifier
+                continue # Skip increment of i
+            end
+            state = :expect_identifier
+        elseif state === :expect_identifier
+            if kind(kid) === K"Identifier"
+                any_changes && push!(kids′, kid)
+                accept_node!(ctx, kid)
+            else
+                @assert false
+            end
+            state = :expect_comma
+        else
+            @assert state === :expect_comma
+            state = :expect_space
+            if kind(kid) === K","
+                any_changes && push!(kids′, kid)
+                accept_node!(ctx, kid)
+            elseif kind(kid) === K"Whitespace"
+                # Drop this node
+                any_changes = true
+                replace_bytes!(ctx, "", span(kid))
+                if kids′ === kids
+                    kids′ = kids[1:(i - 1)]
+                end
+                state = :expect_comma
+            else
+                @assert false
+            end
+        end
+        i += 1
+    end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    return any_changes ? make_node(node, kids′) : nothing
+end
+
 function spaces_in_import_using(ctx::Context, node::Node)
     if !(kind(node) in KSet"import using" && !is_leaf(node))
         return nothing
@@ -2304,8 +2382,8 @@ function continue_all_newlines(
     end
 end
 
-function indent_using_import_export(ctx::Context, node::Node)
-    @assert kind(node) in KSet"using import export"
+function indent_using_import_export_public(ctx::Context, node::Node)
+    @assert kind(node) in KSet"using import export public"
     return continue_all_newlines(ctx, node)
 end
 
@@ -2505,8 +2583,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_braces(ctx, node)
     elseif kind(node) in KSet"|| &&"
         return indent_short_circuit(ctx, node)
-    elseif kind(node) in KSet"using import export"
-        return indent_using_import_export(ctx, node)
+    elseif kind(node) in KSet"using import export public"
+        return indent_using_import_export_public(ctx, node)
     elseif is_assignment(node)
         return indent_assignment(ctx, node)
     elseif kind(node) === K"parameters"

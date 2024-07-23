@@ -798,9 +798,16 @@ end
     end
 end
 
+@testset "spaces in export/public" begin
+    for sp in ("", " ", "  ", "\t"), verb in ("export", "public")
+        @test format_string("$(verb) $(sp)a") == "$(verb) a"
+        @test format_string("$(verb)\na") == "$(verb)\n    a"
+        @test format_string("$(verb) $(sp)a$(sp),$(sp)b") == "$(verb) a, b"
+        @test format_string("$(verb) a$(sp),\nb") == "$(verb) a,\n    b"
+        @test format_string("$(verb) \na$(sp),\nb") == "$(verb)\n    a,\n    b"
+    end
+end
+
 @testset "parsing new syntax" begin
-    # Check that it parses
-    @test format_string("public a,b") == "public a,b"
-    # But currently not actually getting formatted:
-    @test_broken format_string("public a,b") == "public a, b"
+    @test format_string("public a, b") == "public a, b" # Julia 1.11
 end

@@ -313,6 +313,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something spaces_around_ternary(ctx, node)
     @return_something spaces_around_keywords(ctx, node)
     @return_something spaces_in_import_using(ctx, node)
+    @return_something spaces_in_export_public(ctx, node)
     @return_something no_spaces_around_colon_etc(ctx, node)
     @return_something parens_around_op_calls_in_colon(ctx, node)
     @return_something for_loop_use_in(ctx, node)
