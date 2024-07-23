@@ -782,3 +782,10 @@ end
     @test format_string("f(a,\tb)") == "f(a, b)"
     @test format_string("begin\n\tx = 1\nend") == "begin\n    x = 1\nend"
 end
+
+@testset "parsing new syntax" begin
+    # Check that it parses
+    @test format_string("public a,b") == "public a,b"
+    # But currently not actually getting formatted:
+    @test_broken format_string("public a,b") == "public a, b"
+end
