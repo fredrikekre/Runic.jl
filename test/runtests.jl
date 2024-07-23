@@ -783,6 +783,21 @@ end
     @test format_string("begin\n\tx = 1\nend") == "begin\n    x = 1\nend"
 end
 
+@testset "spaces in using/import" begin
+    for sp in ("", " ", "  ", "\t"), verb in ("using", "import")
+        # Simple lists
+        @test format_string("$(verb) $(sp)A") == "$(verb) A"
+        @test format_string("$(verb)\nA") == "$(verb)\n    A"
+        @test format_string("$(verb) $(sp)A$(sp),$(sp)B") == "$(verb) A, B"
+        @test format_string("$(verb) A$(sp),\nB") == "$(verb) A,\n    B"
+        @test format_string("$(verb) \nA$(sp),\nB") == "$(verb)\n    A,\n    B"
+        # Colon lists
+        @test format_string("$(verb) $(sp)A: $(sp)a") == "$(verb) A: a"
+        @test format_string("$(verb) $(sp)A: $(sp)a$(sp),$(sp)b") == "$(verb) A: a, b"
+        @test format_string("$(verb) $(sp)A: $(sp)a$(sp),\nb") == "$(verb) A: a,\n    b"
+    end
+end
+
 @testset "parsing new syntax" begin
     # Check that it parses
     @test format_string("public a,b") == "public a,b"
