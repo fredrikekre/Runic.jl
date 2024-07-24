@@ -983,6 +983,10 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 if kind(kid) === K"$"
                     @assert findlast(x -> x === K"quote", ctx.lineage_kinds) !== nothing
                 end
+            elseif kind(kid) in KSet"Comment NewlineWs"
+                any_changes && push!(kids′, kid)
+                accept_node!(ctx, kid)
+                state = :expect_identifier
             else
                 @assert false
             end
