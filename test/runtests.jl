@@ -840,6 +840,8 @@ end
     @test format_string(":(export \$a)") == ":(export \$a)"
     @test format_string("quote\nexport \$a, \$b\nend") == "quote\n    export \$a, \$b\nend"
     @test_throws Exception format_string("export \$a")
+    # Non-identifiers
+    @test format_string("export  ^") == "export ^"
 end
 
 @testset "parsing new syntax" begin

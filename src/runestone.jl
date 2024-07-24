@@ -974,7 +974,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
             state = :expect_identifier
         elseif state === :expect_identifier
             state = :expect_comma
-            if kind(kid) in KSet"Identifier @ MacroName $"
+            if kind(kid) in KSet"Identifier @ MacroName $" || JuliaSyntax.is_operator(kid)
                 any_changes && push!(kids′, kid)
                 accept_node!(ctx, kid)
                 if kind(kid) === K"@"
