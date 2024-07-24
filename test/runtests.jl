@@ -841,7 +841,7 @@ end
     @test format_string("quote\nexport \$a, \$b\nend") == "quote\n    export \$a, \$b\nend"
     @test_throws Exception format_string("export \$a")
     # Non-identifiers
-    @test format_string("export  ^") == "export ^"
+    @test format_string("export ^, var\"x\"") == "export ^, var\"x\""
 end
 
 @testset "parsing new syntax" begin
