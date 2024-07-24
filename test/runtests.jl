@@ -825,6 +825,10 @@ end
                 "$(verb) A: a, c as d"
         end
     end
+    # Interpolated aliases in quotes and macrocalls
+    @test format_string("quote\nimport A as \$a\nend") == "quote\n    import A as \$a\nend"
+    @test format_string(":(import A as \$a)") == ":(import A as \$a)"
+    @test format_string("@eval import A as \$a") == "@eval import A as \$a"
 end
 
 @testset "spaces in export/public" begin
