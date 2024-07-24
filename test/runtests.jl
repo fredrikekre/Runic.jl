@@ -829,6 +829,8 @@ end
     @test format_string("quote\nimport A as \$a\nend") == "quote\n    import A as \$a\nend"
     @test format_string(":(import A as \$a)") == ":(import A as \$a)"
     @test format_string("@eval import A as \$a") == "@eval import A as \$a"
+    # Macro-aliases
+    @test format_string("import  A.@a  as  @b") == "import A.@a as @b"
 end
 
 @testset "spaces in export/public" begin

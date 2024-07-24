@@ -1106,7 +1106,7 @@ function format_as(ctx::Context, node::Node)
     # Alias-identifier
     idx += 1
     kid = kids[idx]
-    @assert kind(kid) in KSet"Identifier $"
+    @assert kind(kid) in KSet"Identifier $ @"
     if !is_leaf(kid)
         @assert kind(first_leaf(kid)) !== K"Whitespace"
     end
@@ -1115,6 +1115,13 @@ function format_as(ctx::Context, node::Node)
     end
     accept_node!(ctx, kid)
     any_changes && push!(kids′, kid)
+    if kind(kid) === K"@"
+        idx += 1
+        kid = kids[idx]
+        @assert kind(kid) === K"MacroName"
+        accept_node!(ctx, kid)
+        any_changes && push!(kids′, kid)
+    end
     # Reset stream
     seek(ctx.fmt_io, pos)
     return any_changes ? make_node(node, kids′) : nothing
