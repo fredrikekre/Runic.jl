@@ -974,11 +974,14 @@ function spaces_in_export_public(ctx::Context, node::Node)
             state = :expect_identifier
         elseif state === :expect_identifier
             state = :expect_comma
-            if kind(kid) in KSet"Identifier @ MacroName"
+            if kind(kid) in KSet"Identifier @ MacroName $"
                 any_changes && push!(kids′, kid)
                 accept_node!(ctx, kid)
                 if kind(kid) === K"@"
                     state = :expect_identifier
+                end
+                if kind(kid) === K"$"
+                    @assert findlast(x -> x === K"quote", ctx.lineage_kinds) !== nothing
                 end
             else
                 @assert false

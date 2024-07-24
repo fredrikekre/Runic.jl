@@ -3,7 +3,7 @@
 using Runic:
     Runic, format_string
 using Test:
-    @test, @testset, @test_broken, @inferred
+    @test, @testset, @test_broken, @inferred, @test_throws
 using JuliaSyntax:
     JuliaSyntax
 
@@ -809,6 +809,10 @@ end
         @test format_string("$(verb) $(a)$(sp),\n$(b)") == "$(verb) $(a),\n    $(b)"
         @test format_string("$(verb) \n$(a)$(sp),\n$(b)") == "$(verb)\n    $(a),\n    $(b)"
     end
+    # Interpolated identifiers (currently only expected in K"quote")
+    @test format_string(":(export \$a)") == ":(export \$a)"
+    @test format_string("quote\nexport \$a, \$b\nend") == "quote\n    export \$a, \$b\nend"
+    @test_throws Exception format_string("export \$a")
 end
 
 @testset "parsing new syntax" begin
