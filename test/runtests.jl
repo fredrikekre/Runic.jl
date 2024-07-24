@@ -331,6 +331,12 @@ end
     # https://github.com/fredrikekre/Runic.jl/issues/16
     @test format_string("(i for i in\nI)") == "(\n    i for i in\n        I\n)"
     @test format_string("f(i for i in\nI)") == "f(\n    i for i in\n        I\n)"
+    # Parenthesized macrocalls with keyword arguments
+    for sp in ("", " ", "  ")
+        @test format_string("@f($(sp)a$(sp);$(sp)b$(sp))") == "@f(a; b)"
+        @test format_string("@f($(sp)a$(sp);$(sp)b = 1$(sp))") == "@f(a; b = 1)"
+        @test format_string("@f($(sp);$(sp)b$(sp))") == "@f(; b)"
+    end
 end
 
 @testset "whitespace around ->" begin
