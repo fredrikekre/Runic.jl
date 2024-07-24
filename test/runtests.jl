@@ -799,6 +799,26 @@ end
         @test format_string("$(verb) $(sp)A: $(sp)a$(sp),$(sp)b") == "$(verb) A: a, b"
         @test format_string("$(verb) $(sp)A: $(sp)a$(sp),\nb") == "$(verb) A: a,\n    b"
     end
+    for sp in ("", " ", "  ", "\t")
+        # `import A as a, ...`
+        @test format_string("import $(sp)A $(sp)as $(sp)a") == "import A as a"
+        @test format_string("import $(sp)A $(sp)as $(sp)a$(sp),$(sp)B $(sp)as $(sp)b") ==
+            "import A as a, B as b"
+        @test format_string("import $(sp)A $(sp)as $(sp)a$(sp),$(sp)B") ==
+            "import A as a, B"
+        @test format_string("import $(sp)A$(sp),$(sp)B $(sp)as $(sp)b") ==
+            "import A, B as b"
+        # `(import|using) A: a as b, ...`
+        for verb in ("using", "import")
+            @test format_string("$(verb) $(sp)A: $(sp)a $(sp)as $(sp)b") == "$(verb) A: a as b"
+            @test format_string("$(verb) $(sp)A: $(sp)a $(sp)as $(sp)b$(sp),$(sp)c $(sp)as $(sp)d") ==
+                "$(verb) A: a as b, c as d"
+            @test format_string("$(verb) $(sp)A: $(sp)a $(sp)as $(sp)b$(sp),$(sp)c") ==
+                "$(verb) A: a as b, c"
+            @test format_string("$(verb) $(sp)A: $(sp)a$(sp),$(sp)c $(sp)as $(sp)d") ==
+                "$(verb) A: a, c as d"
+        end
+    end
 end
 
 @testset "spaces in export/public" begin

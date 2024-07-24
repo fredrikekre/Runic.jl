@@ -1011,6 +1011,105 @@ function spaces_in_export_public(ctx::Context, node::Node)
     return any_changes ? make_node(node, kids′) : nothing
 end
 
+# Used in spaces_in_import_using. Well formatted importpath should have a single leading
+# space or a newline.
+function format_importpath(ctx::Context, node::Node)
+    @assert kind(node) === K"importpath"
+    pos = position(ctx.fmt_io)
+    spacebar = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    if kind(first_leaf(node)) === K"NewlineWs" ||
+            (kind(first_leaf(node)) === K"Whitespace" && span(first_leaf(node)) == 1)
+        # Newline or whitespace with correct span
+        node′ = nothing
+    elseif kind(first_leaf(node)) === K"Whitespace"
+        # Whitespace with incorrect span; replace with a single space
+        replace_bytes!(ctx, " ", span(first_leaf(node)))
+        node′ = replace_first_leaf(node, spacebar)
+    else
+        # No whitespace, insert
+        @assert kind(first_leaf(node)) === K"Identifier"
+        kids′ = copy(verified_kids(node))
+        pushfirst!(kids′, spacebar)
+        replace_bytes!(ctx, " ", 0)
+        node′ = make_node(node, kids′)
+    end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    return node′
+end
+
+# Used in spaces_in_import_using.
+function format_as(ctx::Context, node::Node)
+    @assert kind(node) === K"as"
+    kids = verified_kids(node)
+    kids′ = kids
+    any_changes = false
+    pos = position(ctx.fmt_io)
+    spacebar = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    # First the importpath (LHS of the `as`)
+    idx = 1
+    kid′ = kids[idx]
+    @assert kind(kid′) === K"importpath"
+    kid′′ = format_importpath(ctx, kid′)
+    if kid′′ !== nothing
+        any_changes = true
+        kid′ = kid′′
+        kids′ = [kid′]
+    end
+    accept_node!(ctx, kid′)
+    # space before `as`
+    idx += 1
+    kid = kids[idx]
+    @assert kind(kid) === K"Whitespace"
+    if span(kid) == 1
+        # Correct span
+        accept_node!(ctx, kid)
+        any_changes && push!(kids′, kid)
+    else
+        # Incorrect span
+        replace_bytes!(ctx, " ", span(kid))
+        any_changes = true
+        if kids′ === kids
+            kids′ = kids[1:(idx - 1)]
+        end
+        accept_node!(ctx, spacebar)
+        push!(kids′, spacebar)
+    end
+    # `as`
+    idx += 1
+    kid = kids[idx]
+    @assert kind(kid) === K"as"
+    accept_node!(ctx, kid)
+    any_changes && push!(kids′, kid)
+    # space after `as`
+    idx += 1
+    kid = kids[idx]
+    @assert kind(kid) === K"Whitespace"
+    if span(kid) == 1
+        # Correct span
+        accept_node!(ctx, kid)
+        any_changes && push!(kids′, kid)
+    else
+        # Incorrect span
+        replace_bytes!(ctx, " ", span(kid))
+        any_changes = true
+        if kids′ === kids
+            kids′ = kids[1:(idx - 1)]
+        end
+        accept_node!(ctx, spacebar)
+        push!(kids′, spacebar)
+    end
+    # Alias-identifier
+    idx += 1
+    kid = kids[idx]
+    @assert kind(kid) === K"Identifier"
+    accept_node!(ctx, kid)
+    any_changes && push!(kids′, kid)
+    # Reset stream
+    seek(ctx.fmt_io, pos)
+    return any_changes ? make_node(node, kids′) : nothing
+end
+
 function spaces_in_import_using(ctx::Context, node::Node)
     if !(kind(node) in KSet"import using" && !is_leaf(node))
         return nothing
@@ -1028,16 +1127,35 @@ function spaces_in_import_using(ctx::Context, node::Node)
         kids′ = kids
     end
 
-    spacenode = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
-
     @assert kind(kids[1]) in KSet"import using"
     accept_node!(ctx, kids[1])
 
-    expect_comma = false
-
-    for i in 2:length(kids)
+    state = :expect_item
+    i = 2
+    while i <= length(kids)
         kid = kids[i]
-        if expect_comma
+        if state === :expect_item
+            @assert kind(kid) in KSet"importpath as"
+            if kind(kid) === K"importpath"
+                kid′ = format_importpath(ctx, kid)
+            else
+                @assert kind(kid) === K"as"
+                kid′ = format_as(ctx, kid)
+            end
+            if kid′ !== nothing
+                any_changes = true
+                if kids′ === kids
+                    kids′ = kids[1:(i - 1)]
+                end
+                accept_node!(ctx, kid′)
+                push!(kids′, kid′)
+            else
+                accept_node!(ctx, kid)
+                any_changes && push!(kids′, kid)
+            end
+            state = :expect_comma
+        else
+            @assert state === :expect_comma
             if kind(kid) === K"Whitespace"
                 # Drop this node
                 any_changes = true
@@ -1049,42 +1167,10 @@ function spaces_in_import_using(ctx::Context, node::Node)
                 @assert kind(kid) in KSet": ,"
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)
-                expect_comma = false
+                state = :expect_item
             end
-        else
-            @assert kind(kid) === K"importpath"
-            # Expect a single leading whitespace
-            if kind(first_leaf(kid)) === K"NewlineWs" ||
-                    (kind(first_leaf(kid)) === K"Whitespace" && span(first_leaf(kid)) == 1)
-                # Newline or whitespace with correct span
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
-            elseif kind(first_leaf(kid)) === K"Whitespace"
-                # Whitespace with incorrect span; replace with a single space
-                kid′ = replace_first_leaf(kid, spacenode)
-                replace_bytes!(ctx, " ", span(first_leaf(kid)))
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                accept_node!(ctx, kid′)
-                push!(kids′, kid′)
-            else
-                # No whitespace, insert
-                @assert kind(first_leaf(kid)) === K"Identifier"
-                grandkids′ = copy(verified_kids(kid))
-                pushfirst!(grandkids′, spacenode)
-                replace_bytes!(ctx, " ", 0)
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                kid′ = make_node(kid, grandkids′)
-                accept_node!(ctx, kid′)
-                push!(kids′, kid′)
-            end
-            expect_comma = true
         end
+        i += 1
     end
     # Reset stream
     seek(ctx.fmt_io, pos)
