@@ -836,9 +836,10 @@ end
         @test format_string("$(verb) \n$(a)$(sp),\n$(b)") == "$(verb)\n    $(a),\n    $(b)"
         @test format_string("$(verb) $(a)$(sp),\n# b\n$(b)") == "$(verb) $(a),\n    # b\n    $(b)"
     end
-    # Interpolated identifiers (currently only expected in K"quote")
+    # Interpolated identifiers (currently only expected in K"quote" and K"macrocall")
     @test format_string(":(export \$a)") == ":(export \$a)"
     @test format_string("quote\nexport \$a, \$b\nend") == "quote\n    export \$a, \$b\nend"
+    @test format_string("@eval export \$a") == "@eval export \$a"
     @test_throws Exception format_string("export \$a")
     # Non-identifiers
     @test format_string("export ^, var\"x\"") == "export ^, var\"x\""
