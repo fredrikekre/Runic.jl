@@ -690,6 +690,9 @@ end
         @test format_string("begin x\n$(sp)end") == "begin x\nend"
         @test format_string("begin x end") == "begin x end"
         @test format_string("begin\n    x end") == "begin\n    x end"
+        # Functors
+        @test format_string("function$(sp)(a::A)(b)\nx\nend") ==
+            "function (a::A)(b)\n    x\nend"
     end
 end
 

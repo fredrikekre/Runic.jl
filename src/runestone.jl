@@ -1324,7 +1324,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 @assert false # Unreachable?
             else
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
-                @assert kind(node) in KSet"where if elseif while do"
+                @assert kind(node) in KSet"where if elseif while do function"
                 any_changes = true
                 if kids′ === kids
                     kids′ = kids[1:(i - 1)]
@@ -1735,7 +1735,7 @@ function indent_function_or_macro(ctx::Context, node::Node)
         any_kid_changed = true
     end
     # Second node is the space between keyword and name
-    if !is_longform_anon_function(node)
+    if !(is_longform_anon_function(node) || is_longform_functor(node))
         space_idx = 2
         space_node = kids[space_idx]
         @assert is_leaf(space_node) && kind(space_node) === K"Whitespace"
@@ -1745,7 +1745,7 @@ function indent_function_or_macro(ctx::Context, node::Node)
     sig_idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, func_idx + 1)::Int
     if sig_idx == 2
         # Only case where no space is needed after the keyword
-        @assert is_longform_anon_function(node)
+        @assert is_longform_anon_function(node) || is_longform_functor(node)
     end
     sig_node = kids[sig_idx]
     # Identifier for regular names but "not function call" for empty functions with Unicode
