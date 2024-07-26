@@ -804,9 +804,15 @@ end
         @test format_string("$(verb) A$(sp),\nB") == "$(verb) A,\n    B"
         @test format_string("$(verb) \nA$(sp),\nB") == "$(verb)\n    A,\n    B"
         # Colon lists
-        @test format_string("$(verb) $(sp)A: $(sp)a") == "$(verb) A: a"
-        @test format_string("$(verb) $(sp)A: $(sp)a$(sp),$(sp)b") == "$(verb) A: a, b"
-        @test format_string("$(verb) $(sp)A: $(sp)a$(sp),\nb") == "$(verb) A: a,\n    b"
+        for a in ("a", "@a", "*")
+            @test format_string("$(verb) $(sp)A: $(sp)$(a)") == "$(verb) A: $(a)"
+            for b in ("b", "@b", "*")
+                @test format_string("$(verb) $(sp)A: $(sp)$(a)$(sp),$(sp)$(b)") ==
+                    "$(verb) A: $(a), $(b)"
+                @test format_string("$(verb) $(sp)A: $(sp)$(a)$(sp),\n$(b)") ==
+                    "$(verb) A: $(a),\n    $(b)"
+            end
+        end
     end
     for sp in ("", " ", "  ", "\t")
         # `import A as a, ...`

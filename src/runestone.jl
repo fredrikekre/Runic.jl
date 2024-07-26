@@ -1031,7 +1031,8 @@ function format_importpath(ctx::Context, node::Node)
         node′ = replace_first_leaf(node, spacebar)
     else
         # No whitespace, insert
-        @assert kind(first_leaf(node)) === K"Identifier"
+        @assert kind(first_leaf(node)) in KSet"Identifier @" ||
+            JuliaSyntax.is_operator(first_leaf(node))
         kids′ = copy(verified_kids(node))
         pushfirst!(kids′, spacebar)
         replace_bytes!(ctx, " ", 0)
