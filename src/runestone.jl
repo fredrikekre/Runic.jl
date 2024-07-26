@@ -986,7 +986,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
             elseif kind(kid) in KSet"Comment NewlineWs"
                 any_changes && push!(kids′, kid)
                 accept_node!(ctx, kid)
-                state = :expect_identifier
+                state = :expect_space
             else
                 @assert false
             end
