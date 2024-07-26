@@ -214,7 +214,7 @@ exec 1>&2
 # Run Runic on added and modified files
 mapfile -t files < <(git diff-index --name-only --diff-filter=AM master | grep '\.jl$')
 
-if [ ! -z "${files}" ]; then
+if [ ${#files[@]} -gt 0 ]; then
     julia --project=@runic -m Runic --check --diff "${files[@]}"
 fi
 ```
