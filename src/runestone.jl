@@ -320,7 +320,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
     end
     if kind(node) === K"parameters"
         # Note that some of these are not valid Julia syntax but still parse
-        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall macrocall curly vect"
+        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall macrocall curly vect ref"
     end
 
     @assert !is_leaf(node)
@@ -602,7 +602,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"parameters"
                 # Note that some of these are not valid Julia syntax still parse
-                @assert kind(node) in KSet"call dotcall macrocall curly tuple vect"
+                @assert kind(node) in KSet"call dotcall macrocall curly tuple vect ref"
                 if kind(first_leaf(kid′)) === K"Whitespace"
                     # Delete the whitespace leaf
                     kid_ws = first_leaf(kid′)

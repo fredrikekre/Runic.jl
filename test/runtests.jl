@@ -287,8 +287,15 @@ end
             format_string("f(;$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
             format_string("f(;$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
             "f(;\n    b = $(b),\n)"
-        # vect with parameter (not valid Julia syntax, but parses)
-        @test format_string("[$(sp)1,$(sp)2$(sp);$(sp)]") == "[1, 2]"
+        # vect/ref with parameter (not valid Julia syntax, but parses)
+        for T in ("", "T")
+            @test format_string("$(T)[$(sp)$(a),$(sp)$(b)$(sp);$(sp)]") ==
+                "$(T)[$(a), $(b)]"
+            @test format_string("$(T)[$(sp)$(a),$(sp)$(b)$(sp);$(sp)a=$(a)$(sp)]") ==
+                "$(T)[$(a), $(b); a = $(a)]"
+            @test format_string("$(T)[$(sp)$(a),$(sp)$(b)$(sp);$(sp)a=$(a)$(sp),$(sp)b=$(b)$(sp)]") ==
+                "$(T)[$(a), $(b); a = $(a), b = $(b)]"
+        end
         # Multple `;` in argument list (lowering error but parses....)
         @test format_string("f($(sp)x$(sp);$(sp)y$(sp)=$(sp)$(a)$(sp);$(sp)z$(sp)=$(sp)$(b)$(sp))") ==
             "f(x; y = $(a); z = $(b))"
