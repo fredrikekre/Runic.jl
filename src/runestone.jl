@@ -960,6 +960,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 accept_node!(ctx, kid′)
                 push!(kids′, kid′)
             else
+                @assert kind(first_leaf(kid)) !== K"Whitespace"
                 # Insert a space
                 any_changes = true
                 if kids′ === kids
@@ -983,6 +984,12 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 if kind(kid) === K"$"
                     @assert findlast(x -> x in KSet"quote macrocall", ctx.lineage_kinds) !== nothing
                 end
+            elseif kind(kid) === K"parens"
+                # Parenthesized symbol gives a warning in JuliaSyntax but is allowed
+                # TODO: Runic could remove them...
+                @assert kind(first_leaf(kid)) !== K"Whitespace"
+                any_changes && push!(kids′, kid)
+                accept_node!(ctx, kid)
             elseif kind(kid) in KSet"Comment NewlineWs"
                 any_changes && push!(kids′, kid)
                 accept_node!(ctx, kid)

@@ -867,6 +867,8 @@ end
     @test_throws Exception format_string("export \$a")
     # Non-identifiers
     @test format_string("export ^, var\"x\"") == "export ^, var\"x\""
+    # Parenthesized identifiers. JuliaSyntax gives a warning but it is still allowed.
+    @test format_string("export (a) ,  (^)") == "export (a), (^)"
 end
 
 @testset "parsing new syntax" begin
