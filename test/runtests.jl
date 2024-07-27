@@ -478,6 +478,8 @@ end
                 "$(l)(i, j) for i in I, j in J$(r)"
             @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I, j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K$(r)") ==
                 "$(l)(i, j, k) for i in I, j in J, k in K$(r)"
+            @test format_string("$(l)(i, j, k) for i$(sp)$(op)$(sp)I for j$(sp)$(op)$(sp)J, k$(sp)$(op)$(sp)K$(r)") ==
+                "$(l)(i, j, k) for i in I for j in J, k in K$(r)"
             # multiple for
             @test format_string("$(l)(i, j) for i$(sp)$(op)$(sp)I for j$(sp)$(op)$(sp)J$(r)") ==
                 "$(l)(i, j) for i in I for j in J$(r)"

@@ -1374,10 +1374,10 @@ function spaces_around_keywords(ctx::Context, node::Node)
 end
 
 # Replace the K"=" operator with `in`
-# TODO: This method doesn't reset the stream so callers should not accept_node??
 function replace_with_in(ctx::Context, node::Node)
     @assert kind(node) === K"=" && !is_leaf(node) && meta_nargs(node) == 3
     kids = verified_kids(node)
+    pos = position(ctx.fmt_io)
     vars_index = findfirst(!JuliaSyntax.is_whitespace, kids)
     # TODO: Need to insert whitespaces around `in` when replacing e.g. `i=I` with `iinI`.
     # However, at the moment it looks like the whitespace around operator pass does it's
@@ -1388,6 +1388,7 @@ function replace_with_in(ctx::Context, node::Node)
     if kind(in_node) === K"in"
         @assert JuliaSyntax.is_trivia(in_node)
         @assert is_leaf(in_node)
+        @assert position(ctx.fmt_io) == pos
         return nothing
     end
     @assert kind(in_node) in KSet"∈ ="
@@ -1405,10 +1406,7 @@ function replace_with_in(ctx::Context, node::Node)
     accept_node!(ctx, in_node′)
     kids′ = copy(kids)
     kids′[in_index] = in_node′
-    # Accept remaining kids
-    for i in (in_index + 1):length(kids′)
-        accept_node!(ctx, kids′[i])
-    end
+    seek(ctx.fmt_io, pos)
     return make_node(node, kids′)
 end
 
@@ -1426,22 +1424,22 @@ function replace_with_in_filter(ctx::Context, node::Node)
     else
         kid′ = replace_with_in_cartesian(ctx, kid)
     end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
     if kid′ === nothing
-        seek(ctx.fmt_io, pos)
         return nothing
+    else
+        kids = copy(kids)
+        kids[idx] = kid′
+        return make_node(node, kids)
     end
-    kids = copy(kids)
-    kids[idx] = kid′
-    for i in (idx + 1):length(kids)
-        accept_node!(ctx, kids[i])
-    end
-    return make_node(node, kids)
 end
 
 function replace_with_in_cartesian(ctx::Context, node::Node)
     @assert kind(node) === K"cartesian_iterator" && !is_leaf(node)
     kids = verified_kids(node)
     kids′ = kids
+    pos = position(ctx.fmt_io)
     for (i, kid) in pairs(kids)
         if kind(kid) === K"="
             kid′ = replace_with_in(ctx, kid)
@@ -1450,6 +1448,7 @@ function replace_with_in_cartesian(ctx::Context, node::Node)
                     kids′ = copy(kids)
                 end
                 kids′[i] = kid′
+                accept_node!(ctx, kid′)
             else
                 kids′[i] = kid
                 accept_node!(ctx, kid)
@@ -1459,6 +1458,8 @@ function replace_with_in_cartesian(ctx::Context, node::Node)
             accept_node!(ctx, kid)
         end
     end
+    # Reset stream
+    seek(ctx.fmt_io, pos)
     if kids === kids′
         return nothing
     end
@@ -1487,7 +1488,6 @@ function for_loop_use_in(ctx::Context, node::Node)
         for i in next_index:for_index
             accept_node!(ctx, kids[i])
         end
-        while_pos = position(ctx.fmt_io)
         # The for loop specification node can be either K"=" or K"cartesian_iterator"
         for_spec_index = for_index + 1
         for_spec_node = kids[for_spec_index]
@@ -1501,13 +1501,15 @@ function for_loop_use_in(ctx::Context, node::Node)
             for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)
         end
         if for_spec_node′ !== nothing
-            @assert position(ctx.fmt_io) == while_pos + span(for_spec_node′)
             any_for_changed = true
             # Insert the new for spec node
             if kids′ === kids
                 kids′ = copy(kids)
             end
             kids′[for_spec_index] = for_spec_node′
+            accept_node!(ctx, for_spec_node′)
+        else
+            accept_node!(ctx, for_spec_node)
         end
         for_index = findnext(c -> kind(c) === K"for" && is_leaf(c), kids, for_spec_index + 1)
         if for_index !== nothing
@@ -1526,7 +1528,6 @@ function for_loop_use_in(ctx::Context, node::Node)
     end
     # Construct the full node and return
     node′ = make_node(node, kids′)
-    @assert position(ctx.fmt_io) == pos + span(node′)
     seek(ctx.fmt_io, pos) # reset
     return node′
 end
