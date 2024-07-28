@@ -687,6 +687,11 @@ end
             @test format_string("$(t)[\n$(sp)a,\n$(sp)b\n$(sp)]") == "$(t)[\n    a,\n    b,\n]"
             @test format_string("$(t)[a b\n$(sp)c d]") == "$(t)[\n    a b\n    c d\n]"
             @test format_string("$(t)[\n$(sp)a b\n$(sp)c d\n$(sp)]") == "$(t)[\n    a b\n    c d\n]"
+            # vcat
+            @test format_string("$(t)[$(sp)a b;\nc d;$(sp)]") ==
+                format_string("$(t)[\na b;\nc d;$(sp)]") ==
+                format_string("$(t)[$(sp)a b;\nc d;\n]") ==
+                format_string("$(t)[\na b;\nc d;\n]") == "$(t)[\n    a b;\n    c d;\n]"
         end
         # array comprehension
         for t in ("", "T")

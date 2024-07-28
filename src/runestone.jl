@@ -2308,8 +2308,24 @@ function indent_listlike(
             push!(kids′, kid)
             accept_node!(ctx, kid)
         elseif kind(last_leaf(kid)) === K"Whitespace"
-            # TODO: Testcase? Need to merge here.
-            @assert false
+            # TODO: I believe this is only reachable because whitespace isn't trimmed from
+            #       vcat nodes like function calls and tuples etc.
+            @assert kind(node) in KSet"vcat typed_vcat"
+            # Since the whitespace is inside the kid node we assume that a newlinews would
+            # have ended up inside too. We also remove all existing whitespace since it
+            # would otherwise have to be cleaned up by the trailing whitespace pass.
+            accept_node!(ctx, kid)
+            seek(ctx.fmt_io, position(ctx.fmt_io) - span(last_leaf(kid)))
+            replace_bytes!(ctx, "\n", span(last_leaf(kid)))
+            nlws = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1)
+            nlws = add_tag(nlws, TAG_PRE_DEDENT)
+            accept_node!(ctx, nlws)
+            kid′ = replace_last_leaf(kid, nlws)
+            if kids′ === kids
+                kids′ = kids[1:(open_idx - 1)]
+            end
+            any_kid_changed = true
+            push!(kids′, kid′)
         else
             # Note that this is a trailing newline and should be put after this item
             if kids′ === kids
