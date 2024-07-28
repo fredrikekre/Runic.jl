@@ -318,15 +318,19 @@ end
         @test format_string("($(sp);$(sp))") == "(;)"
         @test format_string("($(sp); #= a =#$(sp))") == "(; #= a =#)"
     end
-    # Curly (not as extensive testing as tuple/call/dotcall above but the code path is the
-    # same)
+    # KSet"curly braces bracescat" (not as extensive testing as tuple/call/dotcall above but
+    # the code path is the same)
     for x in ("", "X"), sp in ("", " ", "  "), a in ("A", "<:B", "C <: D"), b in ("E", "<:F", "G <: H")
         tr = x == "" ? "" : ","
         @test format_string("$(x){$(sp)$(a)$(sp),$(sp)$(b)$(sp)}") == "$(x){$(a), $(b)}"
         @test format_string("$(x){$(sp)$(a)$(sp);$(sp)$(b)$(sp)}") == "$(x){$(a); $(b)}"
         @test format_string("$(x){$(sp)$(a)$(sp);$(sp)$(b)$(sp)}") == "$(x){$(a); $(b)}"
+        @test format_string("$(x){$(sp)$(a)$(sp),$(sp)$(a)$(sp);$(sp)$(b)$(sp)}") ==
+            "$(x){$(a), $(a); $(b)}"
         @test format_string("$(x){\n$(sp)$(a)$(sp);$(sp)$(b)$(sp)\n}") ==
             "$(x){\n    $(a); $(b)$(tr)\n}"
+        @test format_string("$(x){\n$(sp)$(a)$(sp),$(sp)$(a)$(sp);$(sp)$(b)$(sp)\n}") ==
+            "$(x){\n    $(a), $(a); $(b),\n}"
     end
     # Trailing `;` in paren-block
     @test format_string("(a = A;)") == "(a = A)"
