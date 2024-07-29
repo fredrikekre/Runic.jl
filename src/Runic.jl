@@ -318,6 +318,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something parens_around_op_calls_in_colon(ctx, node)
     @return_something for_loop_use_in(ctx, node)
     @return_something braces_around_where_rhs(ctx, node)
+    @return_something indent_multiline_strings(ctx, node)
     @return_something four_space_indent(ctx, node)
     @return_something spaces_in_listlike(ctx, node)
     ctx.call_depth -= 1

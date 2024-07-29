@@ -893,3 +893,33 @@ end
 @testset "parsing new syntax" begin
     @test format_string("public a, b") == "public a, b" # Julia 1.11
 end
+
+@testset "indent of multiline strings" begin
+    for triple in ("\"\"\"", "```"), sp in ("", " ", "    "),
+            (pre, post) in (("", ""), ("pre", ""), ("pre", "post"))
+        otriple = pre * triple
+        ctriple = triple * post
+        # Level 0
+        @test format_string("$(sp)$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(sp)$(otriple)\na\nb\n$(ctriple)"
+        @test format_string("$(sp)$(otriple)\n$(sp)a\n\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(sp)$(otriple)\na\n\nb\n$(ctriple)"
+        @test format_string("x = $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "x = $(otriple)\na\nb\n$(ctriple)"
+        @test format_string("$(sp)$(otriple)a\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(sp)$(otriple)a\na\nb\n$(ctriple)"
+        @test format_string("$(sp)$(otriple)\n$(sp)a\$(b)c\n$(sp)$(ctriple)") ===
+            "$(sp)$(otriple)\na\$(b)c\n$(ctriple)"
+        # Level 1
+        @test format_string("begin\n$(sp)$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)\nend") ===
+            "begin\n    $(otriple)\n    a\n    b\n    $(ctriple)\nend"
+        @test format_string("begin\n$(sp)$(otriple)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(ctriple)\nend") ===
+            "begin\n    $(otriple)\n    a\n\n    b\n    $(ctriple)\nend"
+        @test format_string("begin\n$(sp)x = $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)\nend") ===
+            "begin\n    x = $(otriple)\n    a\n    b\n    $(ctriple)\nend"
+        @test format_string("begin\n$(sp)$(otriple)a\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)\nend") ===
+            "begin\n    $(otriple)a\n    a\n    b\n    $(ctriple)\nend"
+        @test format_string("begin\n$(sp)$(otriple)\n$(sp)a\$(b)c\n$(sp)$(ctriple)\nend") ===
+            "begin\n    $(otriple)\n    a\$(b)c\n    $(ctriple)\nend"
+    end
+end

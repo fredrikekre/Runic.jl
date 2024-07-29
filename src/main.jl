@@ -37,42 +37,42 @@ function print_help()
     printstyled(io, "DESCRIPTION\n", bold = true)
     println(
         io, """
-                `Runic.main` (typically invoked as `julia -m Runic`) formats Julia source
-                code using the Runic.jl formatter.
-         """,
+               `Runic.main` (typically invoked as `julia -m Runic`) formats Julia source
+               code using the Runic.jl formatter.
+        """,
     )
     printstyled(io, "OPTIONS\n", bold = true)
     println(
         io, """
-                <path>...
-                    Input path(s) (files and/or directories) to process. For directories,
-                    all files (recursively) with the '*.jl' suffix are used as input files.
-                    If path is `-` input is read from stdin and output written to stdout.
+               <path>...
+                   Input path(s) (files and/or directories) to process. For directories,
+                   all files (recursively) with the '*.jl' suffix are used as input files.
+                   If path is `-` input is read from stdin and output written to stdout.
 
-                -c, --check
-                    Do not write output and exit with a non-zero code if the input is not
-                    formatted correctly.
+               -c, --check
+                   Do not write output and exit with a non-zero code if the input is not
+                   formatted correctly.
 
-                -d, --diff
-                    Print the diff between the input and formatted output to stderr.
-                    Requires `git` or `diff` to be installed.
+               -d, --diff
+                   Print the diff between the input and formatted output to stderr.
+                   Requires `git` or `diff` to be installed.
 
-                --fail-fast
-                    Exit immediately after the first error. Only applicable when formatting
-                    multiple files in the same invocation.
+               --fail-fast
+                   Exit immediately after the first error. Only applicable when formatting
+                   multiple files in the same invocation.
 
-                --help
-                    Print this message.
+               --help
+                   Print this message.
 
-                -i, --inplace
-                    Edit files in place. This option is required when passing multiple input
-                    paths.
+               -i, --inplace
+                   Edit files in place. This option is required when passing multiple input
+                   paths.
 
-                -o, --output <file>
-                    Output file to write formatted code to. If the specified file is `-`
-                    output is written to stdout. This option can not be used together with
-                    multiple input paths.
-         """,
+               -o, --output <file>
+                   Output file to write formatted code to. If the specified file is `-`
+                   output is written to stdout. This option can not be used together with
+                   multiple input paths.
+        """,
     )
     return
 end
