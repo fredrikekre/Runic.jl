@@ -711,6 +711,11 @@ end
         # Functors
         @test format_string("function$(sp)(a::A)(b)\nx\nend") ==
             "function (a::A)(b)\n    x\nend"
+        # Multiline strings inside lists
+        for trip in ("\"\"\"", "```")
+            @test format_string("println(io, $(trip)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(trip))") ==
+                "println(\n    io, $(trip)\n    a\n\n    b\n    $(trip),\n)"
+        end
     end
 end
 

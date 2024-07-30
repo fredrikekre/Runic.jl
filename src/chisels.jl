@@ -471,6 +471,76 @@ function any_leaf(pred::F, node::Node) where {F}
     end
 end
 
+# TODO: Alternative non-recursive definition that only looks at the current layer
+# ```
+# contains_outer_newline(kids, opening_leaf_idx, closing_leaf_idx)
+# ```
+function is_multiline_between_idxs(ctx, node::Node, opening_idx::Int, closing_idx::Int)
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    # Check for newline nodes
+    if any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (opening_idx + 1):(closing_idx - 1))
+        return true
+    end
+    # Recurse into multiline triple-strings
+    pos = position(ctx.fmt_io)
+    for i in 1:opening_idx
+        accept_node!(ctx, kids[i])
+    end
+    for i in (opening_idx + 1):(closing_idx - 1)
+        kid = kids[i]
+        ipos = position(ctx.fmt_io)
+        if contains_multiline_triple_string(ctx, kid)
+            seek(ctx.fmt_io, pos)
+            return true
+        end
+        seek(ctx.fmt_io, ipos)
+        accept_node!(ctx, kid)
+    end
+    seek(ctx.fmt_io, pos)
+    return false
+end
+
+function contains_multiline_triple_string(ctx, node::Node)
+    # If this is a leaf just advance the stream
+    if is_leaf(node)
+        accept_node!(ctx, node)
+        return false
+    end
+    kids = verified_kids(node)
+    pos = position(ctx.fmt_io)
+    # If this is a triple string we inspect it
+    if kind(node) in KSet"string cmdstring" && JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG)
+        triplekind, triplestring, itemkind = kind(node) === K"string" ?
+            (K"\"\"\"", "\"\"\"", K"String") : (K"```", "```", K"CmdString")
+        # Look for K"String"s ending in `\n`
+        for (i, kid) in pairs(kids)
+            if i === firstindex(kids) || i === lastindex(kids)
+                @assert kind(kid) === triplekind
+                @assert String(read_bytes(ctx, kid)) == triplestring
+            end
+            if kind(kid) === itemkind
+                if endswith(String(read_bytes(ctx, kid)), "\n")
+                    return true
+                end
+            else
+                accept_node!(ctx, kid)
+            end
+        end
+        @assert position(ctx.fmt_io) == pos + span(node)
+    else
+        for kid in kids
+            kpos = position(ctx.fmt_io)
+            if contains_multiline_triple_string(ctx, kid)
+                return true
+            end
+            seek(ctx.fmt_io, kpos)
+            accept_node!(ctx, kid)
+        end
+    end
+    return false
+end
+
 ##########################
 # Utilities for IOBuffer #
 ##########################

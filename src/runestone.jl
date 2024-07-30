@@ -387,7 +387,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
 
     # Multiline lists require leading and trailing newline
     # multiline = contains_outer_newline(kids, opening_leaf_idx, closing_leaf_idx)
-    multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (opening_leaf_idx + 1):(closing_leaf_idx - 1))
+    # multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (opening_leaf_idx + 1):(closing_leaf_idx - 1))
+    multiline = is_multiline_between_idxs(ctx, node, opening_leaf_idx, closing_leaf_idx)
 
     is_named_tuple = kind(node) === K"tuple" && n_items == 1 && kind(kids[first_item_idx]) === K"parameters"
 
@@ -2126,7 +2127,8 @@ function indent_listlike(
     open_idx == close_idx && return nothing
     # Check whether we expect leading/trailing newlines
     # multiline = contains_outer_newline(kids, open_idx, close_idx)
-    multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (open_idx + 1):(close_idx - 1))
+    # multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (open_idx + 1):(close_idx - 1))
+    multiline = is_multiline_between_idxs(ctx, node, open_idx, close_idx)
     if !multiline
         # TODO: This should be fine? If there are no newlines it should be safe to just
         # don't indent anything in this node?

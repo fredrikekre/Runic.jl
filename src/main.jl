@@ -35,12 +35,15 @@ function print_help()
     println(io, "       julia -m Runic [<options>] <path>...")
     println(io)
     printstyled(io, "DESCRIPTION\n", bold = true)
-    println(io, """
+    println(
+        io, """
                 `Runic.main` (typically invoked as `julia -m Runic`) formats Julia source
                 code using the Runic.jl formatter.
-         """)
+         """,
+    )
     printstyled(io, "OPTIONS\n", bold = true)
-    println(io, """
+    println(
+        io, """
                 <path>...
                     Input path(s) (files and/or directories) to process. For directories,
                     all files (recursively) with the '*.jl' suffix are used as input files.
@@ -69,7 +72,8 @@ function print_help()
                     Output file to write formatted code to. If the specified file is `-`
                     output is written to stdout. This option can not be used together with
                     multiple input paths.
-         """)
+         """,
+    )
     return
 end
 
