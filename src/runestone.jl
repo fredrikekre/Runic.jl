@@ -424,7 +424,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
     end
 
     # Helper to compute the new state after a given item
-    function state_after_item(i)
+    function state_after_item(i, last_item_idx, require_trailing_comma)
         @assert i <= last_item_idx
         if i < last_item_idx
             return :expect_comma
@@ -547,7 +547,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     accept_node!(ctx, kid′)
                 end
                 # Transition to the next state
-                state = state_after_item(i)
+                state = state_after_item(i, last_item_idx, require_trailing_comma)
             end
         elseif state === :expect_comma
             trailing = i > last_item_idx
@@ -711,7 +711,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     # Newline, comment, or whitespace followed by comment
                     accept_node!(ctx, kid′)
                     any_kid_changed && push!(kids′, kid′)
-                    state = state_after_item(i)
+                    state = state_after_item(i, last_item_idx, require_trailing_comma)
                 elseif kind(first_leaf(kid′)) === K"Whitespace"
                     ws_node = first_leaf(kid′)
                     if span(ws_node) == 1
@@ -727,7 +727,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                         accept_node!(ctx, kid′)
                         push!(kids′, kid′)
                     end
-                    state = state_after_item(i)
+                    state = state_after_item(i, last_item_idx, require_trailing_comma)
                 else
                     # Insert a standalone space kid and then accept the current node
                     this_kid_changed = true
@@ -740,7 +740,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     push!(kids′, kid′)
                     accept_node!(ctx, kid′)
                     # Here we inserted a space and consumed the next item, moving on to comma
-                    state = state_after_item(i)
+                    state = state_after_item(i, last_item_idx, require_trailing_comma)
                 end
             end
         else
