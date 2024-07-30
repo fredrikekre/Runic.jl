@@ -368,8 +368,8 @@ end
 function infix_op_call_op(node::Node)
     @assert is_infix_op_call(node) || kind(node) === K"||"
     kids = verified_kids(node)
-    first_operand_index = findfirst(!JuliaSyntax.is_whitespace, kids)
-    op_index = findnext(JuliaSyntax.is_operator, kids, first_operand_index + 1)
+    first_operand_index = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
+    op_index = findnext(JuliaSyntax.is_operator, kids, first_operand_index + 1)::Int
     return kids[op_index]
 end
 
