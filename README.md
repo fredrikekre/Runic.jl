@@ -158,7 +158,7 @@ any of the input files are incorrectly formatted. As an example, the following i
 can be used:
 
 ```sh
-julia -m Runic --check --diff $(git ls-files -- '*.jl')
+git ls-files -z -- '*.jl' | xargs -0 julia -m Runic --check --diff
 ```
 
 This will run Runic's check mode (`--check`) on all `.jl` files in the repository and print
@@ -192,10 +192,10 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Install Runic
         run: |
-          julia --color=yes -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
+          julia --color=yes --project=@runic -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
       - name: Run Runic
         run: |
-          julia --color=yes -m Runic --check --diff $(git ls-files -- '*.jl')
+          git ls-files -z -- '*.jl' | xargs -0 julia --project=@runic -m Runic --check --diff
 ```
 
 ### Git Hooks
@@ -212,11 +212,9 @@ to automatically check formatting before committing. Here is an example hook
 exec 1>&2
 
 # Run Runic on added and modified files
-mapfile -t files < <(git diff-index --name-only --diff-filter=AM master | grep '\.jl$')
-
-if [ ${#files[@]} -gt 0 ]; then
-    julia --project=@runic -m Runic --check --diff "${files[@]}"
-fi
+git diff-index -z --name-only --diff-filter=AM master | \
+    grep -z '\.jl$' | \
+    xargs -0 --no-run-if-empty -p julia --project=@runic -m Runic --check --diff
 ```
 
 ## Formatting specification

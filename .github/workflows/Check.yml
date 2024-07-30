@@ -36,11 +36,11 @@ jobs:
           julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
       - name: Run Runic
         run: |
-          julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -m Runic --check --diff $(git ls-files -- '*.jl')
+          git ls-files -z -- '*.jl' | xargs -0 julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -m Runic --check --diff
         if: ${{ matrix.version == 'nightly' }}
       - name: Run Runic
         run: |
-          julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -e 'using Runic; exit(Runic.main(ARGS))' -- --check --diff $(git ls-files -- '*.jl')
+          git ls-files -z -- '*.jl' | xargs -0 julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -e 'using Runic; exit(Runic.main(ARGS))' -- --check --diff
         if: ${{ matrix.version != 'nightly' }}
       - uses: julia-actions/julia-processcoverage@v1
         if: ${{ matrix.version == '1' || matrix.version == 'nightly' }}
