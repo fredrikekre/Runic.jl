@@ -129,7 +129,7 @@ function format_float_literals(ctx::Context, node::Node)
     end
     # Split up the pieces
     r = r"^(?<sgn>[+-])?(?<int>\d*)(?:\.?(?<frac>\d*))?(?:(?<epm>[eEf][+-]?)(?<exp>\d+))?$"
-    m = match(r, str)
+    m = match(r, str)::RegexMatch
     io = IOBuffer() # TODO: Could be reused?
     # Write the sign part
     if (sgn = m[:sgn]; sgn !== nothing)
@@ -379,10 +379,6 @@ function spaces_in_listlike(ctx::Context, node::Node)
     last_item_idx = findprev(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, closing_leaf_idx - 1)
     if last_item_idx !== nothing && last_item_idx <= opening_leaf_idx
         last_item_idx = nothing
-    end
-    last_comma_idx = findprev(x -> kind(x) === K",", kids, closing_leaf_idx - 1)
-    if last_comma_idx !== nothing && last_comma_idx <= opening_leaf_idx
-        last_comma_idx = nothing
     end
 
     # Multiline lists require leading and trailing newline
@@ -1383,7 +1379,7 @@ function replace_with_in(ctx::Context, node::Node)
     @assert kind(node) === K"=" && !is_leaf(node) && meta_nargs(node) == 3
     kids = verified_kids(node)
     pos = position(ctx.fmt_io)
-    vars_index = findfirst(!JuliaSyntax.is_whitespace, kids)
+    vars_index = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     # TODO: Need to insert whitespaces around `in` when replacing e.g. `i=I` with `iinI`.
     # However, at the moment it looks like the whitespace around operator pass does it's
     # thing first? I don't really know how though, because the for loop pass should be
@@ -2785,8 +2781,8 @@ function indent_multiline_strings(ctx::Context, node::Node)
     end
 
     # Opening triple quote
-    open_idx = findfirst(x -> kind(x) === triplekind, kids)
-    close_idx = findlast(x -> kind(x) === triplekind, kids)
+    open_idx = findfirst(x -> kind(x) === triplekind, kids)::Int
+    close_idx = findlast(x -> kind(x) === triplekind, kids)::Int
     @assert close_idx == length(kids) # ?
     open_kid = kids[open_idx]
     @assert kind(open_kid) === triplekind

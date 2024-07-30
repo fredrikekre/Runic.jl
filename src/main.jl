@@ -270,9 +270,9 @@ function main(argv)
 
         # Call the library to format the text
         ctx = try
-            ctx = Context(sourcetext; quiet, verbose, debug, diff, check)
-            format_tree!(ctx)
-            ctx
+            ctx′ = Context(sourcetext; quiet, verbose, debug, diff, check)
+            format_tree!(ctx′)
+            ctx′
         catch err
             print_progress && errln()
             # Limit stacktrace to 5 frames because Runic uses recursion a lot and 5 should
