@@ -2528,6 +2528,11 @@ function indent_ternary(ctx::Context, node::Node)
     return continue_all_newlines(ctx, node)
 end
 
+function indent_iterator(ctx::Context, node::Node)
+    @assert kind(node) === K"cartesian_iterator"
+    return continue_all_newlines(ctx, node)
+end
+
 function indent_assignment(ctx::Context, node::Node)
     kids = verified_kids(node)
     # Also catches for loop specifications (but at this point we have normalized `=` and `∈`
@@ -2728,6 +2733,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_parameters(ctx, node)
     elseif kind(node) === K"?"
         return indent_ternary(ctx, node)
+    elseif kind(node) === K"cartesian_iterator"
+        return indent_iterator(ctx, node)
     elseif kind(node) === K"try"
         return indent_try(ctx, node)
     elseif kind(node) === K"quote"

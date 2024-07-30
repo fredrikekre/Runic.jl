@@ -759,6 +759,9 @@ end
         # implicit tuple
         @test format_string("a,\n$(sp)b") == "a,\n    b"
         @test format_string("a,\n$(sp)b + \nb") == "a,\n    b +\n    b"
+        # K"cartesian_iterator"
+        @test format_string("for i in I,\n$(sp)j in J\n# body\nend") ==
+            "for i in I,\n        j in J\n    # body\nend"
     end
 end
 
