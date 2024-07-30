@@ -715,6 +715,11 @@ end
         for trip in ("\"\"\"", "```")
             @test format_string("println(io, $(trip)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(trip))") ==
                 "println(\n    io, $(trip)\n    a\n\n    b\n    $(trip),\n)"
+            # Triple string on same line
+            for b in ("", "\$b", "\$(b)", "\$(b)c")
+                @test format_string("println(io, $(trip)a$b$(trip))") ==
+                    "println(io, $(trip)a$b$(trip))"
+            end
         end
     end
 end

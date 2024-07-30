@@ -523,9 +523,8 @@ function contains_multiline_triple_string(ctx, node::Node)
                 if endswith(String(read_bytes(ctx, kid)), "\n")
                     return true
                 end
-            else
-                accept_node!(ctx, kid)
             end
+            accept_node!(ctx, kid)
         end
         @assert position(ctx.fmt_io) == pos + span(node)
     else
