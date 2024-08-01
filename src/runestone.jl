@@ -2053,10 +2053,18 @@ function indent_newlines_between_indices(
         if !indent_closing_token && i == close_idx - 1 && kind(kid) === K"NewlineWs"
             continue
         end
-        # Tag all direct NewlineWs kids
         if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
+            # Tag all direct NewlineWs kids
             kid = add_tag(kid, TAG_LINE_CONT)
             this_kid_changed = true
+        elseif is_triple_thing(kid) && (i != open_idx || has_tag(node, TAG_LINE_CONT))
+            # TODO: Might be too course to use the tag on the node here...
+            # Tag triple strings and triple string macros
+            kid′ = indent_triple_thing(ctx, kid)
+            if kid′ !== nothing
+                kid = kid′
+                this_kid_changed = true
+            end
         end
         # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
         # Skip leading newline if this kid is the first one
@@ -2449,6 +2457,29 @@ function indent_short_circuit(ctx::Context, node::Node)
     return indent_op_call(ctx, node)
 end
 
+function indent_triple_thing(ctx::Context, node::Node)
+    @assert is_triple_thing(node)
+    if is_triple_string(node)
+        return has_tag(node, TAG_LINE_CONT) ? nothing : add_tag(node, TAG_LINE_CONT)
+    elseif is_triple_string_macro(node)
+        kids = verified_kids(node)
+        @assert is_triple_string(kids[2])
+        kid′ = indent_triple_thing(ctx, kids[2])
+        kid′ === nothing && return nothing
+        kids′ = copy(kids)
+        kids′[2] = kid′
+        return make_node(node, kids′)
+    else
+        @assert kind(node) === K"juxtapose" && is_triple_string_macro(verified_kids(node)[1])
+        kids = verified_kids(node)
+        kid′ = indent_triple_thing(ctx, kids[1])
+        kid′ === nothing && return nothing
+        kids′ = copy(kids)
+        kids′[1] = kid′
+        return make_node(node, kids′)
+    end
+end
+
 # TODO: This function can be used for more things than just indent_using I think. Perhaps
 # with a max_depth parameter.
 function continue_all_newlines(
@@ -2462,6 +2493,13 @@ function continue_all_newlines(
         if kind(node) === K"NewlineWs" && !has_tag(node, TAG_LINE_CONT) &&
                 !((skip_last && is_last) || (skip_first && is_first))
             return add_tag(node, TAG_LINE_CONT)
+        else
+            return nothing
+        end
+    elseif is_triple_thing(node)
+        # Check skip_first inside to break the recursion and considier triple strings leafs
+        if !(skip_first && is_first)
+            return indent_triple_thing(ctx, node)
         else
             return nothing
         end
@@ -2508,12 +2546,6 @@ function indent_assignment(ctx::Context, node::Node)
     rhsidx = findnext(!JuliaSyntax.is_whitespace, kids, eqidx + 1)::Int
     r = (eqidx + 1):(rhsidx - 1)
     length(r) == 0 && return nothing
-    if length(r) == 1 && kind(kids[r[1]]) === K"Whitespace"
-        return nothing
-    end
-    if !any(i -> kind(kids[i]) === K"NewlineWs", r)
-        return nothing
-    end
     rhs = kids[rhsidx]
     # Some right hand sides have more "inertia" towards indentation. This is so that we
     # will end up with e.g.
@@ -2533,8 +2565,7 @@ function indent_assignment(ctx::Context, node::Node)
     # x = if cond
     # end
     # ```
-    blocklike = kind(rhs) in KSet"if try function let" ||
-        is_triple_string(rhs) || is_triple_string_macro(rhs)
+    blocklike = kind(rhs) in KSet"if try function let" || is_triple_thing(rhs)
     blocklike && return nothing # TODO: Perhaps delete superfluous newlines?
     # Continue all newlines between the `=` and the rhs
     kids′ = kids
@@ -2554,9 +2585,20 @@ function indent_assignment(ctx::Context, node::Node)
             push!(kids′, kid′)
         end
     end
+    # Mark the rhs for line continuation
+    if !has_tag(rhs, TAG_LINE_CONT)
+        rhs = add_tag(rhs, TAG_LINE_CONT)
+        changed = true
+        if kids′ === kids
+            kids′ = kids[1:(rhsidx - 1)]
+        end
+        push!(kids′, rhs)
+    else
+        changed && push!(kids′, rhs)
+    end
     if changed
         @assert kids !== kids′
-        for i in rhsidx:length(kids)
+        for i in (rhsidx + 1):length(kids)
             push!(kids′, kids[i])
         end
         return make_node(node, kids′)
@@ -2786,6 +2828,9 @@ function indent_multiline_strings(ctx::Context, node::Node)
     triplekind = kind(node) === K"string" ? K"\"\"\"" : K"```"
     itemkind = kind(node) === K"string" ? K"String" : K"CmdString"
     indent_span = 4 * ctx.indent_level
+    if has_tag(node, TAG_LINE_CONT)
+        indent_span += 4
+    end
     indented = indent_span > 0
 
     pos = position(ctx.fmt_io)

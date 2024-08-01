@@ -570,6 +570,11 @@ function is_triple_string_macro(node)
     return false
 end
 
+function is_triple_thing(node)
+    return is_triple_string(node) || is_triple_string_macro(node) ||
+        (kind(node) === K"juxtapose" && is_triple_string_macro(verified_kids(node)[1]))
+end
+
 ##########################
 # Utilities for IOBuffer #
 ##########################
