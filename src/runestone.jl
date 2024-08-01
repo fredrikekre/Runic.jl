@@ -2074,6 +2074,9 @@ function indent_call(ctx::Context, node::Node)
 end
 
 
+# TODO: I feel like this function can be removed. The use in `indent_assignment` can be
+# replaced with `continue_all_newlines` but the use in `indent_op_call` might have to be
+# tweaked slightly.
 function indent_newlines_between_indices(
         ctx::Context, node::Node, open_idx::Int, close_idx::Int;
         indent_closing_token::Bool = false,
@@ -2759,7 +2762,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
 end
 
 function indent_multiline_strings(ctx::Context, node::Node)
-    if !(kind(node) in KSet"string cmdstring" && JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG))
+    if !is_triple_string(node)
         return nothing
     end
     triplekind = kind(node) === K"string" ? K"\"\"\"" : K"```"

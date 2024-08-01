@@ -81,9 +81,6 @@ const TAG_LINE_CONT = UInt32(1) << 31
 const TAG_TRAILING_COMMA = TagType(1) << 4
 
 function add_tag(node::Node, tag::TagType)
-    if kind(node) !== K"parameters"
-        @assert is_leaf(node)
-    end
     return Node(head(node), span(node), node.kids, node.tags | tag)
 end
 
@@ -538,6 +535,11 @@ function contains_multiline_triple_string(ctx, node::Node)
         end
     end
     return false
+end
+
+function is_triple_string(node)
+    return kind(node) in KSet"string cmdstring" &&
+        JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG)
 end
 
 ##########################
