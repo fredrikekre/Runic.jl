@@ -933,3 +933,30 @@ end
             "begin\n    $(otriple)\n    a\\\n    b\n    $(ctriple)\nend"
     end
 end
+
+
+const share_julia = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
+if Sys.isunix() && isdir(share_julia)
+    @testset "JuliaLang/julia" begin
+        for testfolder in joinpath.(share_julia, ("base", "test"))
+            for (root, _, files) in walkdir(testfolder)
+                for file in files
+                    endswith(file, ".jl") || continue
+                    path = joinpath(root, file)
+                    try
+                        Runic.format_file(path, "/dev/null")
+                        @test true
+                    catch err
+                        if err isa JuliaSyntax.ParseError
+                            @warn "JuliaSyntax.ParseError for $path" err
+                            @test_broken false
+                        else
+                            @error "Error when formatting file $path"
+                            @test false
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
