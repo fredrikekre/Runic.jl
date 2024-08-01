@@ -2792,18 +2792,50 @@ function indent_multiline_strings(ctx::Context, node::Node)
         kid = kids[idx]
         if state === :expect_something
             if kind(kid) === itemkind
-                if indented && read_bytes(ctx, kid)[end] == UInt8('\n')
+                if indented && span(kid) > 0 && read_bytes(ctx, kid)[end] == UInt8('\n')
                     state = :expect_indent_ws
                 end
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)
             elseif kind(kid) === K"Whitespace"
-                # Delete this one
-                replace_bytes!(ctx, "", span(kid))
-                if kids′ === kids
-                    kids′ = kids[1:(idx - 1)]
+                bytes = read_bytes(ctx, kid)
+                # Multiline strings with trailing \ will have non-space characters in the
+                # Whitespace node. These should be preserved.
+                # TODO: Maybe this should be continue-indent to highlight the continuation?
+                if length(bytes) == 2 + indent_span && bytes[1] === UInt8('\\') && bytes[2] === UInt8('\n')
+                    @assert all(x -> x in (UInt8(' '), UInt8('\t')), @view(bytes[3:end]))
+                    # This node is correct
+                    accept_node!(ctx, kid)
+                    any_changes && push!(kids′, kid)
+                elseif length(bytes) >= 2 && bytes[1] === UInt8('\\') && bytes[2] === UInt8('\n')
+                    @assert all(x -> x in (UInt8(' '), UInt8('\t')), @view(bytes[3:end]))
+                    if length(bytes) < 2 + indent_span
+                        # Insert the missing spaces
+                        while length(bytes) < 2 + indent_span
+                            push!(bytes, UInt8(' '))
+                        end
+                    else
+                        @assert length(bytes) > 2 + indent_span
+                        # Truncate spaces
+                        resize!(bytes, 2 + indent_span)
+                    end
+                    replace_bytes!(ctx, bytes, span(kid))
+                    if kids′ === kids
+                        kids′ = kids[1:(idx - 1)]
+                    end
+                    kid′ = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), length(bytes))
+                    accept_node!(ctx, kid′)
+                    push!(kids′, kid′)
+                    any_changes = true
+                else
+                    # Delete this node completely
+                    @assert all(x -> x in (UInt8(' '), UInt8('\t')), bytes)
+                    replace_bytes!(ctx, "", span(kid))
+                    if kids′ === kids
+                        kids′ = kids[1:(idx - 1)]
+                    end
+                    any_changes = true
                 end
-                any_changes = true
             else
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)

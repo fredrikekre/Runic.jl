@@ -926,5 +926,10 @@ end
             "begin\n    $(otriple)a\n    a\n    b\n    $(ctriple)\nend"
         @test format_string("begin\n$(sp)$(otriple)\n$(sp)a\$(b)c\n$(sp)$(ctriple)\nend") ===
             "begin\n    $(otriple)\n    a\$(b)c\n    $(ctriple)\nend"
+        # Line continuation with `\`
+        @test format_string("$(otriple)\n$(sp)a\\\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(otriple)\na\\\nb\n$(ctriple)"
+        @test format_string("begin\n$(otriple)\n$(sp)a\\\n$(sp)b\n$(sp)$(ctriple)\nend") ===
+            "begin\n    $(otriple)\n    a\\\n    b\n    $(ctriple)\nend"
     end
 end
