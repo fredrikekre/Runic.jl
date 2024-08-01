@@ -415,6 +415,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
     elseif kind(node) === K"parameters"
         # For parameters the trailing comma is configured from the parent
         require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
+    elseif n_items > 0 && kind(kids[last_item_idx]) === K"macrocall" &&
+            !JuliaSyntax.has_flags(kids[last_item_idx], JuliaSyntax.PARENS_FLAG) &&
+            !is_string_macro(kids[last_item_idx])
+        require_trailing_comma = false
     elseif multiline
         require_trailing_comma = true
     elseif n_items > 0

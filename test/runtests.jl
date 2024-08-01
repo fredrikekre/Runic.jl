@@ -348,6 +348,12 @@ end
         @test format_string("@f($(sp)a$(sp);$(sp)b = 1$(sp))") == "@f(a; b = 1)"
         @test format_string("@f($(sp);$(sp)b$(sp))") == "@f(; b)"
     end
+    # https://github.com/fredrikekre/Runic.jl/issues/32
+    @test format_string("f(@m begin\nend)") == "f(\n    @m begin\n    end\n)"
+    @test format_string("f(@m(begin\nend))") == "f(\n    @m(\n        begin\n        end,\n    ),\n)"
+    @test format_string("f(r\"\"\"\nf\n\"\"\")") == "f(\n    r\"\"\"\n    f\n    \"\"\",\n)"
+    @test format_string("f(```\nf\n```)") == "f(\n    ```\n    f\n    ```,\n)"
+    @test format_string("f(x```\nf\n```)") == "f(\n    x```\n    f\n    ```,\n)"
 end
 
 @testset "whitespace around ->" begin

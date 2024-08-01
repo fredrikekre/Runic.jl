@@ -537,6 +537,15 @@ function contains_multiline_triple_string(ctx, node::Node)
     return false
 end
 
+function is_string_macro(node)
+    kind(node) === K"macrocall" || return false
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    return length(kids) >= 2 &&
+        kind(kids[1]) in KSet"StringMacroName CmdMacroName core_@cmd" &&
+        kind(kids[2]) in KSet"string cmdstring"
+end
+
 function is_triple_string(node)
     return kind(node) in KSet"string cmdstring" &&
         JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG)
