@@ -542,6 +542,18 @@ function is_triple_string(node)
         JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG)
 end
 
+function is_triple_string_macro(node)
+    if kind(node) === K"macrocall"
+        kids = verified_kids(node)
+        if length(kids) >= 2 && kind(kids[1]) in KSet"StringMacroName CmdMacroName core_@cmd" &&
+                kind(kids[2]) in KSet"string cmdstring" &&
+                JuliaSyntax.has_flags(kids[2], JuliaSyntax.TRIPLE_STRING_FLAG)
+            return true
+        end
+    end
+    return false
+end
+
 ##########################
 # Utilities for IOBuffer #
 ##########################

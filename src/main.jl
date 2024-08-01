@@ -315,9 +315,9 @@ function main(argv)
                 write(A, ctx.src_str)
                 write(B, seekstart(ctx.fmt_io))
                 cmd = ```
-                $(git) --no-pager diff --color=always --no-index --no-prefix
-                    $(relpath(A, dir)) $(relpath(B, dir))
-                ```
+                    $(git) --no-pager diff --color=always --no-index --no-prefix
+                        $(relpath(A, dir)) $(relpath(B, dir))
+                    ```
                 # `ignorestatus` because --no-index implies --exit-code
                 cmd = setenv(ignorestatus(cmd); dir = dir)
                 cmd = pipeline(cmd, stdout = stderr, stderr = stderr)

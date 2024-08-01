@@ -112,14 +112,14 @@ function format_float_literals(ctx::Context, node::Node)
     str = String(read_bytes(ctx, node))
     # Check and shortcut the happy path first
     r = r"""
-    ^
-    (?:[+-])?            # Optional sign
-    (?:(?:[1-9]\d*)|0)   # Non-zero followed by any digit, or just a single zero
-    \.                   # Decimal point
-    (?:(?:\d*[1-9])|0)   # Any digit with a final nonzero, or just a single zero
-    (?:[ef][+-]?(?:[1-9]\d*|0))?
-    $
-    """x
+        ^
+        (?:[+-])?            # Optional sign
+        (?:(?:[1-9]\d*)|0)   # Non-zero followed by any digit, or just a single zero
+        \.                   # Decimal point
+        (?:(?:\d*[1-9])|0)   # Any digit with a final nonzero, or just a single zero
+        (?:[ef][+-]?(?:[1-9]\d*|0))?
+        $
+        """x
     if occursin(r, str)
         return nothing
     end
@@ -2092,9 +2092,19 @@ function indent_newlines_between_indices(
         if !indent_closing_token && i == close_idx - 1 && kind(kid) === K"NewlineWs"
             continue
         end
-        # Tag all direct NewlineWs kids
         if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
+            # Tag all direct NewlineWs kids
             kid = add_tag(kid, TAG_LINE_CONT)
+            this_kid_changed = true
+        elseif is_triple_string(kid) && !has_tag(kid, TAG_LINE_CONT) && i != open_idx
+            # Tag triple strings
+            kid = add_tag(kid, TAG_LINE_CONT)
+            this_kid_changed = true
+        elseif is_triple_string_macro(kid) && !has_tag(verified_kids(kid)[2], TAG_LINE_CONT) && i != open_idx
+            # Tag triple string macros
+            grandkids = verified_kids(kid)
+            grandkids[2] = add_tag(grandkids[2], TAG_LINE_CONT)
+            kid = make_node(kid, grandkids)
             this_kid_changed = true
         end
         # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
@@ -2504,6 +2514,16 @@ function continue_all_newlines(
         else
             return nothing
         end
+    elseif is_triple_string(node) && !has_tag(node, TAG_LINE_CONT) &&
+            !(skip_first && is_first)
+        # !((skip_last && is_last) || (skip_first && is_first))
+        return add_tag(node, TAG_LINE_CONT)
+    elseif is_triple_string_macro(node) && !has_tag(verified_kids(node)[2], TAG_LINE_CONT) &&
+            !(skip_first && is_first)
+        # Tag triple string macros
+        kids = verified_kids(node)
+        kids[2] = add_tag(kids[2], TAG_LINE_CONT)
+        return make_node(node, kids)
     else
         any_kid_changed = false
         kids = verified_kids(node)
@@ -2768,6 +2788,9 @@ function indent_multiline_strings(ctx::Context, node::Node)
     triplekind = kind(node) === K"string" ? K"\"\"\"" : K"```"
     itemkind = kind(node) === K"string" ? K"String" : K"CmdString"
     indent_span = 4 * ctx.indent_level
+    if has_tag(node, TAG_LINE_CONT)
+        indent_span += 4
+    end
     indented = indent_span > 0
 
     pos = position(ctx.fmt_io)

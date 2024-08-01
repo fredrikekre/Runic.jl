@@ -910,7 +910,7 @@ end
         @test format_string("$(sp)$(otriple)\n$(sp)a\n\n$(sp)b\n$(sp)$(ctriple)") ===
             "$(sp)$(otriple)\na\n\nb\n$(ctriple)"
         @test format_string("x = $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
-            "x = $(otriple)\na\nb\n$(ctriple)"
+            "x = $(otriple)\n    a\n    b\n    $(ctriple)"
         @test format_string("$(sp)$(otriple)a\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
             "$(sp)$(otriple)a\na\nb\n$(ctriple)"
         @test format_string("$(sp)$(otriple)\n$(sp)a\$(b)c\n$(sp)$(ctriple)") ===
@@ -921,7 +921,7 @@ end
         @test format_string("begin\n$(sp)$(otriple)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(ctriple)\nend") ===
             "begin\n    $(otriple)\n    a\n\n    b\n    $(ctriple)\nend"
         @test format_string("begin\n$(sp)x = $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)\nend") ===
-            "begin\n    x = $(otriple)\n    a\n    b\n    $(ctriple)\nend"
+            "begin\n    x = $(otriple)\n        a\n        b\n        $(ctriple)\nend"
         @test format_string("begin\n$(sp)$(otriple)a\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)\nend") ===
             "begin\n    $(otriple)a\n    a\n    b\n    $(ctriple)\nend"
         @test format_string("begin\n$(sp)$(otriple)\n$(sp)a\$(b)c\n$(sp)$(ctriple)\nend") ===
@@ -931,6 +931,13 @@ end
             "$(otriple)\na\\\nb\n$(ctriple)"
         @test format_string("begin\n$(otriple)\n$(sp)a\\\n$(sp)b\n$(sp)$(ctriple)\nend") ===
             "begin\n    $(otriple)\n    a\\\n    b\n    $(ctriple)\nend"
+        # Triple strings with continuation indent
+        @test format_string("x = $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "x = $(otriple)\n    a\n    b\n    $(ctriple)"
+        @test format_string("$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple) * $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(otriple)\na\nb\n$(ctriple) * $(otriple)\n    a\n    b\n    $(ctriple)"
+        @test format_string("$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple) *\n$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(otriple)\na\nb\n$(ctriple) *\n    $(otriple)\n    a\n    b\n    $(ctriple)"
     end
 end
 
