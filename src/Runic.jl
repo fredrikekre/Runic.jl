@@ -100,9 +100,19 @@ include("chisels.jl")
 
 # Return the result of expr if it doesn't evaluate to `nothing`
 macro return_something(expr)
+    @assert Meta.isexpr(expr, :call, 3)
+    ctx = esc(expr.args[2])
+    node = esc(expr.args[3])
     return :(
-        let node = $(esc(expr))
-            node === nothing || return node
+        let pos = position($(ctx).fmt_io),
+            node′ = $(esc(expr))
+            if node′ === nullnode
+                error("TODO")
+            elseif node′ !== nothing
+                $(esc(:any_formatting_pass_made_changes)) = true
+                $(node) = node′
+            end
+            seek($(ctx).fmt_io, pos)
         end
     )
 end
@@ -299,29 +309,57 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
 
     # Go through the runestone and apply transformations.
     ctx.call_depth += 1
+    p = position(ctx.fmt_io)
+    any_formatting_pass_made_changes = false
     @return_something replace_tabs_with_four_spaces(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something no_leading_and_single_trailing_newline(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something max_three_consecutive_newlines(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something insert_delete_mark_newlines(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something trim_trailing_whitespace(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something format_hex_literals(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something format_oct_literals(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something format_float_literals(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_around_operators(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_around_assignments(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_around_anonymous_function(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_around_ternary(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_around_keywords(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_in_import_using(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_in_export_public(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something no_spaces_around_colon_etc(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something parens_around_op_calls_in_colon(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something for_loop_use_in(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something braces_around_where_rhs(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something indent_multiline_strings(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something four_space_indent(ctx, node)
+    @assert position(ctx.fmt_io) == p
     @return_something spaces_in_listlike(ctx, node)
+    @assert position(ctx.fmt_io) == p
     ctx.call_depth -= 1
+
+    if any_formatting_pass_made_changes
+        return node
+    end
 
     # If none of the transformations above changed the node (and thus returned back up one
     # level before recursing down here again) we i) accept it if it is a leaf or ii) recurse
