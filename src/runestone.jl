@@ -1760,7 +1760,7 @@ function indent_function_or_macro(ctx::Context, node::Node)
     sig_node = kids[sig_idx]
     # Identifier for regular names but "not function call" for empty functions with Unicode
     # symbols??
-    if kind(sig_node) === K"Identifier" || !(kind(sig_node) in KSet"call where :: tuple")
+    if kind(sig_node) === K"Identifier" || !(kind(sig_node) in KSet"call where :: tuple parens")
         # Empty function definition like `function f end`.
         # TODO: Make sure the spaces around are correct
         end_idx = findnext(x -> kind(x) === K"end", kids, sig_idx + 1)::Int
@@ -1773,7 +1773,7 @@ function indent_function_or_macro(ctx::Context, node::Node)
         return any_kid_changed ? node : nothing
     end
     # K"tuple" when this is an anonymous function
-    @assert !is_leaf(sig_node) && kind(sig_node) in KSet"call where :: tuple"
+    @assert !is_leaf(sig_node) && kind(sig_node) in KSet"call where :: tuple parens"
     # Fourth node is the function/macro body block.
     block_idx = sig_idx + 1
     block_node′ = indent_block(ctx, kids[block_idx])

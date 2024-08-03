@@ -316,7 +316,7 @@ end
 function unwrap_to_call_or_tuple(x)
     is_leaf(x) && return nothing
     @assert !is_leaf(x)
-    if kind(x) in KSet"call tuple"
+    if kind(x) in KSet"call tuple parens"
         return x
     end
     xkids = verified_kids(x)
@@ -324,6 +324,8 @@ function unwrap_to_call_or_tuple(x)
     return unwrap_to_call_or_tuple(xkids[xi])
 end
 
+# TODO: This should be reworked to be more specific, in particular K"parens" is maybe not
+# correct (found in e.g. `function(x * b)\n\nend`).
 function is_longform_anon_function(node::Node)
     is_leaf(node) && return false
     kind(node) === K"function" || return false
@@ -336,7 +338,7 @@ function is_longform_anon_function(node::Node)
     if maybe_tuple === nothing
         return false
     else
-        return kind(maybe_tuple) === K"tuple"
+        return kind(maybe_tuple) in KSet"tuple parens"
     end
 end
 

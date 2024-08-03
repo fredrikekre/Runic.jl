@@ -717,6 +717,9 @@ end
         # Functors
         @test format_string("function$(sp)(a::A)(b)\nx\nend") ==
             "function (a::A)(b)\n    x\nend"
+        # TODO: Spaces after function keyword isn't removed.
+        @test format_string("function$(sp)(a * b)\nreturn\nend") ==
+            "function$(sp)(a * b)\n    return\nend"
         # Multiline strings inside lists
         for trip in ("\"\"\"", "```")
             @test format_string("println(io, $(trip)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(trip))") ==
