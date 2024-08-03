@@ -1039,7 +1039,7 @@ function format_importpath(ctx::Context, node::Node)
         node′ = replace_first_leaf(node, spacebar)
     else
         # No whitespace, insert
-        @assert kind(first_leaf(node)) in KSet"Identifier @" ||
+        @assert kind(first_leaf(node)) in KSet"Identifier @ Comment" ||
             JuliaSyntax.is_operator(first_leaf(node))
         kids′ = copy(verified_kids(node))
         pushfirst!(kids′, spacebar)

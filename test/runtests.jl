@@ -848,6 +848,8 @@ end
                     "$(verb) A: $(a), $(b)"
                 @test format_string("$(verb) $(sp)A: $(sp)$(a)$(sp),\n$(b)") ==
                     "$(verb) A: $(a),\n    $(b)"
+                @test format_string("$(verb) $(sp)A: $(sp)$(a)$(sp),$(sp)# c\n$(b)") ==
+                    "$(verb) A: $(a), # c\n    $(b)"
             end
         end
     end
