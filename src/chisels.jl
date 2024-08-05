@@ -557,6 +557,8 @@ end
 # Utilities for IOBuffer #
 ##########################
 
+const backup_buffer = IOBuffer()
+
 # Replace bytes for a node at the current position in the IOBuffer. `size` is the current
 # window for the node, i.e. the number of bytes until the next node starts. If `size` is
 # smaller or larger than the length of `bytes` this method will shift the bytes for
@@ -568,7 +570,8 @@ function replace_bytes!(io::IOBuffer, bytes::Union{String, AbstractVector{UInt8}
         nw = write(io, bytes)
         @assert nb == nw
     else
-        backup = IOBuffer() # TODO: global const (with lock)?
+        # backup = IOBuffer() # TODO: global const (with lock)?
+        backup = truncate(backup_buffer, 0)
         seek(io, pos + size)
         @assert position(io) == pos + size
         nb_written_to_backup = write(backup, io)

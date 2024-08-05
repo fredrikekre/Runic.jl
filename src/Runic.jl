@@ -146,6 +146,7 @@ mutable struct Context
     next_sibling::Union{Node, Nothing}
     # parent::Union{Node, Nothing}
     lineage_kinds::Vector{JuliaSyntax.Kind}
+    tmp_buf::IOBuffer
 end
 
 function Context(
@@ -178,6 +179,7 @@ function Context(
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
         diff, filemode, call_depth, indent_level, prev_sibling, next_sibling, lineage_kinds,
+        IOBuffer(),
     )
 end
 
