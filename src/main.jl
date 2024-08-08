@@ -47,7 +47,7 @@ function print_help()
                <path>...
                    Input path(s) (files and/or directories) to process. For directories,
                    all files (recursively) with the '*.jl' suffix are used as input files.
-                   If path is `-` input is read from stdin and output written to stdout.
+                   If no path is given, or if path is `-`, input is read from stdin.
 
                -c, --check
                    Do not write output and exit with a non-zero code if the input is not
@@ -55,23 +55,17 @@ function print_help()
 
                -d, --diff
                    Print the diff between the input and formatted output to stderr.
-                   Requires `git` or `diff` to be installed.
-
-               --fail-fast
-                   Exit immediately after the first error. Only applicable when formatting
-                   multiple files in the same invocation.
+                   Requires `git` to be installed.
 
                --help
                    Print this message.
 
                -i, --inplace
-                   Edit files in place. This option is required when passing multiple input
-                   paths.
+                   Format files in place.
 
-               -o, --output <file>
-                   Output file to write formatted code to. If the specified file is `-`
-                   output is written to stdout. This option can not be used together with
-                   multiple input paths.
+               -o <file>, --output=<file>
+                   File to write formatted output to. If no output is given, or if the file
+                   is `-`, output is written to stdout.
         """,
     )
     return
@@ -95,9 +89,6 @@ end
 function main(argv)
     # Reset errno
     global errno = 0
-
-    # Split argv entries with `=`
-    argv = mapreduce(x -> split(x, "="; limit = 2), append!, argv; init = String[])
 
     # Default values
     inputfiles = String[]
@@ -130,86 +121,72 @@ function main(argv)
             check = true
         elseif x == "-vv" || x == "--debug"
             debug = verbose = true
-        elseif x == "-o" || x == "--output"
+        elseif x == "-o"
             if length(argv) < 1
-                return panic("expected output file as argument after `-o, --output`")
+                return panic("expected output file argument after `-o`")
             end
             outputfile = popfirst!(argv)
+        elseif (m = match(r"^--output=(.+)$", x); m !== nothing)
+            outputfile = String(m.captures[1]::SubString)
         else
             # Remaining arguments must be inputfile(s)
             maybe_expand_directory!(inputfiles, x)
             for x in argv
                 if x == "-"
                     return panic("input `-` can not be used with multiple files")
-                else
-                    maybe_expand_directory!(inputfiles, x)
                 end
+                maybe_expand_directory!(inputfiles, x)
             end
             break
         end
     end
 
-    # one of --check, --diff, --inplace, or --output must be specified
-    stdio_mode = length(inputfiles) == 1 && inputfiles[1] == "-" &&
-        (outputfile === nothing || outputfile == "-")
-    if !(inplace || check || diff || stdio_mode)
-        return panic(
-            "at least one of options `-c, --check`, `-d, --diff`, `-i, --inplace`, " *
-                "or `-o, --output` must be specified",
-        )
-    end
+    input_is_stdin = length(inputfiles) == 0 || inputfiles[1] == "-"
 
-    # --check can not be used with --inplace
+    # Check the arguments
     if inplace && check
-        return panic("options `-c, --check` and `-i, --inplace` are mutually exclusive")
+        return panic("options `--inplace` and `--check` are mutually exclusive")
     end
-
-    # stdin is the default input
-    if isempty(inputfiles)
-        return panic("no input files or directories specified")
-    end
-
-    # multiple files require --inplace or --check and no --output
-    if length(inputfiles) > 1
-        if !(inplace || check)
-            return panic("option `-i, --inplace` or `-c, --check` is required for multiple input files")
-        elseif outputfile !== nothing
-            return panic("option `-o, --output` can not be used together with multiple input files")
-        end
-    end
-
-    # --inplace can not be used when specifying output
     if inplace && outputfile !== nothing
-        @assert length(inputfiles) == 1
-        return panic("options `-i, --inplace` and `-o, --output` are  mutually exclusive")
+        return panic("options `--inplace` and `--output` are mutually exclusive")
+    end
+    if check && outputfile !== nothing
+        return panic("options `--check` and `--output` are mutually exclusive")
+    end
+    if inplace && input_is_stdin
+        return panic("option `--inplace` can not be used together with stdin input")
+    end
+    if outputfile !== nothing && length(inputfiles) > 1
+        return panic("option `--output` can not be used together with multiple input files")
+    end
+    if length(inputfiles) > 1 && !(inplace || check)
+        return panic("option `--inplace` or `--check` required with multiple input files")
     end
 
-    # --inplace is incompatible with stdin as input
-    if inplace && first(inputfiles) == "-"
-        return panic("option `-i` is incompatible with stdin as input")
+    if length(inputfiles) == 0
+        push!(inputfiles, "-")
     end
 
-    # --diff currently requires git
-    git = nothing
+    git = ""
     if diff
-        git = Sys.which("git")
-        if git === nothing
-            return panic("option `-d, --diff` requires `git` to be installed")
+        git = something(Sys.which("git"), git)
+        if isempty(git)
+            return panic("option `--diff` requires `git` to be installed")
         end
     end
 
     # Loop over the input files
     for inputfile in inputfiles
         # Read the input
-        input_is_file = true
-        if inputfile == "-"
-            input_is_file = false
+        if input_is_stdin
+            @assert length(inputfiles) == 1
             sourcetext = try
                 read(stdin, String)
             catch err
                 return panic("could not read input from stdin: ", err)
             end
         elseif isfile(inputfile)
+            @assert !input_is_stdin
             sourcetext = try
                 read(inputfile, String)
             catch err
@@ -221,14 +198,13 @@ function main(argv)
             continue
         end
 
-        # Check output
+        # Figure out output
         output_is_file = false
         output_is_samefile = false
         if inplace
             @assert outputfile === nothing
             @assert isfile(inputfile)
-            @assert input_is_file
-            # @assert length(inputfiles) == 1 # checked above
+            @assert !input_is_stdin
             output = inputfile
             output_is_samefile = output_is_file = true
         elseif check
@@ -236,11 +212,9 @@ function main(argv)
             output = devnull
         else
             @assert length(inputfiles) == 1
-            if stdio_mode
+            if outputfile === nothing || outputfile == "-"
                 output = stdout
-            elseif outputfile === nothing
-                return panic("no output file specified")
-            elseif isfile(outputfile) && input_is_file && samefile(outputfile, inputfile)
+            elseif isfile(outputfile) && !input_is_stdin && samefile(outputfile, inputfile)
                 return panic("can not use same file for input and output, use `-i` to modify a file in place")
             else
                 output = outputfile
@@ -249,9 +223,9 @@ function main(argv)
         end
 
         # Print file info unless quiet and unless stdin and/or stdout is involved
-        print_progress = !(quiet || !input_is_file || !(output_is_file || check))
+        print_progress = !(quiet || input_is_stdin || !output_is_file)
 
-        # Print file info unless quiet and unless formatting stdin -> stdout
+        # Print file info unless quiet and unless input/output is stdin/stdout
         if print_progress
             input_pretty = relpath(inputfile)
             if check
@@ -295,17 +269,19 @@ function main(argv)
                 print_progress && okln()
             end
         elseif changed || !inplace
+            @assert output !== devnull
             try
                 write(output, seekstart(ctx.fmt_io))
             catch err
                 print_progress && errln()
-                panic("could not write to output: ", err)
+                panic("could not write to output file `$(output)`: ", err)
             end
             print_progress && okln()
         else
             print_progress && okln()
         end
         if diff
+            @assert git !== ""
             mktempdir() do dir
                 a = mkdir(joinpath(dir, "a"))
                 b = mkdir(joinpath(dir, "b"))
