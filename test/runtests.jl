@@ -333,12 +333,13 @@ end
             "$(x){\n    $(a), $(a); $(b),\n}"
     end
     # Trailing `;` in paren-block
-    @test format_string("(a = A;)") == "(a = A)"
-    @test format_string("cond && (a = A;)") == "cond && (a = A)"
+    @test format_string("(a = A;)") == "(a = A;)"
+    @test format_string("cond && (a = A;)") == "cond && (a = A;)"
     @test format_string("(a = A; b = B;)") == "(a = A; b = B)"
-    @test format_string("(a = A;;)") == "(a = A)"
+    @test format_string("(a = A;;)") == "(a = A;)"
     @test format_string("(;;)") == format_string("( ; ; )") == "(;;)"
     @test format_string("(;)") == format_string("( ; )") == "(;)"
+    @test format_string("(@a b(c);)") == "(@a b(c);)"
     # https://github.com/fredrikekre/Runic.jl/issues/16
     @test format_string("(i for i in\nI)") == "(\n    i for i in\n        I\n)"
     @test format_string("f(i for i in\nI)") == "f(\n    i for i in\n        I\n)"

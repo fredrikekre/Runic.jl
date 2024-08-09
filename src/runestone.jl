@@ -407,7 +407,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
         require_trailing_comma = false # Leads to parser error
     elseif kind(node) in KSet"block"
         require_trailing_comma = false
-        allow_trailing_semi = n_items == 0
+        allow_trailing_semi = n_items < 2
     elseif kind(node) === K"parameters"
         # For parameters the trailing comma is configured from the parent
         require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
@@ -756,6 +756,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 replace_bytes!(ctx, "", span(kid′))
             elseif kind(node) === K"block" && kind(kid′) === K";" && allow_trailing_semi ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
+                allow_trailing_semi = n_items == 0 # Only one semicolon allowed
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"NewlineWs" ||
