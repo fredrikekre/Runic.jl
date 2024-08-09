@@ -130,7 +130,7 @@ require("conform").setup({
     formatters = {
         runic = {
             command = "julia",
-            args = {"--project=@runic", "-e", "using Runic; exit(Runic.main(ARGS))", "--", "-"},
+            args = {"--project=@runic", "-e", "using Runic; exit(Runic.main(ARGS))"},
         },
     },
     formatters_by_ft = {
@@ -149,6 +149,31 @@ enabled by adding the following to your configuration:
 ```lua
 vim.o.formatexpr = "v:lua.require('conform').formatexpr()"
 ```
+
+#### VS Code
+
+Runic can be used as a formatter in [VS Code](https://code.visualstudio.com/) using the
+extension [Custom Local Formatters](https://marketplace.visualstudio.com/items?itemName=jkillian.custom-local-formatters&ssr=false#overview).
+
+After installing the extension you can configure Runic as a local formatter by adding the
+following entry to your `settings.json`:
+
+```json
+"customLocalFormatters.formatters": [
+    {
+      "command": "julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))'",
+      "languages": ["julia"]
+    }
+]
+```
+
+Using the "Format Document" VS Code command will now format the file using Runic. Note that
+the first time you execute the command you will be prompted to select a formatter since the
+Julia language extension also comes with a formatter.
+
+> [!WARNING]
+> Note that Custom Local Formatters is a third party extension. It works as advertised but
+> use it at your own risk.
 
 ## Checking formatting
 
