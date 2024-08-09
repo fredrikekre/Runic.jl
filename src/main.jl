@@ -223,7 +223,7 @@ function main(argv)
         end
 
         # Print file info unless quiet and unless stdin and/or stdout is involved
-        print_progress = !(quiet || input_is_stdin || !output_is_file)
+        print_progress = !(quiet || input_is_stdin || !(output_is_file || check))
 
         # Print file info unless quiet and unless input/output is stdin/stdout
         if print_progress
@@ -251,7 +251,8 @@ function main(argv)
             print_progress && errln()
             # Limit stacktrace to 5 frames because Runic uses recursion a lot and 5 should
             # be enough to see where the error occurred.
-            bt = stacktrace(catch_backtrace())[1:5]
+            bt = stacktrace(catch_backtrace())
+            bt = bt[1:min(5, length(bt))]
             rc = panic(err, bt)
             if fail_fast
                 return rc
