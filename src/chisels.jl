@@ -310,7 +310,12 @@ end
 
 function is_assignment(node::Node)
     return JuliaSyntax.is_prec_assignment(node)
-    # return !is_leaf(node) && JuliaSyntax.is_prec_assignment(node)
+end
+
+# Assignment node but exclude loop variable assignment
+function is_variable_assignment(ctx, node::Node)
+    return !is_leaf(node) && is_assignment(node) &&
+        !(ctx.lineage_kinds[end] in KSet"for generator cartesian_iterator filter")
 end
 
 function unwrap_to_call_or_tuple(x)
@@ -551,6 +556,18 @@ end
 function is_triple_string(node)
     return kind(node) in KSet"string cmdstring" &&
         JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG)
+end
+
+function is_triple_string_macro(node)
+    if kind(node) === K"macrocall"
+        kids = verified_kids(node)
+        if length(kids) >= 2 &&
+                kind(kids[1]) in KSet"StringMacroName CmdMacroName core_@cmd" &&
+                is_triple_string(kids[2])
+            return true
+        end
+    end
+    return false
 end
 
 ##########################

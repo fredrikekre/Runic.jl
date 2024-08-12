@@ -2037,9 +2037,7 @@ function indent_call(ctx::Context, node::Node)
 end
 
 
-# TODO: I feel like this function can be removed. The use in `indent_assignment` can be
-# replaced with `continue_all_newlines` but the use in `indent_op_call` might have to be
-# tweaked slightly.
+# TODO: I feel like this function can be removed. It is only used in `indent_op_call`
 function indent_newlines_between_indices(
         ctx::Context, node::Node, open_idx::Int, close_idx::Int;
         indent_closing_token::Bool = false,
@@ -2495,19 +2493,76 @@ function indent_ternary(ctx::Context, node::Node)
 end
 
 function indent_iterator(ctx::Context, node::Node)
-    @assert kind(node) === K"cartesian_iterator"
+    @assert kind(node) in KSet"cartesian_iterator generator"
     return continue_all_newlines(ctx, node)
 end
 
 function indent_assignment(ctx::Context, node::Node)
+    @assert !is_leaf(node)
+    @assert is_variable_assignment(ctx, node)
     kids = verified_kids(node)
-    # Also catches for loop specifications (but at this point we have normalized `=` and `∈`
-    # to `in`).
-    op_idx = findfirst(x -> is_assignment(x) || kind(x) === K"in", kids)::Int
-    last_non_ws_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
-    return indent_newlines_between_indices(
-        ctx, node, op_idx, last_non_ws_idx; indent_closing_token = true,
-    )
+    lhsidx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
+    eqidx = findnext(!JuliaSyntax.is_whitespace, kids, lhsidx + 1)::Int
+    @assert kind(node) === kind(kids[eqidx])
+    @assert length(kids) > eqidx
+    rhsidx = findnext(!JuliaSyntax.is_whitespace, kids, eqidx + 1)::Int
+    r = (eqidx + 1):(rhsidx - 1)
+    length(r) == 0 && return nothing
+    if length(r) == 1 && kind(kids[r[1]]) === K"Whitespace"
+        return nothing
+    end
+    if !any(i -> kind(kids[i]) === K"NewlineWs", r)
+        return nothing
+    end
+    rhs = kids[rhsidx]
+    # Some right hand sides have more "inertia" towards indentation. This is so that we
+    # will end up with e.g.
+    # ```
+    # x =
+    # if cond
+    # end
+    # ```
+    # instead of
+    # ```
+    # x =
+    #     if cond
+    # end
+    # ```
+    # TODO: Remove newlines inbetween the `=` and the rhs to end up with
+    # ```
+    # x = if cond
+    # end
+    # ```
+    blocklike = kind(rhs) in KSet"if try function let" ||
+        is_triple_string(rhs) || is_triple_string_macro(rhs)
+    blocklike && return nothing # TODO: Perhaps delete superfluous newlines?
+    # Continue all newlines between the `=` and the rhs
+    kids′ = kids
+    changed = false
+    for i in r
+        kid = kids[i]
+        if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
+            kid′ = add_tag(kid, TAG_LINE_CONT)
+            changed = true
+        else
+            kid′ = kid
+        end
+        if changed
+            if kids′ === kids
+                kids′ = kids[1:(i - 1)]
+            end
+            push!(kids′, kid′)
+        end
+    end
+    if changed
+        @assert kids !== kids′
+        for i in rhsidx:length(kids)
+            push!(kids′, kids[i])
+        end
+        return make_node(node, kids′)
+    else
+        return nothing
+    end
 end
 
 function indent_paren_block(ctx::Context, node::Node)
@@ -2693,13 +2748,13 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_short_circuit(ctx, node)
     elseif kind(node) in KSet"using import export public"
         return indent_using_import_export_public(ctx, node)
-    elseif is_assignment(node)
+    elseif is_variable_assignment(ctx, node)
         return indent_assignment(ctx, node)
     elseif kind(node) === K"parameters"
         return indent_parameters(ctx, node)
     elseif kind(node) === K"?"
         return indent_ternary(ctx, node)
-    elseif kind(node) === K"cartesian_iterator"
+    elseif kind(node) in KSet"cartesian_iterator generator"
         return indent_iterator(ctx, node)
     elseif kind(node) === K"try"
         return indent_try(ctx, node)
