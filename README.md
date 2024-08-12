@@ -82,7 +82,7 @@ OPTIONS
        <path>...
            Input path(s) (files and/or directories) to process. For directories,
            all files (recursively) with the '*.jl' suffix are used as input files.
-           If path is `-` input is read from stdin and output written to stdout.
+           If no path is given, or if path is `-`, input is read from stdin.
 
        -c, --check
            Do not write output and exit with a non-zero code if the input is not
@@ -90,23 +90,17 @@ OPTIONS
 
        -d, --diff
            Print the diff between the input and formatted output to stderr.
-           Requires `git` or `diff` to be installed.
-
-       --fail-fast
-           Exit immediately after the first error. Only applicable when formatting
-           multiple files in the same invocation.
+           Requires `git` to be installed.
 
        --help
            Print this message.
 
        -i, --inplace
-           Edit files in place. This option is required when passing multiple input
-           paths.
+           Format files in place.
 
-       -o, --output <file>
-           Output file to write formatted code to. If the specified file is `-`
-           output is written to stdout. This option can not be used together with
-           multiple input paths.
+       -o <file>, --output=<file>
+           File to write formatted output to. If no output is given, or if the file
+           is `-`, output is written to stdout.
 ```
 
 In addition to the CLI there is also the two function `Runic.format_file` and
