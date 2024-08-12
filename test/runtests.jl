@@ -78,28 +78,6 @@ end
         ("0x" * z(n) * "1" => "0x" * z(31) * "1" for n in 16:31)...,
         # Hex BigInt
         ("0x" * z(n) * "1" => "0x" * z(n) * "1" for n in 32:35)...,
-        # Octal UInt8
-        ("0o" * z(n) * "1" => "0o001" for n in 0:2)...,
-        "0o377" => "0o377", # typemax(UInt8)
-        # Octal UInt16
-        "0o400" => "0o000400", # typemax(UInt8) + 1
-        ("0o" * z(n) * "1" => "0o000001" for n in 3:5)...,
-        "0o177777" => "0o177777", # typemax(UInt16)
-        # Octal UInt32
-        "0o200000" => "0o00000200000", # typemax(UInt16) + 1
-        ("0o" * z(n) * "1" => "0o00000000001" for n in 6:10)...,
-        "0o37777777777" => "0o37777777777", # typemax(UInt32)
-        # Octal UInt64
-        "0o40000000000" => "0o0000000000040000000000", # typemax(UInt32) + 1
-        ("0o" * z(n) * "1" => "0o" * z(21) * "1" for n in 11:21)...,
-        "0o1777777777777777777777" => "0o1777777777777777777777", # typemax(UInt64)
-        # Octal UInt128
-        "0o2" * z(21) => "0o" * z(21) * "2" * z(21), # typemax(UInt64) + 1
-        ("0o" * z(n) * "1" => "0o" * z(42) * "1" for n in 22:42)...,
-        "0o3" * "7"^42 => "0o3" * "7"^42, # typemax(UInt128)
-        # Octal BigInt
-        "0o4" * z(42) => "0o4" * z(42), # typemax(UInt128) + 1
-        "0o7" * z(42) => "0o7" * z(42),
     ]
     mod = Module()
     for (a, b) in test_cases

@@ -67,44 +67,6 @@ function format_hex_literals(ctx::Context, node::Node)
     return node′
 end
 
-function format_oct_literals(ctx::Context, node::Node)
-    kind(node) === K"OctInt" || return nothing
-    @assert flags(node) == 0
-    @assert is_leaf(node)
-    spn = span(node)
-    @assert spn > 2 # 0o prefix + something more
-    # Padding depends on the value of the literal...
-    str = String(read_bytes(ctx, node))
-    n = tryparse(UInt128, str)
-    if n === nothing || spn > 45
-        # Do nothing: BigInt oct literal
-        return nothing
-    end
-    # Compute the target span
-    target_span_from_value =
-        n <= typemax(UInt8) ? 5 : n <= typemax(UInt16) ? 8 :
-        n <= typemax(UInt32) ? 13 : n <= typemax(UInt64) ? 24 :
-        n <= typemax(UInt128) ? 45 : error("unreachable")
-    target_spans = (5, 8, 13, 24, 45)
-    i = findfirst(x -> x >= spn, target_spans)::Int
-    target_span_from_source = target_spans[i]
-    target_span = max(target_span_from_value, target_span_from_source)
-    if spn == target_span
-        # Do nothing: correctly formatted oct literal
-        return nothing
-    end
-    # Insert leading zeros
-    bytes = read_bytes(ctx, node)
-    while length(bytes) < target_span
-        insert!(bytes, 3, '0')
-    end
-    nb = replace_bytes!(ctx, bytes, spn)
-    @assert nb == length(bytes) == target_span
-    # Create new node and return it
-    node′ = Node(head(node), nb)
-    return node′
-end
-
 function format_float_literals(ctx::Context, node::Node)
     kind(node) in KSet"Float Float32" || return nothing
     @assert flags(node) == 0

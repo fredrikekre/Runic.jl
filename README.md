@@ -560,14 +560,6 @@ Hex literals are padded with zeros to better highlight the resulting type of the
 +0x00012345
 ```
 
-Similarly, oct literals are also padded:
-```diff
--0o644
--0o644644
-+0o000644
-+0o00000644644
-```
-
 ### Parentheses around operator calls in colon
 
 Add parentheses around operator calls in colon expressions to better highlight the low
