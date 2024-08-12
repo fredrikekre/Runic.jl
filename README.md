@@ -257,7 +257,7 @@ This is a list of things that Runic currently is doing:
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
  - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
- - [Trailing whitespace](#trailing-whitespace)
+ - [Whitespace miscellaneous](#whitespace-miscellaneous)
 
 ### Line width limit
 
@@ -343,26 +343,6 @@ would be "correct". Such a chain looks better the way it is currently formatted:
 x = a + b *
     c +
     d
-```
-
-### Vertical spacing
-
-Runic removes empty vertical spacing so that there are at maximum two empty lines between
-expressions. Examples:
-```diff
--function f()
--     x = 1
--
--
--
--    return x
--end
-+function f()
-+     x = 1
-+
-+
-+    return x
-+end
 ```
 
 ### Spaces around operators, assignment, etc
@@ -598,10 +578,48 @@ Braces are consistently used around the right hand side of `where` expressions. 
 +T where {T <: S} where {S <: Any}
 ```
 
-### Trailing whitespace
+### Whitespace miscellaneous
+
+
+#### Trailing spaces
 
 Trailing spaces are removed. Example:
 ```diff
 -1 + 1 
 +1 + 1
 ```
+
+#### Tabs
+
+Tabs are replaced with spaces. Example:
+```diff
+-function f()
+-	return 1
+-end
++function f()
++    return 1
++end
+```
+
+#### Vertical spacing
+
+Extra vertical spacing is trimmed so that there are at maximum two empty lines
+between expressions. Examples:
+```diff
+-function f()
+-     x = 1
+-
+-
+-
+-    return x
+-end
++function f()
++     x = 1
++
++
++    return x
++end
+```
+
+Any newlines at the start of a file are removed and if the file ends with more
+than one newline the extra ones are removed.
