@@ -130,6 +130,7 @@ mutable struct Context
     # Global state
     indent_level::Int # track (hard) indentation level
     call_depth::Int # track call-depth level for debug printing
+    format_on::Bool
     # Current state
     # node::Union{Node, Nothing}
     prev_sibling::Union{Node, Nothing}
@@ -165,9 +166,11 @@ function Context(
     call_depth = 0
     prev_sibling = next_sibling = nothing
     lineage_kinds = JuliaSyntax.Kind[]
+    format_on = true
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, filemode, call_depth, indent_level, prev_sibling, next_sibling, lineage_kinds,
+        diff, filemode, indent_level, call_depth, format_on, prev_sibling, next_sibling,
+        lineage_kinds,
     )
 end
 
@@ -198,6 +201,96 @@ function replace_bytes!(ctx::Context, bytes::Union{String, AbstractVector{UInt8}
     return replace_bytes!(ctx.fmt_io, bytes, Int(sz))
 end
 
+# Validate the toggle comments
+function validate_toggle(ctx, kids, i)
+    toplevel = length(ctx.lineage_kinds) == 1 && ctx.lineage_kinds[1] === K"toplevel"
+    valid = true
+    prev = get(kids, i - 1, nothing)
+    if prev === nothing
+        valid &= toplevel && i == 1
+    else
+        valid &= kind(prev) === K"NewlineWs" || (toplevel && i == 1 && kind(prev) === K"Whitespace")
+    end
+    next = get(kids, i + 1, nothing)
+    if next === nothing
+        valid &= toplevel && i == lastindex(kids)
+    else
+        valid &= kind(next) === K"NewlineWs"
+    end
+    return valid
+end
+
+function check_format_toggle(ctx::Context, node::Node, kid::Node, i::Int)::Union{Int, Nothing}
+    @assert ctx.format_on
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    @assert kid === kids[i]
+    # Check if the kid is a comment
+    kind(kid) === K"Comment" || return nothing
+    # Check the comment content
+    reg = r"^#(!)? (runic|format): (on|off)$"
+    str = String(read_bytes(ctx, kid))
+    offmatch = match(reg, str)
+    offmatch === nothing && return nothing
+    toggle = offmatch.captures[3]::AbstractString
+    if toggle == "on"
+        @debug "Ignoring `$(offmatch.match)` toggle since formatting is already on."
+        return nothing
+    end
+    if !validate_toggle(ctx, kids, i)
+        @debug "Ignoring `$(offmatch.match)` toggle since it is not on a separate line."
+        return nothing
+    end
+    # Find a matching closing toggle
+    pos = position(ctx.fmt_io)
+    accept_node!(ctx, kid)
+    for j in (i + 1):length(kids)
+        lkid = kids[j]
+        if kind(lkid) !== K"Comment"
+            accept_node!(ctx, lkid)
+            continue
+        end
+        str = String(read_bytes(ctx, lkid))
+        onmatch = match(reg, str)
+        if onmatch === nothing
+            accept_node!(ctx, lkid)
+            continue
+        end
+        # Check that the comments match in style
+        if offmatch.captures[1] != onmatch.captures[1] ||
+                offmatch.captures[2] != onmatch.captures[2]
+            @debug "Ignoring `$(onmatch.match)` toggle since it doesn't match the " *
+                "style of the `$(offmatch.match)` toggle."
+            accept_node!(ctx, lkid)
+            continue
+        end
+        toggle = onmatch.captures[3]::AbstractString
+        if toggle == "off"
+            @debug "Ignoring `$(onmatch.match)` toggle since formatting is already off."
+            accept_node!(ctx, lkid)
+            continue
+        end
+        @assert toggle == "on"
+        if !validate_toggle(ctx, kids, j)
+            @debug "Ignoring `$(onmatch.match)` toggle since it is not on a separate line."
+            accept_node!(ctx, lkid)
+            continue
+        end
+        seek(ctx.fmt_io, pos)
+        return j
+    end
+    # Reset the stream
+    seek(ctx.fmt_io, pos)
+    # No closing toggle found. This is allowed as a top level statement so that complete
+    # files can be ignored by just a comment at the top.
+    if length(ctx.lineage_kinds) == 1 && ctx.lineage_kinds[1] === K"toplevel"
+        return typemax(Int)
+    end
+    @debug "Ignoring `$(offmatch.match)` toggle since no matching `on` toggle " *
+        "was found at the same tree level."
+    return nothing
+end
+
 function format_node_with_kids!(ctx::Context, node::Node)
     # If the node doesn't have kids there is nothing to do here
     if is_leaf(node)
@@ -219,6 +312,10 @@ function format_node_with_kids!(ctx::Context, node::Node)
     kids′ = kids
     any_kid_changed = false
 
+    # This method should never be called if formatting is off for this node
+    @assert ctx.format_on
+    format_on_idx = typemin(Int)
+
     # Loop over all the kids
     for (i, kid) in pairs(kids)
         # Set the siblings: previous from kids′, next from kids
@@ -227,6 +324,18 @@ function format_node_with_kids!(ctx::Context, node::Node)
         kid′ = kid
         this_kid_changed = false
         itr = 0
+        # Check if this kid toggles formatting off
+        if ctx.format_on && i > format_on_idx
+            format_on_idx′ = check_format_toggle(ctx, node, kid, i)
+            if format_on_idx′ !== nothing
+                ctx.format_on = false
+                format_on_idx = format_on_idx′
+            end
+        elseif !ctx.format_on && i > format_on_idx - 2
+            # The formatter is turned on 2 steps before so that we can format
+            # the indent of the `#! format: on` comment.
+            ctx.format_on = true
+        end
         # Loop until this node reaches a steady state and is accepted
         while true
             # Keep track of the stream position and reset it below if the node is changed
@@ -286,6 +395,11 @@ Format a node. Return values:
  - `node::JuliaSyntax.GreenNode`: The node should be replaced with the new node
 """
 function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
+    # If formatting is off just return
+    if !ctx.format_on
+        accept_node!(ctx, node)
+        return nothing
+    end
     node_kind = kind(node)
 
     # Not that two separate `if`s are used here because a node like `else` can be both

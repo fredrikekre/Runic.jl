@@ -924,6 +924,68 @@ end
     end
 end
 
+@testset "# runic: (on|off)" begin
+    for exc in ("", "!"), word in ("runic", "format")
+        on = "#$(exc) $(word): on"
+        off = "#$(exc) $(word): off"
+        bon = "#$(exc == "" ? "!" : "") $(word): on"
+        # Disable rest of the file from top level comment
+        @test format_string("$off\n1+1") == "$off\n1+1"
+        @test format_string("1+1\n$off\n1+1") == "1 + 1\n$off\n1+1"
+        @test format_string("1+1\n$off\n1+1\n$on\n1+1") == "1 + 1\n$off\n1+1\n$on\n1 + 1"
+        @test format_string("1+1\n$off\n1+1\n$bon\n1+1") == "1 + 1\n$off\n1+1\n$bon\n1+1"
+        # Toggle inside a function
+        @test format_string(
+            """
+            function f()
+                $off
+                1+1
+                $on
+                1+1
+            end
+            """,
+        ) == """
+        function f()
+            $off
+            1+1
+            $on
+            1 + 1
+        end
+        """
+        @test format_string(
+            """
+            function f()
+                $off
+                1+1
+                $bon
+                1+1
+            end
+            """,
+        ) == """
+        function f()
+            $off
+            1 + 1
+            $bon
+            1 + 1
+        end
+        """
+        @test format_string(
+            """
+            function f()
+                $off
+                1+1
+                1+1
+            end
+            """,
+        ) == """
+        function f()
+            $off
+            1 + 1
+            1 + 1
+        end
+        """
+    end
+end
 
 const share_julia = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
 if Sys.isunix() && isdir(share_julia)
