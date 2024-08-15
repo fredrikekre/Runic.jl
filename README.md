@@ -233,13 +233,14 @@ exec 1>&2
 # Run Runic on added and modified files
 git diff-index -z --name-only --diff-filter=AM master | \
     grep -z '\.jl$' | \
-    xargs -0 --no-run-if-empty -p julia --project=@runic -m Runic --check --diff
+    xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
 ```
 
 ## Formatting specification
 
 This is a list of things that Runic currently is doing:
 
+ - [Toggle formatting](#toggle-formatting)
  - [Line width limit](#line-width-limit)
  - [Indentation](#indentation)
  - [Spaces around operators, assignment, etc](#spaces-around-operators-assignment-etc)
@@ -252,6 +253,41 @@ This is a list of things that Runic currently is doing:
  - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [Whitespace miscellaneous](#whitespace-miscellaneous)
+
+### Toggle formatting
+
+It is possible to toggle formatting around expressions where you want to disable Runic's
+formatting. This can be useful in cases where manual formatting increase the readability of
+the code. For example, manually aligned array literals may look worse when formatted by
+Runic.
+
+The source comments `# runic: off` and `# runic: on` will toggle the formatting off and on,
+respectively. The comments must be on their own line, they must be on the same level in the
+syntax tree, and they must come in pairs.
+
+> [!NOTE]
+> For compatibility with [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl) the
+> comments `#! format: off` and `#! format: on` are also recognized by Runic.
+
+For example, the following code will toggle off the formatting for the array literal `A`:
+
+```julia
+function foo()
+    a = rand(2)
+    # runic: off
+    A = [
+        -1.00   1.41
+         3.14  -4.05
+    ]
+    # runic: on
+    return A * a
+end
+```
+
+An exception to the pairing rule is made at top level where a `# runic: off` comment will
+disable formatting for the remainder of the file. This is so that a full file can be
+excluded from formatting without having to add a `# runic: on` comment at the end of the
+file.
 
 ### Line width limit
 
