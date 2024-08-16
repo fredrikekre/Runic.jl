@@ -735,12 +735,16 @@ end
             # Blocklike RHS
             for thing in (
                     "if c\n    x\nend", "try\n    x\ncatch\n    y\nend",
+                    "let c = 1\n    c\nend", "function()\n    x\nend",
                     "\"\"\"\nfoo\n\"\"\"", "r\"\"\"\nfoo\n\"\"\"",
-                    "```\nfoo\n```", "r```\nfoo\n```",
+                    "```\nfoo\n```", "r```\nfoo\n```", "```\nfoo\n```x",
                 )
                 @test format_string("a =$(nl)$(thing)") == "a =$(nl)$(thing)"
                 @test format_string("a =$(nl)# comment$(nl)$(thing)") ==
                     "a =$(nl)# comment$(nl)$(thing)"
+                @test format_string("a = $(thing)") == "a = $(thing)"
+                @test format_string("a = #=comment=#$(sp)$(thing)") ==
+                    "a = #=comment=# $(thing)"
             end
         end
         # using/import
@@ -937,6 +941,29 @@ end
             "$(otriple)\na\\\nb\n$(ctriple)"
         @test format_string("begin\n$(otriple)\n$(sp)a\\\n$(sp)b\n$(sp)$(ctriple)\nend") ===
             "begin\n    $(otriple)\n    a\\\n    b\n    $(ctriple)\nend"
+        # Triple strings with continuation indent
+        @test format_string("x = $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "x = $(otriple)\na\nb\n$(ctriple)"
+        @test format_string("$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple) * $(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(otriple)\na\nb\n$(ctriple) * $(otriple)\n    a\n    b\n    $(ctriple)"
+        @test format_string("$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple) *\n$(otriple)\n$(sp)a\n$(sp)b\n$(sp)$(ctriple)") ===
+            "$(otriple)\na\nb\n$(ctriple) *\n    $(otriple)\n    a\n    b\n    $(ctriple)"
+        # Implicit tuple
+        @test format_string("$(otriple)\nabc\n$(ctriple), $(otriple)\ndef\n$(ctriple)") ===
+            "$(otriple)\nabc\n$(ctriple), $(otriple)\n    def\n    $(ctriple)"
+        @test format_string("$(otriple)\nabc\n$(ctriple),\n$(otriple)\ndef\n$(ctriple)") ===
+            "$(otriple)\nabc\n$(ctriple),\n    $(otriple)\n    def\n    $(ctriple)"
+        # Operator chains
+        @test format_string("$(otriple)\nabc\n$(ctriple) * $(otriple)\ndef\n$(ctriple)") ===
+            "$(otriple)\nabc\n$(ctriple) * $(otriple)\n    def\n    $(ctriple)"
+        @test format_string("$(otriple)\nabc\n$(ctriple) *\n$(otriple)\ndef\n$(ctriple)") ===
+            "$(otriple)\nabc\n$(ctriple) *\n    $(otriple)\n    def\n    $(ctriple)"
+        @test format_string("x = $(otriple)\nabc\n$(ctriple) *\n$(otriple)\ndef\n$(ctriple)") ===
+            "x = $(otriple)\n    abc\n    $(ctriple) *\n    $(otriple)\n    def\n    $(ctriple)"
+        @test format_string("x = $(otriple)\nabc\n$(ctriple) *\n\"def\"") ===
+            "x = $(otriple)\n    abc\n    $(ctriple) *\n    \"def\""
+        @test format_string("x = \"abc\" *\n$(otriple)\ndef\n$(ctriple)") ===
+            "x = \"abc\" *\n    $(otriple)\n    def\n    $(ctriple)"
     end
 end
 
@@ -961,13 +988,13 @@ end
             end
             """,
         ) == """
-        function f()
-            $off
-            1+1
-            $on
-            1 + 1
-        end
-        """
+            function f()
+                $off
+                1+1
+                $on
+                1 + 1
+            end
+            """
         @test format_string(
             """
             function f()
@@ -978,13 +1005,13 @@ end
             end
             """,
         ) == """
-        function f()
-            $off
-            1 + 1
-            $bon
-            1 + 1
-        end
-        """
+            function f()
+                $off
+                1 + 1
+                $bon
+                1 + 1
+            end
+            """
         @test format_string(
             """
             function f()
@@ -994,12 +1021,12 @@ end
             end
             """,
         ) == """
-        function f()
-            $off
-            1 + 1
-            1 + 1
-        end
-        """
+            function f()
+                $off
+                1 + 1
+                1 + 1
+            end
+            """
     end
 end
 
