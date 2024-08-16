@@ -724,8 +724,24 @@ end
             end
         end
         # assignment
-        for op in ("=", "+=")
-            @test format_string("a $(op)\n$(sp)b") == "a $(op)\n    b"
+        for nl in ("\n", "\n\n")
+            # Regular line continuation of newlines between `=` and rhs
+            for op in ("=", "+=", ".=", ".+=")
+                @test format_string("a $(op)$(nl)b") == "a $(op)$(nl)    b"
+                @test format_string("a $(op)$(nl)# comment$(nl)b") ==
+                    "a $(op)$(nl)    # comment$(nl)    b"
+            end
+            @test format_string("f(a) =$(nl)b") == "f(a) =$(nl)    b"
+            # Blocklike RHS
+            for thing in (
+                    "if c\n    x\nend", "try\n    x\ncatch\n    y\nend",
+                    "\"\"\"\nfoo\n\"\"\"", "r\"\"\"\nfoo\n\"\"\"",
+                    "```\nfoo\n```", "r```\nfoo\n```",
+                )
+                @test format_string("a =$(nl)$(thing)") == "a =$(nl)$(thing)"
+                @test format_string("a =$(nl)# comment$(nl)$(thing)") ==
+                    "a =$(nl)# comment$(nl)$(thing)"
+            end
         end
         # using/import
         for verb in ("using", "import")
