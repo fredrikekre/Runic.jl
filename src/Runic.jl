@@ -147,6 +147,7 @@ function Context(
     src_tree = Node(
         JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true, version = v"2-"),
     )
+    normalize_tree!(src_tree)
     fmt_io = IOBuffer()
     fmt_tree = nothing
     # Set up buffers
@@ -356,6 +357,9 @@ function format_node_with_kids!(ctx::Context, node::Node)
                 # The node should be replaced with the new one. Reset the stream and try
                 # again until it is accepted.
                 @assert kid′′ isa Node
+                if !is_leaf(kid′′)
+                    @assert span(kid′′) == mapreduce(span, +, verified_kids(kid′′); init = 0)
+                end
                 this_kid_changed = true
                 seek(ctx.fmt_io, fmt_pos)
                 kid′ = kid′′

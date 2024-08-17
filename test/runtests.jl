@@ -438,7 +438,7 @@ end
         @test format_string("A$(sp)where$(sp){T}$(sp)where$(sp){S}") == "A where {T} where {S}"
         @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
         @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
-        @test format_string("f()$(sp)do; y end") == "f() do; y end"
+        @test format_string("f()$(sp)do; y end") == "f() do;\n    y\nend"
         # After `where` (anywhere else?) a newline can be used instead of a space
         @test format_string("A$(sp)where$(sp)\n{A}") == "A where\n{A}"
     end
@@ -503,17 +503,18 @@ end
         @test format_string("function f()\n$(sp)x\n$(sp)end") ==
             "function f()\n    x\nend"
         @test format_string("function f end") == "function f end"
+        @test_broken format_string("function f\nend") == "function f\nend" # TODO
         @test format_string("function ∉ end") == "function ∉ end"
         # macro-end
         @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
             "macro f()\n    x\nend"
-        @test format_string("macro f() x end") == "macro f() x end"
+        @test format_string("macro f() x end") == "macro f()\n    x\nend"
         # let-end
         @test format_string("let a = 1\n$(sp)x\n$(sp)end") == "let a = 1\n    x\nend"
         @test format_string("let\n$(sp)x\n$(sp)end") == "let\n    x\nend"
         @test format_string("let a = 1 # a\n$(sp)x\n$(sp)end") ==
             "let a = 1 # a\n    x\nend"
-        @test format_string("let a = 1; x end") == "let a = 1; x end"
+        @test format_string("let a = 1; x end") == "let a = 1\n    ; x\nend"
         # begin-end
         @test format_string("begin\n$(sp)x\n$(sp)end") ==
             "begin\n    x\nend"
@@ -635,7 +636,7 @@ end
             @test format_string("$(b)module \$(A)\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module \$(A)\n    x\nend\nf"
             # single line module
-            @test format_string("$(b)module A; x; end\nf") == "$(b)module A; x; end\nf"
+            @test format_string("$(b)module A; x; end\nf") == "$(b)module A\n    ; x;\nend\nf"
         end
         # tuple
         @test format_string("(a,\n$(sp)b)") == "(\n    a,\n    b,\n)"
@@ -690,9 +691,9 @@ end
                 "$(t)[\n    a for a in b\n]"
         end
         # Single line begin-end
-        @test format_string("begin x\n$(sp)end") == "begin x\nend"
-        @test format_string("begin x end") == "begin x end"
-        @test format_string("begin\n    x end") == "begin\n    x end"
+        @test format_string("begin x\n$(sp)end") == "begin\n    x\nend"
+        @test format_string("begin x end") == "begin\n    x\nend"
+        @test format_string("begin\n    x end") == "begin\n    x\nend"
         # Functors
         @test format_string("function$(sp)(a::A)(b)\nx\nend") ==
             "function (a::A)(b)\n    x\nend"
@@ -964,6 +965,144 @@ end
             "x = $(otriple)\n    abc\n    $(ctriple) *\n    \"def\""
         @test format_string("x = \"abc\" *\n$(otriple)\ndef\n$(ctriple)") ===
             "x = \"abc\" *\n    $(otriple)\n    def\n    $(ctriple)"
+    end
+end
+
+# TODO: This can be used for `;`-trimming by a loop and delimeters
+@testset "blocks start and end with newline" begin
+    # for/while-end
+    for verb in ("for", "while")
+        @test format_string("$(verb) x in X x end") ==
+            format_string("$(verb) x in X\nx end") ==
+            format_string("$(verb) x in X x\nend") ==
+            "$(verb) x in X\n    x\nend"
+    end
+    # if-end
+    @test format_string("if a x end") == "if a\n    x\nend"
+    # if-else-end
+    @test format_string("if a x else y end") == "if a\n    x\nelse\n    y\nend"
+    # if-elseif-end
+    @test format_string("if a x elseif b y end") == "if a\n    x\nelseif b\n    y\nend"
+    # if-elseif-elseif-end
+    @test format_string("if a x elseif b y elseif c z end") ==
+        "if a\n    x\nelseif b\n    y\nelseif c\n    z\nend"
+    # if-elseif-else-end
+    @test format_string("if a x elseif b y else z end") ==
+        "if a\n    x\nelseif b\n    y\nelse\n    z\nend"
+    # if-elseif-elseif-else-end
+    @test format_string("if a elseif b elseif c else end") ==
+        "if a elseif b elseif c else end"
+    @test_broken format_string("if a elseif b elseif c else x end") ==
+        "if a\nelseif b\nelseif c\nelse\n    x\nend"
+    @test format_string("if a x elseif b y elseif c z else u end") ==
+        "if a\n    x\nelseif b\n    y\nelseif c\n    z\nelse\n    u\nend"
+    # try-catch-end
+    @test format_string("try x catch\ny end") == "try\n    x\ncatch\n    y\nend"
+    # try-catch(err)-end
+    @test format_string("try x catch err y end") == "try\n    x\ncatch err\n    y\nend"
+    # try-catch-finally-end
+    @test format_string("try x catch\ny finally z end") ==
+        "try\n    x\ncatch\n    y\nfinally\n    z\nend"
+    # try-catch(err)-finally-end
+    @test format_string("try x catch err y finally z end") ==
+        "try\n    x\ncatch err\n    y\nfinally\n    z\nend"
+    # try-finally-catch-end (yes, this is allowed...)
+    @test format_string("try x finally y catch\nz end") ==
+        "try\n    x\nfinally\n    y\ncatch\n    z\nend"
+    # try-finally-catch(err)-end
+    @test format_string("try x finally y catch err z end") ==
+        "try\n    x\nfinally\n    y\ncatch err\n    z\nend"
+    if VERSION >= v"1.8"
+        # try-catch-else-end
+        @test format_string("try x catch\ny else z end") ==
+            "try\n    x\ncatch\n    y\nelse\n    z\nend"
+        # try-catch(err)-else-end
+        @test format_string("try x catch err y else z end") ==
+            "try\n    x\ncatch err\n    y\nelse\n    z\nend"
+        # try-catch-else-finally-end
+        @test format_string("try x catch\ny else z finally z end") ==
+            "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
+        # try-catch(err)-else-finally-end
+        @test format_string("try x catch err y else z finally z end") ==
+            "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
+    end
+    # do-end
+    @test format_string("open() do\na end") == "open() do\n    a\nend"
+    @test format_string("open() do io a end") == "open() do io\n    a\nend"
+    # let-end
+    @test format_string("let a = 1\nx end") == "let a = 1\n    x\nend"
+    @test format_string("let\nx end") == "let\n    x\nend"
+    @test format_string("let a = 1 # a\nx end") == "let a = 1 # a\n    x\nend"
+    # function-end
+    @test format_string("function f() x end") == "function f()\n    x\nend"
+    @test format_string("function() x end") == "function()\n    x\nend"
+    @test format_string("function () x end") == "function ()\n    x\nend"
+    @test format_string("function f end") == "function f end"
+    # macro-end
+    @test format_string("macro f() x end") == "macro f()\n    x\nend"
+    # quote-end
+    @test format_string("quote x end") == "quote\n    x\nend"
+    # begin-end
+    @test format_string("begin x end") == "begin\n    x\nend"
+    # (mutable) struct
+    for mut in ("", "mutable ")
+        @test format_string("$(mut)struct A x end") == "$(mut)struct A\n    x\nend"
+    end
+    # module-end, baremodule-end
+    for b in ("", "bare")
+        # Just a module
+        @test format_string("$(b)module A x end") == "$(b)module A\nx\nend"
+        # Comment before
+        @test format_string("# c\n$(b)module A x end") == "# c\n$(b)module A\nx\nend"
+        # Docstring before
+        @test format_string("\"doc\"\n$(b)module A x end") == "\"doc\"\n$(b)module A\nx\nend"
+        # code before
+        @test format_string("f\n$(b)module A x end") == "f\n$(b)module A\n    x\nend"
+        @test format_string("f\n$(b)module A x end\n$(b)module B x end") ==
+            "f\n$(b)module A\n    x\nend\n$(b)module B\n    x\nend"
+        # code after
+        @test format_string("$(b)module A x end\nf") == "$(b)module A\n    x\nend\nf"
+        # nested modules
+        @test format_string("$(b)module A $(b)module B x end end") ==
+            "$(b)module A\n$(b)module B\n    x\nend\nend"
+        # nested documented modules
+        @test format_string("\"doc\"\n$(b)module A\n\"doc\"\n$(b)module B x end\nend") ==
+            "\"doc\"\n$(b)module A\n\"doc\"\n$(b)module B\n    x\nend\nend"
+    end
+    # Empty blocks
+    for verb in ("for", "while")
+        @test format_string("$(verb) x in X end") == "$(verb) x in X end"
+        @test format_string("$(verb) x in X\nend") == "$(verb) x in X\nend"
+    end
+    @test format_string("if a end") == "if a end"
+    @test format_string("if a\nend") == "if a\nend"
+    @test format_string("if a else end") == "if a else end"
+    @test_broken format_string("if a x else end") == "if a\n    x\nelse\nend"
+    @test format_string("if a elseif b end") == "if a elseif b end"
+    @test_broken format_string("if a x elseif b end") == "if a\n    x\nelseif b\nend"
+    @test format_string("if a elseif b elseif c end") == "if a elseif b elseif c end"
+    @test_broken format_string("if a x elseif b elseif c end") ==
+        "if a\n    x\nelseif b\nelseif c\nend"
+    @test format_string("if a elseif b else end") == "if a elseif b else end"
+    @test_broken format_string("if a x elseif b else end") == "if a\n    x\nelseif b\nelse\nend"
+    @test format_string("if a elseif b elseif c else end") ==
+        "if a elseif b elseif c else end"
+    @test_broken format_string("if a elseif b elseif c else x end") ==
+        "if a\nelseif b\nelseif c\nelse\n    x\nend"
+    @test format_string("try catch y end") == "try catch y end"
+    @test_broken format_string("try catch y y end") == "try\ncatch y\n    y\nend"
+    @test format_string("open() do io end") == "open() do io end"
+    @test format_string("function f() end") == "function f() end"
+    @test format_string("macro f() end") == "macro f() end"
+    @test format_string("quote end") == "quote end"
+    @test format_string("begin end") == "begin end"
+    for mut in ("", "mutable ")
+        @test format_string("$(mut)struct A end") == "$(mut)struct A end"
+    end
+    for b in ("", "bare")
+        @test format_string("$(b)module A end") == "$(b)module A end"
+        @test format_string("$(b)module A $(b)module B end end") ==
+            "$(b)module A\n$(b)module B end\nend"
     end
 end
 
