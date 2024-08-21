@@ -1,2 +1,4 @@
 /Manifest.toml
 *.cov
+/lcov.info
+*.pb.gz
