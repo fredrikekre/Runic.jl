@@ -66,6 +66,155 @@ function stringify_flags(node::Node)
     return String(take!(io))
 end
 
+# The parser is somewhat inconsistent(?) with where e.g. whitespace nodes end up so in order
+# to simplify the formatting code we normalize some things.
+function normalize_tree!(node)
+    is_leaf(node) && return
+    kids = verified_kids(node)
+
+    # Move standalone K"NewlineWs" (and other??) nodes from between the var block and the
+    # body block in K"let" nodes.
+    # Note that this happens before the whitespace into block normalization below because
+    # for let we want to move it to the subsequent block instead.
+    if kind(node) === K"let"
+        varsidx = findfirst(x -> kind(x) === K"block", kids)::Int
+        bodyidx = findnext(x -> kind(x) === K"block", kids, varsidx + 1)::Int
+        r = (varsidx + 1):(bodyidx - 1)
+        if length(r) > 0
+            items = kids[r]
+            deleteat!(kids, r)
+            bodyidx -= length(r)
+            body = kids[bodyidx]
+            prepend!(verified_kids(body), items)
+            kids[bodyidx] = make_node(body, verified_kids(body))
+        end
+    end
+
+    # Normalize K"Whitespace" nodes in blocks. For example in `if x y end` the space will be
+    # outside the block just before the K"end" node, but in `if x\ny\nend` the K"NewlineWs"
+    # will end up inside the block.
+    if kind(node) in KSet"function if elseif for while try do macro module baremodule let struct module"
+        blockidx = findfirst(x -> kind(x) === K"block", kids)
+        while blockidx !== nothing && blockidx < length(kids)
+            if kind(kids[blockidx + 1]) !== K"Whitespace"
+                # TODO: This repeats the computation below...
+                blockidx = findnext(x -> kind(x) === K"block", kids, blockidx + 1)
+                continue
+            end
+            # Pop the ws and push it into the block instead
+            block = kids[blockidx]
+            blockkids = verified_kids(block)
+            @assert !(kind(blockkids[end]) in KSet"Whitespace NewlineWs")
+            push!(blockkids, popat!(kids, blockidx + 1))
+            # Remake the block to recompute the span
+            kids[blockidx] = make_node(block, blockkids)
+            # Find next block
+            blockidx = findnext(x -> kind(x) === K"block", kids, blockidx + 1)
+        end
+    end
+
+    # Normalize K"Whitespace" nodes in if-elseif-else chains where the node needs to move
+    # many steps into the last else block...
+    if kind(node) === K"if"
+        elseifidx = findfirst(x -> kind(x) === K"elseif", kids)
+        if elseifidx !== nothing
+            endidx = findnext(x -> kind(x) === K"end", kids, elseifidx + 1)::Int
+            if elseifidx + 2 == endidx && kind(kids[elseifidx + 1]) === K"Whitespace"
+                # Pop the ws and push it into the last block instead
+                ws = popat!(kids, elseifidx + 1)
+                elseifnode = insert_into_last_else_block(kids[elseifidx], ws)
+                @assert elseifnode !== nothing
+                kids[elseifidx] = elseifnode
+            end
+        end
+    end
+
+    # Normalize K"Whitespace" nodes in try-catch-finally-else
+    if kind(node) === K"try"
+        catchidx = findfirst(x -> kind(x) in KSet"catch finally else", kids)
+        while catchidx !== nothing
+            if kind(kids[catchidx + 1]) === K"Whitespace"
+                ws = popat!(kids, catchidx + 1)
+                catchnode = insert_into_last_catchlike_block(kids[catchidx], ws)
+                @assert catchnode !== nothing
+                kids[catchidx] = catchnode
+            end
+            catchidx = findnext(x -> kind(x) in KSet"catch finally else", kids, catchidx + 1)
+        end
+    end
+
+    # Normalize K"NewlineWs" nodes in empty do-blocks
+    if kind(node) === K"do"
+        tupleidx = findfirst(x -> kind(x) === K"tuple", kids)::Int
+        blockidx = findnext(x -> kind(x) === K"block", kids, tupleidx + 1)::Int
+        @assert tupleidx + 1 == blockidx
+        tuple = kids[tupleidx]
+        tuplekids = verified_kids(tuple)
+        if kind(tuplekids[end]) === K"NewlineWs"
+            # If the tuple ends with a K"NewlineWs" node we move it into the block
+            block = kids[blockidx]
+            blockkids = verified_kids(block)
+            @assert kind(blockkids[1]) !== K"Whitespace"
+            pushfirst!(blockkids, pop!(tuplekids))
+            # Remake the nodes to recompute the spans
+            kids[tupleidx] = make_node(tuple, tuplekids)
+            kids[blockidx] = make_node(block, blockkids)
+        end
+    end
+
+    @assert kids === verified_kids(node)
+    for kid in kids
+        ksp = span(kid)
+        normalize_tree!(kid)
+        @assert span(kid) == ksp
+    end
+    # We only move around things inside this node so the span should be unchanged
+    @assert span(node) == mapreduce(span, +, kids; init = 0)
+    return node
+end
+
+function insert_into_last_else_block(node, ws)
+    @assert kind(node) === K"elseif"
+    kids = verified_kids(node)
+    elseifidx = findfirst(x -> !is_leaf(x) && kind(x) === K"elseif", kids)
+    if elseifidx !== nothing
+        @assert elseifidx == lastindex(kids)
+        elseifnode′ = insert_into_last_else_block(kids[elseifidx], ws)
+        @assert elseifnode′ !== nothing
+        kids[elseifidx] = elseifnode′
+        return make_node(node, kids)
+    end
+    # Find the else block
+    elseifblockidx = findfirst(x -> kind(x) === K"block", kids)::Int
+    elseleafidx = findnext(x -> kind(x) === K"else", kids, elseifblockidx + 1)::Int
+    elseblockidx = findnext(x -> kind(x) === K"block", kids, elseleafidx + 1)::Int
+    @assert elseblockidx == lastindex(kids)
+    elseblock = kids[elseblockidx]
+    # Insert the node
+    elseblockkids = verified_kids(elseblock)
+    @assert !(kind(elseblockkids[end]) in KSet"NewlineWs Whitespace")
+    push!(elseblockkids, ws)
+    # Remake the else block
+    kids[elseblockidx] = make_node(elseblock, elseblockkids)
+    # Remake and return the elseif node
+    return make_node(node, kids)
+end
+
+function insert_into_last_catchlike_block(node, ws)
+    @assert kind(node) in KSet"catch finally else"
+    kids = verified_kids(node)
+    catchblockidx = findfirst(x -> kind(x) === K"block", kids)::Int
+    @assert catchblockidx == lastindex(kids)
+    catchblock = kids[catchblockidx]
+    catchblockkids = verified_kids(catchblock)
+    @assert !(kind(catchblockkids[end]) in KSet"NewlineWs Whitespace")
+    push!(catchblockkids, ws)
+    # Remake the catch block
+    kids[catchblockidx] = make_node(catchblock, catchblockkids)
+    # Remake and return the catch node
+    return make_node(node, kids)
+end
+
 
 # Node tags #
 
