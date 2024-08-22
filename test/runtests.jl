@@ -1033,6 +1033,7 @@ end
         end
         # do-end
         @test format_string("open() do\na$(d)end") == "open() do\n    a\nend"
+        @test format_string("open() do\nend") == "open() do\nend"
         @test_broken format_string("open() do;a$(d)end") == "open() do\n    a\nend"
         @test_broken format_string("open() do ;a$(d)end") == "open() do\n    a\nend"
         @test format_string("open() do io$(d)a end") == "open() do io\n    a\nend"

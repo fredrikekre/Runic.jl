@@ -154,7 +154,9 @@ function normalize_tree!(node)
             # If the tuple ends with a K"NewlineWs" node we move it into the block
             block = kids[blockidx]
             blockkids = verified_kids(block)
-            @assert kind(blockkids[1]) !== K"Whitespace"
+            if length(blockkids) > 0
+                @assert kind(blockkids[1]) !== K"Whitespace"
+            end
             pushfirst!(blockkids, pop!(tuplekids))
             # Remake the nodes to recompute the spans
             kids[tupleidx] = make_node(tuple, tuplekids)
