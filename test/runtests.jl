@@ -1164,7 +1164,7 @@ end
     """
     for prefix in (
             "begin", "quote", "for i in I", "let", "let x = 1", "while cond",
-            "if cond", "macro f()", "function f()",
+            "if cond", "macro f()", "function f()", "f() do", "f() do x",
         )
         @test format_string("$(prefix)\n$(body)\nend") == "$prefix\n$(bodyfmt)\nend"
     end
@@ -1184,6 +1184,10 @@ end
         format_string("try\n$(bodyfmt)\ncatch err\n$(bodyfmt)\nfinally\n$(bodyfmt)\nend")
     @test format_string("try\n$(body)\ncatch err\n$(body)\nelse\n$(body)\nend") ==
         format_string("try\n$(bodyfmt)\ncatch err\n$(bodyfmt)\nelse\n$(bodyfmt)\nend")
+    for mut in ("", "mutable ")
+        @test format_string("$(mut)struct A\na::Int;\nend") ==
+            "$(mut)struct A\n    a::Int\nend"
+    end
     # Top-level semicolons are kept (useful if you want to supress output in various
     # contexts)
     let str = """

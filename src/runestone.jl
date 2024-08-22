@@ -3279,7 +3279,7 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
         r = remove_trailing_semicolon_block(ctx, node)
         return r
     end
-    if !(!is_leaf(node) && kind(node) in KSet"if elseif quote function for let while macro try catch finally else")
+    if !(!is_leaf(node) && kind(node) in KSet"if elseif quote function for let while macro try catch finally else do struct")
         return nothing
     end
     if kind(node) === K"quote" && JuliaSyntax.has_flags(node, JuliaSyntax.COLON_QUOTE)
