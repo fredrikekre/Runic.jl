@@ -21,8 +21,7 @@ function trim_trailing_whitespace(ctx::Context, node::Node)
     nb = replace_bytes!(ctx, str′, span(node))
     @assert nb != span(node)
     # Create new node and return it
-    node′ = Node(head(node), nb)
-    return node′
+    return make_node(node, nb)
 end
 
 function replace_tabs_with_four_spaces(ctx::Context, node::Node)
@@ -39,7 +38,7 @@ function replace_tabs_with_four_spaces(ctx::Context, node::Node)
         tabidx = findnext(x -> x == UInt8('\t'), bytes, tabidx + 4)
     end
     nb = replace_bytes!(ctx, bytes, span(node))
-    return Node(head(node), nb, tags(node))
+    return make_node(node, nb)
 end
 
 function format_hex_literals(ctx::Context, node::Node)

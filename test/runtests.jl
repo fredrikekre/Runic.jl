@@ -61,6 +61,9 @@ end
     println(io, "  ")
     str = String(take!(io))
     @test format_string(str) == "a = 1\nb = 2\n\n\n"
+    # Trailing whitespace just before closing indent token
+    @test format_string("begin\n    a = 1 \nend") == "begin\n    a = 1\nend"
+    @test format_string("let\n    a = 1 \nend") == "let\n    a = 1\nend"
 end
 
 @testset "Hex/oct/bin literal integers" begin

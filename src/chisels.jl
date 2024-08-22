@@ -336,6 +336,11 @@ function make_node(node::Node, kids′::Vector{Node}, tags = node.tags)
     return Node(head(node), span′, kids′, tags)
 end
 
+function make_node(node::Node, span′::Integer, tags = node.tags)
+    @assert is_leaf(node)
+    return Node(head(node), span′, (), tags)
+end
+
 # TODO: Remove?
 first_leaf(node::Node) = nth_leaf(node, 1)
 
