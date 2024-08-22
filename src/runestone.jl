@@ -1809,7 +1809,6 @@ function indent_let(ctx::Context, node::Node)
     return any_kid_changed ? make_node(node, kids) : nothing
 end
 
-# TODO: Reuse indent_block?
 function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
     @assert kind(node) === K"block"
     pos = position(ctx.fmt_io)
@@ -3199,4 +3198,132 @@ function indent_multiline_strings(ctx::Context, node::Node)
     # Reset stream
     seek(ctx.fmt_io, pos)
     return any_changes ? make_node(node, kids′) : nothing
+end
+
+# Pattern matching for "bad" semicolons:
+#  - `\s*;\n` -> `\n`
+#  - `\s*;\s*#\n` -> `\s* \s*#\n`
+function remove_trailing_semicolon_block(ctx::Context, node::Node)
+    kind(node) === K"block" || return nothing
+    @assert !is_leaf(node)
+    pos = position(ctx.fmt_io)
+    kids = verified_kids(node)
+    kids′ = kids
+    dealias() = kids′ === kids ? copy(kids) : kids′
+    function kmatch(i, kinds)
+        if i < 1 || i + length(kinds) - 1 > length(kids′)
+            return false
+        end
+        for (j, k) in pairs(kinds)
+            if kind(kids′[i + j - 1]) !== k
+                return false
+            end
+        end
+        return true
+    end
+    semi_idx = findfirst(x -> kind(x) === K";", kids′)
+    while semi_idx !== nothing
+        search_index = semi_idx + 1
+        if kmatch(semi_idx, KSet"; NewlineWs")
+            # `\s*;\n` -> `\n`
+            kids′ = dealias()
+            space_before = kmatch(semi_idx - 1, KSet"Whitespace ;")
+            if space_before
+                span_overwrite = span(kids′[semi_idx - 1]) + span(kids′[semi_idx])
+                nodes_to_skip_over = semi_idx - 2
+                deleteat!(kids′, semi_idx)
+                deleteat!(kids′, semi_idx - 1)
+                search_index = semi_idx - 1
+            else
+                span_overwrite = span(kids′[semi_idx])
+                nodes_to_skip_over = semi_idx - 1
+                deleteat!(kids′, semi_idx)
+                search_index = semi_idx
+            end
+            let p = position(ctx.fmt_io)
+                for i in 1:nodes_to_skip_over
+                    accept_node!(ctx, kids′[i])
+                end
+                replace_bytes!(ctx, "", span_overwrite)
+                seek(ctx.fmt_io, p)
+            end
+        elseif kmatch(semi_idx, KSet"; Comment NewlineWs") ||
+                kmatch(semi_idx, KSet"; Whitespace Comment NewlineWs")
+            # `\s*;\s*#\n` -> `\s* \s*#\n`
+            # The `;` is replaced by ` ` here in case comments are aligned
+            kids′ = dealias()
+            ws_span = span(kids′[semi_idx])
+            @assert ws_span == 1
+            space_before = kmatch(semi_idx - 1, KSet"Whitespace ;")
+            if space_before
+                ws_span += span(kids′[semi_idx - 1])
+            end
+            space_after = kmatch(semi_idx, KSet"; Whitespace")
+            if space_after
+                ws_span += span(kids′[semi_idx + 1])
+            end
+            let p = position(ctx.fmt_io)
+                for i in 1:(semi_idx - 1)
+                    accept_node!(ctx, kids′[i])
+                end
+                replace_bytes!(ctx, " ", span(kids′[semi_idx]))
+                seek(ctx.fmt_io, p)
+            end
+            # Insert new node
+            @assert kind(kids′[semi_idx]) === K";"
+            ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), ws_span)
+            kids′[semi_idx] = ws
+            # Delete the consumed whitespace nodes
+            space_after && deleteat!(kids′, semi_idx + 1)
+            space_before && deleteat!(kids′, semi_idx - 1)
+        end
+        # Compute next index
+        semi_idx = findnext(x -> kind(x) === K";", kids′, search_index)
+    end
+    # Reset the stream and return
+    seek(ctx.fmt_io, pos)
+    return kids′ === kids ? nothing : make_node(node, kids′)
+end
+
+function remove_trailing_semicolon(ctx::Context, node::Node)
+    if is_begin_block(node)
+        r = remove_trailing_semicolon_block(ctx, node)
+        return r
+    end
+    if !(!is_leaf(node) && kind(node) in KSet"if elseif quote function for let while macro try catch finally else")
+        return nothing
+    end
+    if kind(node) === K"quote" && JuliaSyntax.has_flags(node, JuliaSyntax.COLON_QUOTE)
+        # This node is `:(...)` and not `quote...end`
+        return nothing
+    end
+    pos = position(ctx.fmt_io)
+    kids = verified_kids(node)
+    kids′ = kids
+    block_idx = findfirst(x -> kind(x) === K"block", kids′)
+    if kind(node) === K"let"
+        # The first block of let is the variables
+        block_idx = findnext(x -> kind(x) === K"block", kids′, block_idx + 1)
+    end
+    any_changed = false
+    while block_idx !== nothing
+        let p = position(ctx.fmt_io)
+            for i in 1:(block_idx - 1)
+                accept_node!(ctx, kids′[i])
+            end
+            block′ = remove_trailing_semicolon_block(ctx, kids′[block_idx])
+            if block′ !== nothing
+                any_changed = true
+                if kids′ === kids
+                    kids′ = copy(kids)
+                end
+                kids′[block_idx] = block′
+            end
+            seek(ctx.fmt_io, p)
+        end
+        block_idx = findnext(x -> kind(x) === K"block", kids′, block_idx + 1)
+    end
+    # Reset the stream and return
+    seek(ctx.fmt_io, pos)
+    return any_changed ? make_node(node, kids′) : nothing
 end

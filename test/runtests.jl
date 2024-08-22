@@ -5,7 +5,7 @@ using Runic:
 using Test:
     @test, @testset, @test_broken, @inferred, @test_throws
 using JuliaSyntax:
-    JuliaSyntax
+    JuliaSyntax, @K_str, @KSet_str
 
 @testset "Node" begin
     node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))
@@ -51,6 +51,12 @@ end
     @test read(io, String) == "xc"
     seekstart(io)
     @test read(io, String) == "axc"
+end
+
+@testset "JuliaSyntax assumptions" begin
+    # Duplicates are kept in KSet
+    @test KSet"; ;" == (K";", K";")
+    @test KSet"Whitespace ; Whitespace" == (K"Whitespace", K";", K"Whitespace")
 end
 
 @testset "Trailing whitespace" begin
@@ -1106,6 +1112,87 @@ end
         @test format_string("$(b)module A end") == "$(b)module A end"
         @test format_string("$(b)module A $(b)module B end end") ==
             "$(b)module A\n$(b)module B end\nend"
+    end
+end
+
+@testset "trailing semicolon" begin
+    body = """
+        # Semicolons on their own lines
+        ;
+        ;;
+        # Trailing semicolon
+        a;
+        a;;
+        # Trailing semicolon with ws after
+        b; 
+        b;; 
+        # Trailing semicolon with ws before
+        c ;
+        c ;;
+        # Trailing semicolon with ws before and after
+        d ; 
+        d ;; 
+        # Trailing semicolon before comment
+        e;# comment
+        e;;# comment
+        # Trailing semicolon before ws+comment
+        f; # comment
+        f;; # comment
+    """
+    bodyfmt = """
+        # Semicolons on their own lines
+
+
+        # Trailing semicolon
+        a
+        a
+        # Trailing semicolon with ws after
+        b
+        b
+        # Trailing semicolon with ws before
+        c
+        c
+        # Trailing semicolon with ws before and after
+        d
+        d
+        # Trailing semicolon before comment
+        e # comment
+        e  # comment
+        # Trailing semicolon before ws+comment
+        f  # comment
+        f   # comment
+    """
+    for prefix in (
+            "begin", "quote", "for i in I", "let", "let x = 1", "while cond",
+            "if cond", "macro f()", "function f()",
+        )
+        @test format_string("$(prefix)\n$(body)\nend") == "$prefix\n$(bodyfmt)\nend"
+    end
+    @test format_string(
+        "if cond1\n$(body)\nelseif cond2\n$(body)\nelseif cond3\n$(body)\nelse\n$(body)\nend",
+    ) ==
+        "if cond1\n$(bodyfmt)\nelseif cond2\n$(bodyfmt)\nelseif cond3\n$(bodyfmt)\nelse\n$(bodyfmt)\nend"
+    @test format_string("try\n$(body)\ncatch\n$(body)\nend") ==
+        "try\n$(bodyfmt)\ncatch\n$(bodyfmt)\nend"
+    @test format_string("try\n$(body)\ncatch err\n$(body)\nend") ==
+        "try\n$(bodyfmt)\ncatch err\n$(bodyfmt)\nend"
+    @test format_string("try\n$(body)\nfinally\n$(body)\nend") ==
+        "try\n$(bodyfmt)\nfinally\n$(bodyfmt)\nend"
+    @test format_string("try\n$(body)\ncatch\n$(body)\nfinally\n$(body)\nend") ==
+        format_string("try\n$(bodyfmt)\ncatch\n$(bodyfmt)\nfinally\n$(bodyfmt)\nend")
+    @test format_string("try\n$(body)\ncatch err\n$(body)\nfinally\n$(body)\nend") ==
+        format_string("try\n$(bodyfmt)\ncatch err\n$(bodyfmt)\nfinally\n$(bodyfmt)\nend")
+    @test format_string("try\n$(body)\ncatch err\n$(body)\nelse\n$(body)\nend") ==
+        format_string("try\n$(bodyfmt)\ncatch err\n$(bodyfmt)\nelse\n$(bodyfmt)\nend")
+    # Top-level semicolons are kept (useful if you want to supress output in various
+    # contexts)
+    let str = """
+        f(x) = 1;
+        module A
+            g(x) = 2;
+        end;
+        """
+        @test format_string(str) == str
     end
 end
 
