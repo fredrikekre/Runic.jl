@@ -729,6 +729,19 @@ function is_triple_thing(node)
         (kind(node) === K"juxtapose" && is_triple_string_macro(verified_kids(node)[1]))
 end
 
+# Check whether the sequence of kinds in `kinds` exist in `kids` starting at index `i`.
+function kmatch(kids, kinds, i = firstindex(kids))
+    if i < 1 || i + length(kinds) - 1 > length(kids)
+        return false
+    end
+    for (j, k) in pairs(kinds)
+        if kind(kids[i + j - 1]) !== k
+            return false
+        end
+    end
+    return true
+end
+
 ##########################
 # Utilities for IOBuffer #
 ##########################

@@ -3210,24 +3210,13 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
     kids = verified_kids(node)
     kids′ = kids
     dealias() = kids′ === kids ? copy(kids) : kids′
-    function kmatch(i, kinds)
-        if i < 1 || i + length(kinds) - 1 > length(kids′)
-            return false
-        end
-        for (j, k) in pairs(kinds)
-            if kind(kids′[i + j - 1]) !== k
-                return false
-            end
-        end
-        return true
-    end
     semi_idx = findfirst(x -> kind(x) === K";", kids′)
     while semi_idx !== nothing
         search_index = semi_idx + 1
-        if kmatch(semi_idx, KSet"; NewlineWs")
+        if kmatch(kids′, KSet"; NewlineWs", semi_idx)
             # `\s*;\n` -> `\n`
             kids′ = dealias()
-            space_before = kmatch(semi_idx - 1, KSet"Whitespace ;")
+            space_before = kmatch(kids′, KSet"Whitespace ;", semi_idx - 1)
             if space_before
                 span_overwrite = span(kids′[semi_idx - 1]) + span(kids′[semi_idx])
                 nodes_to_skip_over = semi_idx - 2
@@ -3247,18 +3236,18 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
                 replace_bytes!(ctx, "", span_overwrite)
                 seek(ctx.fmt_io, p)
             end
-        elseif kmatch(semi_idx, KSet"; Comment NewlineWs") ||
-                kmatch(semi_idx, KSet"; Whitespace Comment NewlineWs")
+        elseif kmatch(kids′, KSet"; Comment NewlineWs", semi_idx) ||
+                kmatch(kids′, KSet"; Whitespace Comment NewlineWs", semi_idx)
             # `\s*;\s*#\n` -> `\s* \s*#\n`
             # The `;` is replaced by ` ` here in case comments are aligned
             kids′ = dealias()
             ws_span = span(kids′[semi_idx])
             @assert ws_span == 1
-            space_before = kmatch(semi_idx - 1, KSet"Whitespace ;")
+            space_before = kmatch(kids′, KSet"Whitespace ;", semi_idx - 1)
             if space_before
                 ws_span += span(kids′[semi_idx - 1])
             end
-            space_after = kmatch(semi_idx, KSet"; Whitespace")
+            space_after = kmatch(kids′, KSet"; Whitespace", semi_idx)
             if space_after
                 ws_span += span(kids′[semi_idx + 1])
             end
