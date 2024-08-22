@@ -1959,18 +1959,31 @@ function indent_block(
     # ```
     # TODO: Perhaps only certain blocks should allow this? E.g. `let` to support comments
     # for the variables (the last comment would end up inside the block)?
-    leading_idx = findfirst(x -> kind(x) === K"NewlineWs", kids′)::Int
-    if !(
-            leading_idx == 1 ||
-                (leading_idx == 2 && kind(kids′[1]) === K"Comment") ||
-                (leading_idx == 3 && kind(kids′[1]) === K"Whitespace" && kind(kids′[2]) === K"Comment")
-        )
-        # Allow a comment on the same line
+    acceptable_newline =
+        kmatch(kids′, KSet"NewlineWs") ||
+        kmatch(kids′, KSet"; NewlineWs") ||
+        kmatch(kids′, KSet"Whitespace ; NewlineWs") ||
+        kmatch(kids′, KSet"Comment NewlineWs") ||
+        kmatch(kids′, KSet"Whitespace Comment NewlineWs") ||
+        kmatch(kids′, KSet"; Comment NewlineWs") ||
+        kmatch(kids′, KSet"; Whitespace Comment NewlineWs") ||
+        kmatch(kids′, KSet"Whitespace ; Comment NewlineWs") ||
+        kmatch(kids′, KSet"Whitespace ; Whitespace Comment NewlineWs")
+
+    if !acceptable_newline
         insert_idx = 1
-        if length(kids′) > 1 && kind(kids′[1]) === K"Comment"
-            insert_idx = 2
-        elseif length(kids′) > 2 && kind(kids′[1]) === K"Whitespace" && kind(kids′[2]) === K"Comment"
+        if kmatch(kids′, KSet"Whitespace ; Whitespace Comment")
+            insert_idx = 5
+        elseif kmatch(kids′, KSet"; Whitespace Comment") ||
+                kmatch(kids′, KSet"Whitespace ; Comment")
+            insert_idx = 4
+        elseif kmatch(kids′, KSet"Whitespace ;") ||
+                kmatch(kids′, KSet"Whitespace Comment") ||
+                kmatch(kids′, KSet"; Comment")
             insert_idx = 3
+        elseif kmatch(kids′, KSet";") ||
+                kmatch(kids′, KSet"Comment")
+            insert_idx = 2
         end
         if kids === parent(kids′)
             kids′ = make_view(copy(kids))
