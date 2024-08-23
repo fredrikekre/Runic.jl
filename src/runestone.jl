@@ -3302,10 +3302,13 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
     kids′ = kids
-    block_idx = findfirst(x -> kind(x) === K"block", kids′)
+    block_predicate = function(x)
+        return kind(x) === K"block" && !JuliaSyntax.has_flags(x, JuliaSyntax.PARENS_FLAG)
+    end
+    block_idx = findfirst(block_predicate, kids′)
     if kind(node) === K"let"
         # The first block of let is the variables
-        block_idx = findnext(x -> kind(x) === K"block", kids′, block_idx + 1)
+        block_idx = findnext(block_predicate, kids′, block_idx + 1)
     end
     any_changed = false
     while block_idx !== nothing
@@ -3323,7 +3326,7 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
             end
             seek(ctx.fmt_io, p)
         end
-        block_idx = findnext(x -> kind(x) === K"block", kids′, block_idx + 1)
+        block_idx = findnext(block_predicate, kids′, block_idx + 1)
     end
     # Reset the stream and return
     seek(ctx.fmt_io, pos)

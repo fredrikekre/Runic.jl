@@ -1188,6 +1188,9 @@ end
         @test format_string("$(mut)struct A\na::Int;\nend") ==
             "$(mut)struct A\n    a::Int\nend"
     end
+    # Paren-blocks should be skipped
+    @test format_string("if (a;\nb)\nend") == "if (\n        a;\n        b\n    )\nend"
+    @test format_string("if begin a;\nb; end\nend") == "if begin\n        a\n        b\n    end\nend"
     # Top-level semicolons are kept (useful if you want to supress output in various
     # contexts)
     let str = """
