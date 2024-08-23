@@ -191,6 +191,7 @@ end
     for sp in ("", " ", "  "), a in ("a", "a + a", "a(x)"), b in ("b", "b + b", "b(y)")
         # tuple, call, dotcall, vect, ref
         for (o, c) in (("(", ")"), ("f(", ")"), ("@f(", ")"), ("f.(", ")"), ("[", "]"), ("T[", "]"))
+            tr = o in ("f(", "@f(", "f.(") ? "" : ","
             # single line
             @test format_string("$(o)$(sp)$(c)") == "$(o)$(c)"
             @test format_string("$(o)$(sp)$(a)$(sp),$(sp)$(b)$(sp)$(c)") ==
@@ -205,35 +206,42 @@ end
                 "$(o)$(a) #==# = 1$(c)"
             # line break in between items
             @test format_string("$(o)$(sp)$(a)$(sp),\n$(sp)$(b)$(sp)$(c)") ==
-                format_string("$(o)$(sp)$(a)$(sp),\n$(sp)$(b)$(sp),$(sp)$(c)") ==
+                "$(o)\n    $(a),\n    $(b)$(tr)\n$(c)"
+            @test format_string("$(o)$(sp)$(a)$(sp),\n$(sp)$(b)$(sp),$(sp)$(c)") ==
                 "$(o)\n    $(a),\n    $(b),\n$(c)"
             # line break after opening token
             @test format_string("$(o)\n$(sp)$(a)$(sp),$(sp)$(b)$(sp)$(c)") ==
-                format_string("$(o)\n$(sp)$(a)$(sp),$(sp)$(b)$(sp),$(c)") ==
+                "$(o)\n    $(a), $(b)$(tr)\n$(c)"
+            @test format_string("$(o)\n$(sp)$(a)$(sp),$(sp)$(b)$(sp),$(c)") ==
                 "$(o)\n    $(a), $(b),\n$(c)"
             # line break before closing token
             @test format_string("$(o)$(sp)$(a)$(sp),$(sp)$(b)\n$(c)") ==
-                format_string("$(o)$(sp)$(a)$(sp),$(sp)$(b),\n$(c)") ==
+                "$(o)\n    $(a), $(b)$(tr)\n$(c)"
+            @test format_string("$(o)$(sp)$(a)$(sp),$(sp)$(b),\n$(c)") ==
                 "$(o)\n    $(a), $(b),\n$(c)"
             # line break after opening and before closing token
             @test format_string("$(o)\n$(sp)$(a)$(sp),$(sp)$(b)\n$(c)") ==
-                format_string("$(o)\n$(sp)$(a)$(sp),$(sp)$(b),\n$(c)") ==
+                "$(o)\n    $(a), $(b)$(tr)\n$(c)"
+            @test format_string("$(o)\n$(sp)$(a)$(sp),$(sp)$(b),\n$(c)") ==
                 "$(o)\n    $(a), $(b),\n$(c)"
             # line break after opening and before closing token and between items
             @test format_string("$(o)\n$(sp)$(a)$(sp),\n$(sp)$(b)\n$(c)") ==
-                format_string("$(o)\n$(sp)$(a)$(sp),\n$(sp)$(b),\n$(c)") ==
+                "$(o)\n    $(a),\n    $(b)$(tr)\n$(c)"
+            @test format_string("$(o)\n$(sp)$(a)$(sp),\n$(sp)$(b),\n$(c)") ==
                 "$(o)\n    $(a),\n    $(b),\n$(c)"
             # trailing comments
             @test format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b)$(sp)# b\n$(c)") ==
-                format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n$(c)") ==
+                "$(o)\n    # x\n    $(a),$(sp)# a\n    $(b)$(tr)$(sp)# b\n$(c)"
+            @test format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n$(c)") ==
                 "$(o)\n    # x\n    $(a),$(sp)# a\n    $(b),$(sp)# b\n$(c)"
             # comments on separate lines between items
             @test format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)\n$(c)") ==
-                format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)$(sp),\n$(c)") ==
+                "$(o)\n    # a\n    $(a),\n    # b\n    $(b)$(tr)\n$(c)"
+            @test format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)$(sp),\n$(c)") ==
                 "$(o)\n    # a\n    $(a),\n    # b\n    $(b),\n$(c)"
             # comma on next line (TODO: move them up?)
             @test format_string("$(o)\n$(a)$(sp)\n,$(sp)$(b)\n$(c)") ==
-                "$(o)\n    $(a)\n    , $(b),\n$(c)"
+                "$(o)\n    $(a)\n    , $(b)$(tr)\n$(c)"
         end
         # parens (but not block)
         @test format_string("($(sp)$(a)$(sp))") == "($(a))"
@@ -260,18 +268,25 @@ end
             format_string("f($(sp)$(a)$(sp);$(sp)$(b)$(sp),$(sp))") ==
             "f($(a); $(b))"
         @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp)\n)") ==
-            format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp),$(sp)\n)") ==
+            "f(\n    $(a);\n    $(b)\n)"
+        @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)$(b)$(sp),$(sp)\n)") ==
             "f(\n    $(a);\n    $(b),\n)"
         @test format_string("f($(sp)$(a)$(sp);$(sp)b$(sp)=$(sp)$(b)$(sp))") ==
             format_string("f($(sp)$(a)$(sp);$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp))") ==
             "f($(a); b = $(b))"
         @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
-            format_string("f(\n$(sp)$(a)$(sp);\n$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
+            "f(\n    $(a);\n    b = $(b)\n)"
+        @test format_string("f(\n$(sp)$(a)$(sp);\n$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
             "f(\n    $(a);\n    b = $(b),\n)"
+        @test format_string("f(\n$(sp)$(a)$(sp);$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
+            "f(\n    $(a); b = $(b)\n)"
+        @test format_string("f(\n$(sp)$(a)$(sp);$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
+            "f(\n    $(a); b = $(b),\n)"
         # Keyword arguments only with semi-colon on the same line as opening paren
         @test format_string("f(;\n$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
-            format_string("f(;\n$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
             format_string("f(;$(sp)b$(sp)=$(sp)$(b)$(sp)\n)") ==
+            "f(;\n    b = $(b)\n)"
+        @test format_string("f(;\n$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
             format_string("f(;$(sp)b$(sp)=$(sp)$(b)$(sp),$(sp)\n)") ==
             "f(;\n    b = $(b),\n)"
         # vect/ref with parameter (not valid Julia syntax, but parses)
@@ -338,10 +353,12 @@ end
     end
     # https://github.com/fredrikekre/Runic.jl/issues/32
     @test format_string("f(@m begin\nend)") == "f(\n    @m begin\n    end\n)"
-    @test format_string("f(@m(begin\nend))") == "f(\n    @m(\n        begin\n        end,\n    ),\n)"
-    @test format_string("f(r\"\"\"\nf\n\"\"\")") == "f(\n    r\"\"\"\n    f\n    \"\"\",\n)"
-    @test format_string("f(```\nf\n```)") == "f(\n    ```\n    f\n    ```,\n)"
-    @test format_string("f(x```\nf\n```)") == "f(\n    x```\n    f\n    ```,\n)"
+    @test format_string("f(@m(begin\nend))") == "f(\n    @m(\n        begin\n        end\n    )\n)"
+    @test format_string("f(r\"\"\"\nf\n\"\"\")") == "f(\n    r\"\"\"\n    f\n    \"\"\"\n)"
+    @test format_string("f(```\nf\n```)") == "f(\n    ```\n    f\n    ```\n)"
+    @test format_string("f(x```\nf\n```)") == "f(\n    x```\n    f\n    ```\n)"
+    # Weird cornercase where a trailing comma messes some cases up (don't recall...)
+    @test format_string("{\n@f\n}") == "{\n    @f\n}"
 end
 
 @testset "whitespace around ->" begin
@@ -654,11 +671,11 @@ end
         @test format_string("(\n$(sp)a,\n$(sp)b,\n$(sp))") == "(\n    a,\n    b,\n)"
         # call, dotcall
         for sep in (",", ";"), d in ("", ".")
-            @test format_string("f$(d)(a$(sep)\n$(sp)b)") == "f$(d)(\n    a$(sep)\n    b,\n)"
+            @test format_string("f$(d)(a$(sep)\n$(sp)b)") == "f$(d)(\n    a$(sep)\n    b\n)"
             @test format_string("f$(d)(a$(sep)\n$(sp)b\n$(sp))") ==
-                format_string("f$(d)(a$(sep)\n$(sp)b,\n$(sp))") ==
-                "f$(d)(\n    a$(sep)\n    b,\n)"
-            @test format_string("f$(d)(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") ==
+                "f$(d)(\n    a$(sep)\n    b\n)"
+            @test format_string("f$(d)(a$(sep)\n$(sp)b,\n$(sp))") ==
+                format_string("f$(d)(\n$(sp)a$(sep)\n$(sp)b,\n$(sp))") ==
                 "f$(d)(\n    a$(sep)\n    b,\n)"
         end
         # paren-quote
@@ -712,7 +729,7 @@ end
         # Multiline strings inside lists
         for trip in ("\"\"\"", "```")
             @test format_string("println(io, $(trip)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(trip))") ==
-                "println(\n    io, $(trip)\n    a\n\n    b\n    $(trip),\n)"
+                "println(\n    io, $(trip)\n    a\n\n    b\n    $(trip)\n)"
             # Triple string on same line
             for b in ("", "\$b", "\$(b)", "\$(b)c")
                 @test format_string("println(io, $(trip)a$b$(trip))") ==
@@ -776,6 +793,8 @@ end
             "(\n    a ? b : c,\n)"
         @test format_string("f(\n$(sp)a ? b : c,\n)") ==
             "f(\n    a ? b : c,\n)"
+        @test format_string("f(\n$(sp)a ? b : c\n)") ==
+            "f(\n    a ? b : c\n)"
         # comparison
         @test format_string("a == b ==\n$(sp)c") == "a == b ==\n    c"
         @test format_string("a <= b >=\n$(sp)c") == "a <= b >=\n    c"
@@ -806,14 +825,15 @@ end
 
 @testset "leading and trailing newline in multiline listlike" begin
     for (o, c) in (("f(", ")"), ("@f(", ")"), ("(", ")"), ("{", "}"))
+        tr = o in ("f(", "@f(") ? "" : ","
         @test format_string("$(o)a,\nb$(c)") ==
             format_string("$(o)\na,\nb$(c)") ==
             format_string("$(o)\na,\nb\n$(c)") ==
-            "$(o)\n    a,\n    b,\n$(c)"
+            "$(o)\n    a,\n    b$(tr)\n$(c)"
         @test format_string("$(o)a, # a\nb$(c)") ==
             format_string("$(o)\na, # a\nb$(c)") ==
             format_string("$(o)\na, # a\nb\n$(c)") ==
-            "$(o)\n    a, # a\n    b,\n$(c)"
+            "$(o)\n    a, # a\n    b$(tr)\n$(c)"
     end
 end
 

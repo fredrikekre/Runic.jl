@@ -354,16 +354,15 @@ function spaces_in_listlike(ctx::Context, node::Node)
     #  - the closing token is not on the same line as the last item (Runic-requirement)
     require_trailing_comma = false
     allow_trailing_semi = false
-    if implicit_tuple
+    allow_trailing_comma = multiline
+    if kind(node) in KSet"call dotcall macrocall"
+        require_trailing_comma = false
+    elseif implicit_tuple
         require_trailing_comma = false
     elseif kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
         require_trailing_comma = true
-    elseif kind(node) in KSet"call" && n_items == 1 && kind(kids[first_item_idx::Int]) === K"generator"
-        # https://github.com/fredrikekre/Runic.jl/issues/16
-        # TODO: There is probably a more generic pattern for the check above.
-        require_trailing_comma = false
     elseif kind(node) in KSet"bracescat parens"
         require_trailing_comma = false # Leads to parser error
     elseif kind(node) in KSet"block"
@@ -372,6 +371,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
     elseif kind(node) === K"parameters"
         # For parameters the trailing comma is configured from the parent
         require_trailing_comma = has_tag(node, TAG_TRAILING_COMMA)
+        allow_trailing_comma = has_tag(node, TAG_TRAILING_COMMA_OPT)
     elseif n_items > 0 && kind(kids[last_item_idx]) === K"macrocall" &&
             !JuliaSyntax.has_flags(kids[last_item_idx], JuliaSyntax.PARENS_FLAG) &&
             !is_string_macro(kids[last_item_idx])
@@ -473,6 +473,12 @@ function spaces_in_listlike(ctx::Context, node::Node)
                         i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA)
                     # Tag the node to require a trailing comma
                     kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
+                    this_kid_changed = true
+                end
+                if kind(kid′) === K"parameters" && allow_trailing_comma &&
+                        i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
+                    # Tag the node to optionally have a trailing comma
+                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA_OPT)
                     this_kid_changed = true
                 end
                 if kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
@@ -582,6 +588,11 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     # if kids′ === kids
                     #     kids′ = kids[1:i - 1]
                     # end
+                end
+                if allow_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
+                    # Tag the parameters node to optionally allow a trailing comma
+                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA_OPT)
+                    this_kid_changed = true
                 end
                 if !require_trailing_comma &&
                         count(
@@ -706,7 +717,8 @@ function spaces_in_listlike(ctx::Context, node::Node)
             end
         else
             @assert state === :expect_closing
-            if kind(kid′) === K"," || (kind(kid′) === K";" && !allow_trailing_semi) ||
+            if (kind(kid′) === K"," && !allow_trailing_comma) ||
+                    (kind(kid′) === K";" && !allow_trailing_semi) ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
                 # Trailing comma (when not wanted) and space not followed by a comment are
                 # removed
@@ -716,8 +728,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 end
                 replace_bytes!(ctx, "", span(kid′))
             elseif kind(node) === K"block" && kind(kid′) === K";" && allow_trailing_semi ||
+                    (kind(kid′) === K"," && allow_trailing_comma) ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
                 allow_trailing_semi = n_items == 0 # Only one semicolon allowed
+                allow_trailing_comma = false # Just one please
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"NewlineWs" ||

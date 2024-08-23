@@ -486,7 +486,8 @@ Consistently use single space around keywords. Examples:
 
 Listlike expressions (tuples, function calls/definitions, array literals, etc.) that
 *already* span multiple lines are formatted to consistently have a leading and a trailing
-newline, as well as a trailing comma where applicable. Examples:
+newline. Trailing commas are enforced for array/tuple literals (where adding another item is
+common) but optional for function/macro calls/definitions.
 ```diff
 -(a,
 -    b)
@@ -499,7 +500,7 @@ newline, as well as a trailing comma where applicable. Examples:
 -    b)
 +foo(
 +    a,
-+    b,
++    b
 +)
 
 -[1 2
@@ -518,9 +519,10 @@ this rule.
 ### Spacing in listlike expressions
 
 Listlike expressions (tuples, function calls/definitions, array literals, etc.) use a
-consistent rule of no space before `,` and a single space after `,`. In single line
-expressions there is no trailing `,`. In multiline expressions there is a trailing `,`.
-Leading/trailing spaces are removed. Examples:
+consistent rule of no space before `,` and a single space after `,`. Trailing commas are
+enforced for array/tuple literals (where adding another item is common) but optional for
+function/macro calls/definitions. Leading/trailing spaces are removed. Examples:
+
 ```diff
 -f(a,b)
 -(a,b)

@@ -230,6 +230,8 @@ const TAG_PRE_DEDENT = TagType(1) << 2
 const TAG_LINE_CONT = UInt32(1) << 31
 # Parameters that should have a trailing comma after last item
 const TAG_TRAILING_COMMA = TagType(1) << 4
+# Parameters that should optinally have a trailing comma after last item
+const TAG_TRAILING_COMMA_OPT = TagType(1) << 5
 
 function add_tag(node::Node, tag::TagType)
     return Node(head(node), span(node), node.kids, node.tags | tag)
