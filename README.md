@@ -242,11 +242,13 @@ This is a list of things that Runic currently is doing:
 
  - [Toggle formatting](#toggle-formatting)
  - [Line width limit](#line-width-limit)
+ - [Newlines in blocks](#newlines-in-blocks)
  - [Indentation](#indentation)
  - [Spaces around operators, assignment, etc](#spaces-around-operators-assignment-etc)
  - [Spaces around keywords](#spaces-around-keywords)
  - [Multiline listlike expressions](#multiline-listlike-expressions)
  - [Spacing in listlike expressions](#spacing-in-listlike-expressions)
+ - [Trailing semicolons](#trailing-semicolons)
  - [Literal floating point numbers](#literal-floating-point-numbers)
  - [Literal hex and oct numbers](#literal-hex-and-oct-numbers)
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
@@ -292,6 +294,28 @@ file.
 ### Line width limit
 
 No. Use your <kbd>Enter</kbd> key or refactor your code.
+
+###  Newlines in blocks
+
+The body of blocklike expressions (e.g. `if`, `for`, `while`, `function`, `struct`, etc.)
+always start and end with a newline. Examples:
+```diff
+-if c x end
++if c
++    x
++end
+
+-function f(x) x^2 end
++function f(x)
++    x^2
++end
+```
+
+An exception is made for empty blocks so that e.g.
+```julia
+struct A end
+```
+is allowed.
 
 ### Indentation
 
@@ -522,6 +546,24 @@ Leading/trailing spaces are removed. Examples:
  - Perhaps the rule for some of these should be "at least one space" instead. This could
    help with alignment issues. Discussed in issue
    [#12](https://github.com/fredrikekre/Runic.jl/issues/12).
+
+### Trailing semicolons
+
+Trailing semicolons are removed in the body of blocklike expressions. Examples
+```diff
+ function f(x)
+-    y = x^2;
+-    z = y^2; # z = x^4
+-    return z;
++    y = x^2
++    z = y^2  # z = x^4
++    return z
+ end
+```
+
+Trailing semicolons at top level and module level are kept since they are sometimes used
+there for output supression (e.g. Documenter examples or scripts that are
+copy-pasted/included in the REPL).
 
 ### Literal floating point numbers
 
