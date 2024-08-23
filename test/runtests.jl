@@ -109,7 +109,7 @@ end
         abc′ = replace(abc, "E" => "e")
         push!(
             test_cases,
-            ["1$(abc)", "01$(abc)", "01.$(abc)", "1.$(abc)", "1.000$(abc)", "01.00$(abc)"] => "1.0$(abc′)",
+            ["1$(abc)", "01$(abc)", "01.$(abc)", "1.$(abc)", "1.000$(abc)", "01.00$(abc)"] => "1.0$(abc′)"
         )
     end
     mod = Module()
@@ -558,16 +558,16 @@ end
             "if a\n    x\nelseif b\n    y\nend"
         # if-elseif-elseif-end
         @test format_string(
-            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)elseif c\n$(sp)z\n$(sp)end",
+            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)elseif c\n$(sp)z\n$(sp)end"
         ) == "if a\n    x\nelseif b\n    y\nelseif c\n    z\nend"
         # if-elseif-else-end
         @test format_string(
-            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end",
+            "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
         ) == "if a\n    x\nelseif b\n    y\nelse\n    z\nend"
         # if-elseif-elseif-else-end
         @test format_string(
             "if a\n$(sp)x\n$(sp)elseif b\n$(sp)y\n$(sp)elseif " *
-                "c\n$(sp)z\n$(sp)else\n$(sp)u\n$(sp)end",
+                "c\n$(sp)z\n$(sp)else\n$(sp)u\n$(sp)end"
         ) == "if a\n    x\nelseif b\n    y\nelseif c\n    z\nelse\n    u\nend"
         # begin-end
         @test format_string("begin\n$(sp)x\n$(sp)end") == "begin\n    x\nend"
@@ -591,36 +591,36 @@ end
             "try\n    x\ncatch err\n    y\nend"
         # try-catch-finally-end
         @test format_string(
-            "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)finally\n$(sp)z\n$(sp)end",
+            "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)finally\n$(sp)z\n$(sp)end"
         ) == "try\n    x\ncatch\n    y\nfinally\n    z\nend"
         # try-catch(err)-finally-end
         @test format_string(
-            "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)finally\n$(sp)z\n$(sp)end",
+            "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)finally\n$(sp)z\n$(sp)end"
         ) == "try\n    x\ncatch err\n    y\nfinally\n    z\nend"
         # try-finally-catch-end (yes, this is allowed...)
         @test format_string(
-            "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch\n$(sp)z\n$(sp)end",
+            "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch\n$(sp)z\n$(sp)end"
         ) == "try\n    x\nfinally\n    y\ncatch\n    z\nend"
         # try-finally-catch(err)-end
         @test format_string(
-            "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch err\n$(sp)z\n$(sp)end",
+            "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch err\n$(sp)z\n$(sp)end"
         ) == "try\n    x\nfinally\n    y\ncatch err\n    z\nend"
         if VERSION >= v"1.8"
             # try-catch-else-end
             @test format_string(
-                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end",
+                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
             ) == "try\n    x\ncatch\n    y\nelse\n    z\nend"
             # try-catch(err)-else-end
             @test format_string(
-                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end",
+                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
             ) == "try\n    x\ncatch err\n    y\nelse\n    z\nend"
             # try-catch-else-finally-end
             @test format_string(
-                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end",
+                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
             ) == "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
             # try-catch(err)-else-finally-end
             @test format_string(
-                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end",
+                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
             ) == "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         end
         # do-end
@@ -1189,7 +1189,7 @@ end
         @test format_string("$(prefix)\n$(body)\nend") == "$prefix\n$(bodyfmt)\nend"
     end
     @test format_string(
-        "if cond1\n$(body)\nelseif cond2\n$(body)\nelseif cond3\n$(body)\nelse\n$(body)\nend",
+        "if cond1\n$(body)\nelseif cond2\n$(body)\nelseif cond3\n$(body)\nelse\n$(body)\nend"
     ) ==
         "if cond1\n$(bodyfmt)\nelseif cond2\n$(bodyfmt)\nelseif cond3\n$(bodyfmt)\nelse\n$(bodyfmt)\nend"
     @test format_string("try\n$(body)\ncatch\n$(body)\nend") ==
@@ -1242,7 +1242,7 @@ end
                 $on
                 1+1
             end
-            """,
+            """
         ) == """
             function f()
                 $off
@@ -1259,7 +1259,7 @@ end
                 $bon
                 1+1
             end
-            """,
+            """
         ) == """
             function f()
                 $off
@@ -1275,7 +1275,7 @@ end
                 1+1
                 1+1
             end
-            """,
+            """
         ) == """
             function f()
                 $off

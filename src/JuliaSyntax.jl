@@ -34,7 +34,7 @@ function _show_green_node(io, node, indent, pos, str, show_trivia)
     posstr = "$(lpad(pos, 6)):$(rpad(pos + span(node) - 1, 6)) │"
     brackets = is_leaf(node) ? ("" => "") : ("[" => "]")
     line = string(
-        posstr, indent, brackets.first, JuliaSyntax.summary(head(node)), brackets.second,
+        posstr, indent, brackets.first, JuliaSyntax.summary(head(node)), brackets.second
     )
     if node.tags != 0
         line = string(rpad(line, 50), ' ', "tags: $(stringify_tags(node))")

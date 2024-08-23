@@ -331,7 +331,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
 
     n_items = count(
         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
-        @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)]),
+        @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)])
     )
     first_item_idx = findnext(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, opening_leaf_idx + 1)
     if first_item_idx !== nothing && first_item_idx >= closing_leaf_idx
@@ -380,7 +380,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
         require_trailing_comma = true
     elseif n_items > 0
         require_trailing_comma = any(
-            x -> kind(x) === K"NewlineWs", @view(kids[(last_item_idx + 1):(closing_leaf_idx - 1)]),
+            x -> kind(x) === K"NewlineWs", @view(kids[(last_item_idx + 1):(closing_leaf_idx - 1)])
         ) || has_newline_after_non_whitespace(kids[last_item_idx])
     end
 
@@ -484,7 +484,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 if kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
                         count(
                         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
-                        verified_kids(kid′),
+                        verified_kids(kid′)
                     ) == 0
                     # If kid is K"parameters" without items and we don't want a trailing
                     # comma/semicolon we need to eat any whitespace kids (e.g. comments)
@@ -545,7 +545,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 #  - there is a comma coming but it is on the next line (weird)
                 #  - there is a comment with no space before it
                 next_non_ws_idx = findnext(
-                    !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1,
+                    !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1
                 )
                 next_kind = next_non_ws_idx === nothing ? nothing : kind(kids[next_non_ws_idx])
                 # Insert a comma if there isn't one coming
@@ -597,7 +597,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 if !require_trailing_comma &&
                         count(
                         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
-                        verified_kids(kid′),
+                        verified_kids(kid′)
                     ) == 0
                     # If kid is K"parameters" without items and we don't want a trailing
                     # comma/semicolon we need to eat any whitespace kids (e.g. comments)
@@ -1378,7 +1378,7 @@ function replace_with_in(ctx::Context, node::Node)
     # Construct the replacement
     nb = replace_bytes!(ctx, "in", span(in_node))
     in_node′ = Node(
-        JuliaSyntax.SyntaxHead(K"in", JuliaSyntax.TRIVIA_FLAG), nb,
+        JuliaSyntax.SyntaxHead(K"in", JuliaSyntax.TRIVIA_FLAG), nb
     )
     accept_node!(ctx, in_node′)
     kids′ = copy(kids)
@@ -1532,7 +1532,7 @@ function braces_around_where_rhs(ctx::Context, node::Node)
     closing_brace = Node(JuliaSyntax.SyntaxHead(K"}", 0), 1)
     rhs′ = Node(
         JuliaSyntax.SyntaxHead(K"braces", 0),
-        [opening_brace, rhs, closing_brace],
+        [opening_brace, rhs, closing_brace]
     )
     push!(kids′, rhs′)
     # Write the new node
@@ -1871,7 +1871,7 @@ function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
 end
 
 function indent_block(
-        ctx::Context, node::Node; allow_empty::Bool = true, do_indent::Bool = true,
+        ctx::Context, node::Node; allow_empty::Bool = true, do_indent::Bool = true
     )
     @assert kind(node) === K"block" && !is_leaf(node)
     @assert !JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
@@ -2117,7 +2117,7 @@ function indent_try(ctx::Context, node::Node)
     # Check for the other one
     other_kind = kind(kids[catch_idx]) === K"catch" ? K"finally" : K"catch"
     finally_idx = findnext(
-        x -> kind(x) === other_kind, kids, something(else_idx, catch_idx) + 1,
+        x -> kind(x) === other_kind, kids, something(else_idx, catch_idx) + 1
     )
     if finally_idx !== nothing
         let p = position(ctx.fmt_io)
@@ -2134,7 +2134,7 @@ function indent_try(ctx::Context, node::Node)
     end
     # Check for end
     end_idx = findnext(
-        x -> kind(x) === K"end", kids, something(finally_idx, else_idx, catch_idx) + 1,
+        x -> kind(x) === K"end", kids, something(finally_idx, else_idx, catch_idx) + 1
     )::Int
     @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
     if !has_tag(kids[end_idx], TAG_DEDENT)
@@ -2252,7 +2252,7 @@ end
 # TODO: I feel like this function can be removed. It is only used in `indent_op_call`
 function indent_newlines_between_indices(
         ctx::Context, node::Node, open_idx::Int, close_idx::Int;
-        indent_closing_token::Bool = false,
+        indent_closing_token::Bool = false
     )
     kids = verified_kids(node)
     any_kid_changed = false
@@ -2302,7 +2302,7 @@ end
 # token as pre-dedent
 function indent_listlike(
         ctx::Context, node::Node, open_idx::Int, close_idx::Int;
-        indent_closing_token::Bool = false,
+        indent_closing_token::Bool = false
     )
     kids = verified_kids(node)
     kids′ = kids
@@ -2574,7 +2574,7 @@ function indent_op_call(ctx::Context, node::Node)
     first_operand_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     last_operand_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
     return indent_newlines_between_indices(
-        ctx, node, first_operand_idx, last_operand_idx; indent_closing_token = true,
+        ctx, node, first_operand_idx, last_operand_idx; indent_closing_token = true
     )
 end
 
@@ -2708,7 +2708,7 @@ end
 # with a max_depth parameter.
 function continue_all_newlines(
         ctx::Context, node::Node; skip_last::Bool = true, is_last::Bool = is_leaf(node),
-        skip_first::Bool = true, is_first::Bool = true,
+        skip_first::Bool = true, is_first::Bool = true
     )
     # Not sure these need to arguments since they should always(?) be `true`.
     @assert skip_last
@@ -2733,7 +2733,7 @@ function continue_all_newlines(
         for (i, kid) in pairs(kids)
             kid′ = continue_all_newlines(
                 ctx, kid; skip_last = skip_last, is_last = i == lastindex(kids),
-                skip_first = skip_first, is_first = is_first && i == firstindex(kids),
+                skip_first = skip_first, is_first = is_first && i == firstindex(kids)
             )
             if kid′ !== nothing
                 kids[i] = kid′

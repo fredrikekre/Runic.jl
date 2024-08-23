@@ -39,7 +39,7 @@ function print_help()
         io, """
                `Runic.main` (typically invoked as `julia -m Runic`) formats Julia source
                code using the Runic.jl formatter.
-        """,
+        """
     )
     printstyled(io, "OPTIONS\n", bold = true)
     println(
@@ -66,7 +66,7 @@ function print_help()
                -o <file>, --output=<file>
                    File to write formatted output to. If no output is given, or if the file
                    is `-`, output is written to stdout.
-        """,
+        """
     )
     return
 end

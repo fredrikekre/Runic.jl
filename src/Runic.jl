@@ -53,7 +53,7 @@ function Node(node::JuliaSyntax.GreenNode)
     tags = 0 % TagType
     return Node(
         JuliaSyntax.head(node), JuliaSyntax.span(node),
-        map(Node, JuliaSyntax.children(node)), tags,
+        map(Node, JuliaSyntax.children(node)), tags
     )
 end
 
@@ -141,11 +141,11 @@ end
 
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
-        diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
+        diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true
     )
     src_io = IOBuffer(src_str)
     src_tree = Node(
-        JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true, version = v"2-"),
+        JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true, version = v"2-")
     )
     normalize_tree!(src_tree)
     fmt_io = IOBuffer()
@@ -171,7 +171,7 @@ function Context(
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
         diff, filemode, indent_level, call_depth, format_on, prev_sibling, next_sibling,
-        lineage_kinds,
+        lineage_kinds
     )
 end
 
