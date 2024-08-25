@@ -30,13 +30,13 @@ assert_enabled() = true
 
 macro assert(expr)
     code = macroexpand_assert(expr)
-    :(assert_enabled() ? $(code) : nothing)
+    return :(assert_enabled() ? $(code) : nothing)
 end
 
 const toggle_lock = ReentrantLock()
 
 function enable_assert(enable::Bool)
-    @lock toggle_lock begin
+    return @lock toggle_lock begin
         if assert_enabled() != enable
             @eval Runic assert_enabled() = $enable
         end
