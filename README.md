@@ -244,6 +244,7 @@ This is a list of things that Runic currently is doing:
  - [Line width limit](#line-width-limit)
  - [Newlines in blocks](#newlines-in-blocks)
  - [Indentation](#indentation)
+ - [Explicit `return`](#explicit-return)
  - [Spaces around operators, assignment, etc](#spaces-around-operators-assignment-etc)
  - [Spaces around keywords](#spaces-around-keywords)
  - [Multiline listlike expressions](#multiline-listlike-expressions)
@@ -398,6 +399,65 @@ x = a + b *
     c +
     d
 ```
+
+### Explicit `return`
+
+Explicit `return` statements are ensured in function/macro definitions as well as in
+`do`-blocks by adding `return` in front of the last expression, with some exceptions listed
+below.
+
+ - If the last expression is a `for` or `while` loop (which both always evaluate to
+   `nothing`) `return` is added *after* the loop.
+ - If the last expression is a `if` or `try` block the `return` is only added in case
+   there is no `return` inside any of the branches.
+ - If the last expression is a `let` or `begin` block the `return` is only added in case
+   there is no `return` inside the block.
+ - If the last expression is a macro call, the `return` is only added in case there is no
+   `return` inside the macro.
+ - If the last expression is a function call, and the function name is (or contains) `throw`
+   or `error`, no `return` is added. This is because it is already obvious that these calls
+   terminate the function and don't return any value.
+
+Note that adding `return` changes the expression in a way that is visible to macros.
+Therefore it is, in general, not valid to add `return` to a function defined inside a macro
+since it isn't possible to know what the macro will expand to. For this reason this
+formatting rule is disabled for functions defined inside macros with the exception of some
+known and safe ones from Base (e.g. `@inline`, `@generated`, ...).
+
+For the same reason mentioned above, if the last expression in a function is a macro call it
+isn't valid to step in and add `return` inside. Instead the `return` will be added in front
+of the macro call like any other expression (unless there is already a `return` inside of
+the macro as described above).
+
+Examples:
+```diff
+ function f(n)
+-    sum(rand(n))
++    return sum(rand(n))
+ end
+
+ macro m(args...)
+-    :(generate_expr(args...))
++    return :(generate_expr(args...))
+ end
+
+ function g()
+-    open("/dev/random", "r") do f
+-        read(f, 8)
++    return open("/dev/random", "r") do f
++        return read(f, 8)
+     end
+ end
+```
+
+#### Potential changes
+ - If the last expression is a `if` or `try` block it might be better to
+   recurse into the branches and add `return` there. Looking at real code, if a
+   function ends with an `if` block, it seems about 50/50 whether adding return
+   *after* the block or adding return inside the branches is the best choice.
+   Quite often `return if` is not the best but at least Runic's current
+   formatting will force to think about the return value.
+   See issue [#52](https://github.com/fredrikekre/Runic.jl/issues/52).
 
 ### Spaces around operators, assignment, etc
 

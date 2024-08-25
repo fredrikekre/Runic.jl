@@ -424,6 +424,7 @@ function main(argv)
                 cmd = setenv(ignorestatus(cmd); dir = dir)
                 cmd = pipeline(cmd, stdout = stderr, stderr = stderr)
                 run_cmd(cmd)
+                return
             end
         end
 
