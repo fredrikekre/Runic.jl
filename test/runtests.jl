@@ -784,9 +784,11 @@ end
             @test format_string("$(verb) A: a,\n$(sp)b") == "$(verb) A: a,\n    b"
             @test format_string("$(verb) A:\n$(sp)a,\n$(sp)b") == "$(verb) A:\n    a,\n    b"
         end
-        # export
-        @test format_string("export a,\n$(sp)b") == "export a,\n    b"
-        @test format_string("export\n$(sp)a,\n$(sp)b") == "export\n    a,\n    b"
+        # export/public/global/local
+        for verb in ("export", "public", "global", "local")
+            @test format_string("$(verb) a,\n$(sp)b") == "$(verb) a,\n    b"
+            @test format_string("$(verb)\n$(sp)a,\n$(sp)b") == "$(verb)\n    a,\n    b"
+        end
         # ternary
         @test format_string("a ?\n$(sp)b : c") == "a ?\n    b : c"
         @test format_string("a ? b :\n$(sp)c") == "a ? b :\n    c"
@@ -917,8 +919,13 @@ end
     @test format_string("import  A.@a  as  @b") == "import A.@a as @b"
 end
 
-@testset "spaces in export/public" begin
-    for sp in ("", " ", "  ", "\t"), verb in ("export", "public"), (a, b) in (("a", "@b"), ("@a", "b"))
+@testset "spaces in export/public/global/local" begin
+    for sp in ("", " ", "  ", "\t"), verb in ("export", "public", "global", "local"),
+            (a, b) in (("a", "b"), ("a", "@b"), ("@a", "b"))
+        if verb in ("global", "local") && (a, b) != ("a", "b")
+            # global and local only support K"Identifier"s right now
+            continue
+        end
         @test format_string("$(verb) $(sp)$(a)") == "$(verb) $(a)"
         @test format_string("$(verb)\n$(a)") == "$(verb)\n    $(a)"
         @test format_string("$(verb) $(sp)$(a)$(sp),$(sp)$(b)") == "$(verb) $(a), $(b)"
@@ -926,7 +933,7 @@ end
         @test format_string("$(verb) \n$(a)$(sp),\n$(b)") == "$(verb)\n    $(a),\n    $(b)"
         @test format_string("$(verb) $(a)$(sp),\n# b\n$(b)") == "$(verb) $(a),\n    # b\n    $(b)"
         # Inline comments
-        @test format_string("export a$(sp),$(sp)#= b, =#$(sp)c") == "export a, #= b, =# c"
+        @test format_string("$(verb) a$(sp),$(sp)#= b, =#$(sp)c") == "$(verb) a, #= b, =# c"
     end
     # Interpolated identifiers (currently only expected in K"quote" and K"macrocall")
     @test format_string(":(export \$a)") == ":(export \$a)"

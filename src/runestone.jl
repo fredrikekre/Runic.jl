@@ -913,7 +913,8 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
 end
 
 function spaces_in_export_public(ctx::Context, node::Node)
-    if !(kind(node) in KSet"export public" && !is_leaf(node))
+    is_leaf(node) && return nothing
+    if !(kind(node) in KSet"export public" || is_global_local_list(node))
         return nothing
     end
     kids = verified_kids(node)
@@ -923,7 +924,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
 
     spacenode = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
 
-    @assert is_leaf(kids[1]) && kind(kids[1]) in KSet"export public"
+    @assert is_leaf(kids[1]) && kind(kids[1]) in KSet"export public global local"
     accept_node!(ctx, kids[1])
 
     # space -> identifier -> comma
@@ -2753,7 +2754,7 @@ function continue_all_newlines(
 end
 
 function indent_using_import_export_public(ctx::Context, node::Node)
-    @assert kind(node) in KSet"using import export public"
+    @assert kind(node) in KSet"using import export public global local"
     return continue_all_newlines(ctx, node)
 end
 
@@ -3044,7 +3045,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_braces(ctx, node)
     elseif kind(node) in KSet"|| &&"
         return indent_short_circuit(ctx, node)
-    elseif kind(node) in KSet"using import export public"
+    elseif kind(node) in KSet"using import export public" || is_global_local_list(node)
         return indent_using_import_export_public(ctx, node)
     elseif is_variable_assignment(ctx, node)
         return indent_assignment(ctx, node)
