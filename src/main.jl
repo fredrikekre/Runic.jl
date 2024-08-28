@@ -78,6 +78,12 @@ function maybe_expand_directory!(outfiles, dir)
         return
     end
     for (root, _, files) in walkdir(dir; onerror = (err) -> nothing)
+        # Don't recurse into `.git`. If e.g. a branch name ends with `.jl` there are files
+        # inside of `.git` which has the `.jl` extension, but they are not Julia source
+        # files.
+        if occursin(".git", root) && ".git" in splitpath(root)
+            continue
+        end
         for file in files
             if endswith(file, ".jl")
                 push!(outfiles, joinpath(root, file))
