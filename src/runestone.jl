@@ -3,16 +3,24 @@
 # This is the runestone where all the formatting transformations are implemented.
 
 function trim_trailing_whitespace(ctx::Context, node::Node)
-    kind(node) === K"NewlineWs" || return nothing
+    kind(node) in KSet"NewlineWs Comment" || return nothing
     @assert is_leaf(node)
     str = String(read_bytes(ctx, node))
-    str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
-    # If the next sibling is also a NewlineWs we can trim trailing
-    # whitespace from this node too
-    next_kind = next_sibling_kind(ctx)
-    if next_kind === K"NewlineWs"
-        # str′ = replace(str′, r"(\r\n|\r|\n)\h*" => '\n')
-        str′ = replace(str′, r"\n\h*" => '\n')
+    local str′::String
+    if kind(node) === K"NewlineWs"
+        # Strip all whitespace up until the newline while normalizing line endings to \njK:w
+        str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
+        # If the next sibling is also a NewlineWs we can trim trailing
+        # whitespace from this node too
+        next_kind = next_sibling_kind(ctx)
+        if next_kind === K"NewlineWs"
+            # str′ = replace(str′, r"(\r\n|\r|\n)\h*" => '\n')
+            str′ = replace(str′, r"\n\h*" => '\n')
+        end
+    else
+        @assert kind(node) === K"Comment"
+        # Strip trailing spaces and tabs from comments
+        str′ = rstrip(str, (' ', '\t'))
     end
     if str == str′
         return nothing

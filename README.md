@@ -657,10 +657,14 @@ Braces are consistently used around the right hand side of `where` expressions. 
 
 #### Trailing spaces
 
-Trailing spaces are removed. Example:
+Trailing spaces are removed in code and comments (but not inside of multiline strings where
+doing so would change the meaning of the code). Examples:
 ```diff
 -1 + 1 
 +1 + 1
+
+-x = 2 # x is two 
++x = 2 # x is two
 ```
 
 #### Tabs
