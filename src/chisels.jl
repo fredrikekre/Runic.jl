@@ -476,6 +476,13 @@ function is_variable_assignment(ctx, node::Node)
         !(ctx.lineage_kinds[end] in KSet"for generator cartesian_iterator filter")
 end
 
+# K"global" and K"local" nodes can be either `global a, b, c` or `global a = 1`. This method
+# checks whether the node is of the former kind.
+function is_global_local_list(node)
+    return kind(node) in KSet"global local" && !is_leaf(node) &&
+        all(x -> kind(x) in KSet"global local Identifier , Whitespace NewlineWs Comment", verified_kids(node))
+end
+
 function unwrap_to_call_or_tuple(x)
     is_leaf(x) && return nothing
     @assert !is_leaf(x)
