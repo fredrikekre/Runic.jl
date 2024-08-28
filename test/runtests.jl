@@ -70,6 +70,10 @@ end
     # Trailing whitespace just before closing indent token
     @test format_string("begin\n    a = 1 \nend") == "begin\n    a = 1\nend"
     @test format_string("let\n    a = 1 \nend") == "let\n    a = 1\nend"
+    # Trailing whitespace in comments
+    @test format_string("# comment ") == format_string("# comment  ") ==
+        format_string("# comment\t") == format_string("# comment\t\t") ==
+        format_string("# comment \t ") == format_string("# comment\t \t") == "# comment"
 end
 
 @testset "Hex/oct/bin literal integers" begin
