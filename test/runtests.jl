@@ -76,6 +76,22 @@ end
         format_string("# comment \t ") == format_string("# comment\t \t") == "# comment"
 end
 
+@testset "space before comment" begin
+    for sp in ("", " ", "  ")
+        csp = sp == "" ? " " : sp
+        @test format_string("a$(sp)# comment") == "a$(csp)# comment"
+        @test format_string("1 + 1$(sp)# comment") == "1 + 1$(csp)# comment"
+        @test format_string("(a,$(sp)# comment\nb)") ==
+            "(\n    a,$(csp)# comment\n    b,\n)"
+        # Edgecase where the comment ends up as the first leaf inside the call
+        @test format_string("(a,$(sp)# comment\nb + b)") ==
+            "(\n    a,$(csp)# comment\n    b + b,\n)"
+    end
+    let str = "a = 1  # a comment\nab = 2 # ab comment\n"
+        @test format_string(str) == str
+    end
+end
+
 @testset "Hex/oct/bin literal integers" begin
     z(n) = "0"^n
     test_cases = [
@@ -193,6 +209,7 @@ end
 
 @testset "spaces in listlike" begin
     for sp in ("", " ", "  "), a in ("a", "a + a", "a(x)"), b in ("b", "b + b", "b(y)")
+        csp = sp == "" ? " " : sp # at least one space before comment (but more allowed)
         # tuple, call, dotcall, vect, ref
         for (o, c) in (("(", ")"), ("f(", ")"), ("@f(", ")"), ("f.(", ")"), ("[", "]"), ("T[", "]"))
             tr = o in ("f(", "@f(", "f.(") ? "" : ","
@@ -235,9 +252,9 @@ end
                 "$(o)\n    $(a),\n    $(b),\n$(c)"
             # trailing comments
             @test format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b)$(sp)# b\n$(c)") ==
-                "$(o)\n    # x\n    $(a),$(sp)# a\n    $(b)$(tr)$(sp)# b\n$(c)"
+                "$(o)\n    # x\n    $(a),$(csp)# a\n    $(b)$(tr)$(csp)# b\n$(c)"
             @test format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n$(c)") ==
-                "$(o)\n    # x\n    $(a),$(sp)# a\n    $(b),$(sp)# b\n$(c)"
+                "$(o)\n    # x\n    $(a),$(csp)# a\n    $(b),$(csp)# b\n$(c)"
             # comments on separate lines between items
             @test format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)\n$(c)") ==
                 "$(o)\n    # a\n    $(a),\n    # b\n    $(b)$(tr)\n$(c)"
@@ -259,7 +276,7 @@ end
             @test format_string("$(a)$(sp),\n$(sp)$(b)") == "$(a),\n    $(b)"
             # trailing comments
             @test format_string("$(a)$(sp),$(sp)# a\n$(sp)$(b)$(sp)# b") ==
-                "$(a),$(sp)# a\n    $(b)$(sp)# b"
+                "$(a),$(csp)# a\n    $(b)$(csp)# b"
             @test format_string("# a\n$(a)$(sp),\n# b\n$(b)") ==
                 "# a\n$(a),\n    # b\n    $(b)"
         end

@@ -3355,3 +3355,43 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
     seek(ctx.fmt_io, pos)
     return any_changed ? make_node(node, kids′) : nothing
 end
+
+function spaces_around_comments(ctx::Context, node::Node)
+    is_leaf(node) && return
+    pos = position(ctx.fmt_io)
+    kids = verified_kids(node)
+    kids′ = kids
+    # We assume that the previous node ends with ws, which should be true since the same
+    # pass here adds it if the first kid is a comment.
+    prev_kid_ends_with_ws = true
+    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    for (i, kid) in pairs(kids)
+        if kind(kid) === K"Comment" ||
+                (fl = first_leaf(kid); fl !== nothing && kind(fl) === K"Comment")
+            # TODO: In the case where the comment is found within the kid the whitespace
+            # should maybe be added right before the comment in the tree (which is how
+            # JuliaSyntax would have parsed the source if the space was already there). I
+            # don't know if this really matters though since it is already pretty random
+            # where whitespace ends up.
+            if !prev_kid_ends_with_ws
+                kids′ = kids′ === kids ? kids[1:(i - 1)] : kids′
+                push!(kids′, ws)
+                replace_bytes!(ctx, " ", 0)
+                accept_node!(ctx, ws)
+            end
+        end
+        if kids′ !== kids
+            push!(kids′, kid)
+        end
+        accept_node!(ctx, kid)
+        prev_kid_ends_with_ws = kind(kid) in KSet"Whitespace NewlineWs" ||
+            (ll = last_leaf(kid); ll !== nothing && kind(ll) in KSet"Whitespace NewlineWs")
+    end
+    # Reset the stream and return
+    seek(ctx.fmt_io, pos)
+    if kids === kids′
+        return nothing
+    else
+        return make_node(node, kids′)
+    end
+end
