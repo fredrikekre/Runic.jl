@@ -6,7 +6,7 @@ version = "1.0.0"
 JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 
 [compat]
-JuliaSyntax = "0.4.8"
+JuliaSyntax = "0.4.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

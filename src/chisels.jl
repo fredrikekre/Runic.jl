@@ -6,8 +6,19 @@
 
 # JuliaSyntax.jl overloads == for this but seems easier to just define a new function
 function nodes_equal(n1::Node, n2::Node)
-    return head(n1) == head(n2) && span(n1) == span(n2) && # n1.tags == n2.tags &&
-        all(((x, y),) -> nodes_equal(x, y), zip(n1.kids, n2.kids))
+    head(n1) == head(n2) && span(n1) == span(n2) || return false
+    # juliac: this is `all(((x, y),) -> nodes_equal(x, y), zip(n1.kids, n2.kids))` but
+    # written out as an explicit loop to help inference.
+    if is_leaf(n1)
+        return is_leaf(n2)
+    end
+    kids1 = verified_kids(n1)
+    kids2 = verified_kids(n2)
+    length(kids1) == length(kids2) || return false
+    for i in eachindex(kids1)
+        nodes_equal(n1.kids[i], n2.kids[i]) || return false
+    end
+    return true
 end
 
 # See JuliaSyntax/src/parse_stream.jl

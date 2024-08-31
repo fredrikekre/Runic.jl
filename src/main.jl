@@ -6,42 +6,124 @@ else
     errno = 0
 end
 
-function panic(msg...)
-    printstyled(stderr, "ERROR: "; color = :red, bold = true)
-    for m in msg
-        if m isa Exception
-            showerror(stderr, m)
-        elseif m isa Vector{Base.StackFrame}
-            Base.show_backtrace(stderr, m)
+# Check whether we are compiling with juliac
+# TODO: I thought juliac would never use existing pkgimages but looks like it does so this
+# isn't reliable... Existing cache files are pruned in the Makefile for now.
+const juliac = let opts = Base.JLOptions()
+    hasfield(typeof(opts), :trim) &&
+        getfield(opts, :trim) != 0 &&
+        Base.generating_output()
+end
+
+@static if juliac
+    stderr() = Core.stderr
+    stdout() = Core.stdout
+    include("juliac.jl")
+    const run_cmd = run_juliac
+    read_stdin(::Type{String}) = String(read_juliac())
+    const printstyled = printstyled_juliac
+    const mktempdir = mktempdir_juliac
+    const sprint_showerror = sprint_showerror_juliac
+else
+    stderr() = Base.stderr
+    stdout() = Base.stdout
+    const run_cmd = Base.run
+    read_stdin(::Type{String}) = read(stdin, String)
+    const printstyled = Base.printstyled
+    const mktempdir = Base.mktempdir
+    sprint_showerror(err::Exception) = sprint(showerror, err)
+end
+
+# juliac-compatible `Base.walkdir` but since we are collecting the files eagerly anyway we
+# might as well use the same method even when not compiling with juliac.
+function tryf(f::F, arg, default) where {F}
+    try
+        return f(arg)
+    catch
+        return default
+    end
+end
+function scandir!(files, root)
+    # Don't recurse into `.git`. If e.g. a branch name ends with `.jl` there are files
+    # inside of `.git` which has the `.jl` extension, but they are not Julia source files.
+    if occursin(".git", root) && ".git" in splitpath(root)
+        @assert endswith(root, ".git")
+        return
+    end
+    tryf(isdir, root, false) || return
+    dirs = Vector{String}()
+    for f in tryf(readdir, root, String[])
+        jf = joinpath(root, f)
+        if tryf(isdir, jf, false)
+            push!(dirs, f)
+        elseif (tryf(isfile, jf, false) || tryf(islink, jf, false)) && endswith(jf, ".jl")
+            push!(files, jf)
         else
-            print(stderr, msg...)
+            # Ignore it I guess...
         end
     end
-    println(stderr)
+    for dir in dirs
+        scandir!(files, joinpath(root, dir))
+    end
+    return
+end
+
+function panic(
+        msg::String, err::Union{Exception, Nothing} = nothing,
+        bt::Union{Vector{Base.StackFrame}, Nothing} = nothing
+    )
+    io = stderr()
+    printstyled(io, "ERROR: "; color = :red, bold = true)
+    print(io, msg)
+    if err !== nothing
+        print(io, sprint_showerror(err))
+    end
+    @static if juliac
+        @assert bt === nothing
+    else
+        if bt !== nothing
+            Base.show_backtrace(io, bt)
+        end
+    end
+    println(io)
     global errno = 1
     return errno
 end
 
-okln() = printstyled(stderr, "✔\n"; color = :green, bold = true)
-errln() = printstyled(stderr, "✖\n"; color = :red, bold = true)
+function okln()
+    printstyled(stderr(), "✔"; color = :green, bold = true)
+    println(stderr())
+    return
+end
+function errln()
+    printstyled(stderr(), "✖"; color = :red, bold = true)
+    println(stderr())
+    return
+end
+
 
 # Print a typical cli program help message
 function print_help()
-    io = stdout
-    printstyled(io, "NAME\n", bold = true)
+    io = stdout()
+    printstyled(io, "NAME", bold = true)
+    println(io)
     println(io, "       Runic.main - format Julia source code")
     println(io)
-    printstyled(io, "SYNOPSIS\n", bold = true)
+    printstyled(io, "SYNOPSIS", bold = true)
+    println(io)
+    println(io, "       Runic.main - format Julia source code")
     println(io, "       julia -m Runic [<options>] <path>...")
     println(io)
-    printstyled(io, "DESCRIPTION\n", bold = true)
+    printstyled(io, "DESCRIPTION", bold = true)
+    println(io)
     println(
         io, """
                `Runic.main` (typically invoked as `julia -m Runic`) formats Julia source
                code using the Runic.jl formatter.
         """
     )
-    printstyled(io, "OPTIONS\n", bold = true)
+    printstyled(io, "OPTIONS", bold = true)
+    println(io)
     println(
         io, """
                <path>...
@@ -73,23 +155,39 @@ end
 
 function maybe_expand_directory!(outfiles, dir)
     if !isdir(dir)
-        # Assumed a file, checked when using it
+        # Assumed to be a file, checked when using it
         push!(outfiles, dir)
-        return
+    else
+        scandir!(outfiles, dir)
     end
-    for (root, _, files) in walkdir(dir; onerror = (err) -> nothing)
-        # Don't recurse into `.git`. If e.g. a branch name ends with `.jl` there are files
-        # inside of `.git` which has the `.jl` extension, but they are not Julia source
-        # files.
-        if occursin(".git", root) && ".git" in splitpath(root)
-            continue
-        end
-        for file in files
-            if endswith(file, ".jl")
-                push!(outfiles, joinpath(root, file))
+    return
+end
+
+# juliac: type-stable output struct (required for juliac but useful in general too)
+struct Output{IO}
+    which::Symbol
+    file::String
+    stream::IO
+    output_is_file::Bool
+    output_is_samefile::Bool
+end
+
+function writeo(output::Output, iob)
+    @assert output.which !== :devnull
+    if output.which === :file
+        # juliac: `open(...) do` uses dynamic dispatch
+        # write(output.file, iob)
+        let io = open(output.file, "w")
+            try
+                write(io, iob)
+            finally
+                close(io)
             end
         end
+    elseif output.which == :stdout
+        write(output.stream, iob)
     end
+    return
 end
 
 function main(argv)
@@ -98,7 +196,7 @@ function main(argv)
 
     # Default values
     inputfiles = String[]
-    outputfile = nothing
+    outputfile = ""
     quiet = false
     verbose = false
     debug = false
@@ -153,16 +251,16 @@ function main(argv)
     if inplace && check
         return panic("options `--inplace` and `--check` are mutually exclusive")
     end
-    if inplace && outputfile !== nothing
+    if inplace && outputfile != ""
         return panic("options `--inplace` and `--output` are mutually exclusive")
     end
-    if check && outputfile !== nothing
+    if check && outputfile != ""
         return panic("options `--check` and `--output` are mutually exclusive")
     end
     if inplace && input_is_stdin
         return panic("option `--inplace` can not be used together with stdin input")
     end
-    if outputfile !== nothing && length(inputfiles) > 1
+    if outputfile != "" && length(inputfiles) > 1
         return panic("option `--output` can not be used together with multiple input files")
     end
     if length(inputfiles) > 1 && !(inplace || check)
@@ -173,10 +271,8 @@ function main(argv)
         push!(inputfiles, "-")
     end
 
-    git = ""
     if diff
-        git = something(Sys.which("git"), git)
-        if isempty(git)
+        if Sys.which("git") === nothing
             return panic("option `--diff` requires `git` to be installed")
         end
     end
@@ -187,7 +283,7 @@ function main(argv)
         if input_is_stdin
             @assert length(inputfiles) == 1
             sourcetext = try
-                read(stdin, String)
+                read_stdin(String)
             catch err
                 return panic("could not read input from stdin: ", err)
             end
@@ -205,46 +301,43 @@ function main(argv)
         end
 
         # Figure out output
-        output_is_file = false
-        output_is_samefile = false
         if inplace
-            @assert outputfile === nothing
+            @assert outputfile == ""
             @assert isfile(inputfile)
             @assert !input_is_stdin
-            output = inputfile
-            output_is_samefile = output_is_file = true
+            output = Output(:file, inputfile, stdout(), true, true)
         elseif check
-            @assert outputfile === nothing
-            output = devnull
+            @assert outputfile == ""
+            output = Output(:devnull, "", stdout(), false, false)
         else
             @assert length(inputfiles) == 1
-            if outputfile === nothing || outputfile == "-"
-                output = stdout
+            if outputfile == "" || outputfile == "-"
+                output = Output(:stdout, "", stdout(), false, false)
             elseif isfile(outputfile) && !input_is_stdin && samefile(outputfile, inputfile)
                 return panic("can not use same file for input and output, use `-i` to modify a file in place")
             else
-                output = outputfile
-                output_is_file = true
+                output = Output(:file, outputfile, stdout(), true, false)
             end
         end
 
         # Print file info unless quiet and unless stdin and/or stdout is involved
-        print_progress = !(quiet || input_is_stdin || !(output_is_file || check))
+        print_progress = !(quiet || input_is_stdin || !(output.output_is_file || check))
 
         # Print file info unless quiet and unless input/output is stdin/stdout
         if print_progress
+            @assert inputfile != "-"
             input_pretty = relpath(inputfile)
             if check
                 str = "Checking `$(input_pretty)` "
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
-                printstyled(stderr, str, dots, " "; color = :blue)
+                printstyled(stderr(), str * dots * " "; color = :blue)
             else
-                to = output_is_samefile ? " " : " -> `$(relpath(output))` "
+                to = output.output_is_samefile ? " " : " -> `$(relpath(output.file))` "
                 str = "Formatting `$(inputfile)`$(to)"
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
-                printstyled(stderr, str, dots, " "; color = :blue)
+                printstyled(stderr(), str * dots * " "; color = :blue)
             end
         end
 
@@ -255,11 +348,20 @@ function main(argv)
             ctx′
         catch err
             print_progress && errln()
-            # Limit stacktrace to 5 frames because Runic uses recursion a lot and 5 should
-            # be enough to see where the error occurred.
-            bt = stacktrace(catch_backtrace())
-            bt = bt[1:min(5, length(bt))]
-            rc = panic(err, bt)
+            if err isa JuliaSyntax.ParseError
+                panic("failed to parse input: ", err)
+                continue
+            end
+            msg = "failed to format input: "
+            @static if juliac
+                rc = panic(msg, err)
+            else
+                # Limit stacktrace to 5 frames because Runic uses recursion a lot and 5
+                # should be enough to see where the error occurred.
+                bt = stacktrace(catch_backtrace())
+                bt = bt[1:min(5, length(bt))]
+                rc = panic(msg, err, bt)
+            end
             if fail_fast
                 return rc
             end
@@ -276,35 +378,58 @@ function main(argv)
                 print_progress && okln()
             end
         elseif changed || !inplace
-            @assert output !== devnull
+            @assert output.which !== :devnull
             try
-                write(output, seekstart(ctx.fmt_io))
+                writeo(output, seekstart(ctx.fmt_io))
             catch err
                 print_progress && errln()
-                panic("could not write to output file `$(output)`: ", err)
+                panic("could not write to output file `$(output.file)`: ", err)
             end
             print_progress && okln()
         else
             print_progress && okln()
         end
         if diff
-            @assert git !== ""
             mktempdir() do dir
                 a = mkdir(joinpath(dir, "a"))
                 b = mkdir(joinpath(dir, "b"))
                 file = basename(inputfile)
                 A = joinpath(a, file)
                 B = joinpath(b, file)
-                write(A, ctx.src_str)
-                write(B, seekstart(ctx.fmt_io))
-                cmd = ```
-                $(git) --no-pager diff --color=always --no-index --no-prefix
-                    $(relpath(A, dir)) $(relpath(B, dir))
-                ```
+                # juliac: `open(...) do` uses dynamic dispatch otherwise the following
+                # blocks could be written as
+                # ```
+                # write(A, ctx.src_str)
+                # write(B, seekstart(ctx.fmt_io))
+                # ```
+                let io = open(A, "w")
+                    try
+                        write(io, ctx.src_str)
+                    finally
+                        close(io)
+                    end
+                end
+                let io = open(B, "w")
+                    try
+                        write(io, seekstart(ctx.fmt_io))
+                    finally
+                        close(io)
+                    end
+                end
+                # juliac: Cmd string parsing uses dynamic dispatch
+                # cmd = ```
+                # $(git) --no-pager diff --color=always --no-index --no-prefix
+                #     $(relpath(A, dir)) $(relpath(B, dir))
+                # ```
+                git_argv = String[
+                    Sys.which("git"), "--no-pager", "diff", "--color=always", "--no-index", "--no-prefix",
+                    relpath(A, dir), relpath(B, dir),
+                ]
+                cmd = Cmd(git_argv)
                 # `ignorestatus` because --no-index implies --exit-code
                 cmd = setenv(ignorestatus(cmd); dir = dir)
-                cmd = pipeline(cmd, stdout = stderr, stderr = stderr)
-                run(cmd)
+                cmd = pipeline(cmd, stdout = stderr(), stderr = stderr())
+                run_cmd(cmd)
             end
         end
 
