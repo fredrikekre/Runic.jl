@@ -7,13 +7,8 @@ else
 end
 
 # Check whether we are compiling with juliac
-# TODO: I thought juliac would never use existing pkgimages but looks like it does so this
-# isn't reliable... Existing cache files are pruned in the Makefile for now.
-const juliac = let opts = Base.JLOptions()
-    hasfield(typeof(opts), :trim) &&
-        getfield(opts, :trim) != 0 &&
-        Base.generating_output()
-end
+using Preferences: @load_preference
+const juliac = @load_preference("juliac", false)
 
 @static if juliac
     stderr() = Core.stderr
