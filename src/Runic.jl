@@ -51,10 +51,18 @@ end
 # Re-package a GreenNode as a Node
 function Node(node::JuliaSyntax.GreenNode)
     tags = 0 % TagType
-    return Node(
-        JuliaSyntax.head(node), JuliaSyntax.span(node),
-        map(Node, JuliaSyntax.children(node)), tags
-    )
+    # juliac: this is `kids = map(Node, JuliaSyntax.children(node))` but written out like
+    # this in order to help inference.
+    children = JuliaSyntax.children(node)
+    if children isa Tuple{}
+        kids = ()
+    else
+        kids = Vector{Node}(undef, length(children))
+        for (i, child) in pairs(children)
+            kids[i] = Node(child)
+        end
+    end
+    return Node(JuliaSyntax.head(node), JuliaSyntax.span(node), kids, tags)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", node::Node)
@@ -235,11 +243,11 @@ function check_format_toggle(ctx::Context, node::Node, kid::Node, i::Int)::Union
     offmatch === nothing && return nothing
     toggle = offmatch.captures[3]::AbstractString
     if toggle == "on"
-        @debug "Ignoring `$(offmatch.match)` toggle since formatting is already on."
+        # @debug "Ignoring `$(offmatch.match)` toggle since formatting is already on."
         return nothing
     end
     if !validate_toggle(ctx, kids, i)
-        @debug "Ignoring `$(offmatch.match)` toggle since it is not on a separate line."
+        # @debug "Ignoring `$(offmatch.match)` toggle since it is not on a separate line."
         return nothing
     end
     # Find a matching closing toggle
@@ -260,20 +268,20 @@ function check_format_toggle(ctx::Context, node::Node, kid::Node, i::Int)::Union
         # Check that the comments match in style
         if offmatch.captures[1] != onmatch.captures[1] ||
                 offmatch.captures[2] != onmatch.captures[2]
-            @debug "Ignoring `$(onmatch.match)` toggle since it doesn't match the " *
-                "style of the `$(offmatch.match)` toggle."
+            # @debug "Ignoring `$(onmatch.match)` toggle since it doesn't match the " *
+            #     "style of the `$(offmatch.match)` toggle."
             accept_node!(ctx, lkid)
             continue
         end
         toggle = onmatch.captures[3]::AbstractString
         if toggle == "off"
-            @debug "Ignoring `$(onmatch.match)` toggle since formatting is already off."
+            # @debug "Ignoring `$(onmatch.match)` toggle since formatting is already off."
             accept_node!(ctx, lkid)
             continue
         end
         @assert toggle == "on"
         if !validate_toggle(ctx, kids, j)
-            @debug "Ignoring `$(onmatch.match)` toggle since it is not on a separate line."
+            # @debug "Ignoring `$(onmatch.match)` toggle since it is not on a separate line."
             accept_node!(ctx, lkid)
             continue
         end
@@ -287,8 +295,8 @@ function check_format_toggle(ctx::Context, node::Node, kid::Node, i::Int)::Union
     if length(ctx.lineage_kinds) == 1 && ctx.lineage_kinds[1] === K"toplevel"
         return typemax(Int)
     end
-    @debug "Ignoring `$(offmatch.match)` toggle since no matching `on` toggle " *
-        "was found at the same tree level."
+    # @debug "Ignoring `$(offmatch.match)` toggle since no matching `on` toggle " *
+    #     "was found at the same tree level."
     return nothing
 end
 

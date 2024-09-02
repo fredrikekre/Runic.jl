@@ -3245,13 +3245,12 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
     kids′ = kids
-    dealias() = kids′ === kids ? copy(kids) : kids′
     semi_idx = findfirst(x -> kind(x) === K";", kids′)
     while semi_idx !== nothing
         search_index = semi_idx + 1
         if kmatch(kids′, KSet"; NewlineWs", semi_idx)
             # `\s*;\n` -> `\n`
-            kids′ = dealias()
+            kids′ = kids′ === kids ? copy(kids) : kids′
             space_before = kmatch(kids′, KSet"Whitespace ;", semi_idx - 1)
             if space_before
                 span_overwrite = span(kids′[semi_idx - 1]) + span(kids′[semi_idx])
@@ -3276,7 +3275,7 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
                 kmatch(kids′, KSet"; Whitespace Comment NewlineWs", semi_idx)
             # `\s*;\s*#\n` -> `\s* \s*#\n`
             # The `;` is replaced by ` ` here in case comments are aligned
-            kids′ = dealias()
+            kids′ = kids′ === kids ? copy(kids) : kids′
             ws_span = span(kids′[semi_idx])
             @assert ws_span == 1
             space_before = kmatch(kids′, KSet"Whitespace ;", semi_idx - 1)
