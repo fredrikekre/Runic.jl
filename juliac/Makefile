@@ -8,6 +8,7 @@ runicc: runicc.jl Project.toml Manifest.toml $(RUNIC_FILES)
 
 Manifest.toml: Project.toml ../Project.toml
 	$(JULIA) --project=. -e 'using Pkg; Pkg.instantiate()'
+	@touch $@ # Pkg.instantiate doesn't update the mtime if there are no changes
 
 clean:
 	-rm -f runicc Manifest.toml
