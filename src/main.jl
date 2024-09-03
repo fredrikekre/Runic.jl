@@ -11,23 +11,25 @@ using Preferences: @load_preference
 const juliac = @load_preference("juliac", false)
 
 @static if juliac
-    stderr() = Core.stderr
-    stdout() = Core.stdout
     include("juliac.jl")
+    const stdin = RawIO(RawFD(0))
+    const stdout = RawIO(RawFD(1))
+    const stderr = RawIO(RawFD(2))
     const run_cmd = run_juliac
-    read_stdin(::Type{String}) = String(read_juliac())
     const printstyled = printstyled_juliac
     const mktempdir = mktempdir_juliac
     const sprint_showerror = sprint_showerror_juliac
 else
-    stderr() = Base.stderr
-    stdout() = Base.stdout
+    # const stdin = Base.stdin
+    # const stdout = Base.stdout
+    # const stderr = Base.stderr
     const run_cmd = Base.run
-    read_stdin(::Type{String}) = read(stdin, String)
     const printstyled = Base.printstyled
     const mktempdir = Base.mktempdir
     sprint_showerror(err::Exception) = sprint(showerror, err)
 end
+
+supports_color(io) = get(io, :color, false)
 
 # juliac-compatible `Base.walkdir` but since we are collecting the files eagerly anyway we
 # might as well use the same method even when not compiling with juliac.
@@ -67,39 +69,38 @@ function panic(
         msg::String, err::Union{Exception, Nothing} = nothing,
         bt::Union{Vector{Base.StackFrame}, Nothing} = nothing
     )
-    io = stderr()
-    printstyled(io, "ERROR: "; color = :red, bold = true)
-    print(io, msg)
+    printstyled(stderr, "ERROR: "; color = :red, bold = true)
+    print(stderr, msg)
     if err !== nothing
-        print(io, sprint_showerror(err))
+        print(stderr, sprint_showerror(err))
     end
     @static if juliac
         @assert bt === nothing
     else
         if bt !== nothing
-            Base.show_backtrace(io, bt)
+            Base.show_backtrace(stderr, bt)
         end
     end
-    println(io)
+    println(stderr)
     global errno = 1
     return errno
 end
 
 function okln()
-    printstyled(stderr(), "✔"; color = :green, bold = true)
-    println(stderr())
+    printstyled(stderr, "✔"; color = :green, bold = true)
+    println(stderr)
     return
 end
 function errln()
-    printstyled(stderr(), "✖"; color = :red, bold = true)
-    println(stderr())
+    printstyled(stderr, "✖"; color = :red, bold = true)
+    println(stderr)
     return
 end
 
 
 # Print a typical cli program help message
 function print_help()
-    io = stdout()
+    io = stdout
     printstyled(io, "NAME", bold = true)
     println(io)
     println(io, "       Runic.main - format Julia source code")
@@ -278,7 +279,7 @@ function main(argv)
         if input_is_stdin
             @assert length(inputfiles) == 1
             sourcetext = try
-                read_stdin(String)
+                read(stdin, String)
             catch err
                 return panic("could not read input from stdin: ", err)
             end
@@ -300,18 +301,18 @@ function main(argv)
             @assert outputfile == ""
             @assert isfile(inputfile)
             @assert !input_is_stdin
-            output = Output(:file, inputfile, stdout(), true, true)
+            output = Output(:file, inputfile, stdout, true, true)
         elseif check
             @assert outputfile == ""
-            output = Output(:devnull, "", stdout(), false, false)
+            output = Output(:devnull, "", stdout, false, false)
         else
             @assert length(inputfiles) == 1
             if outputfile == "" || outputfile == "-"
-                output = Output(:stdout, "", stdout(), false, false)
+                output = Output(:stdout, "", stdout, false, false)
             elseif isfile(outputfile) && !input_is_stdin && samefile(outputfile, inputfile)
                 return panic("can not use same file for input and output, use `-i` to modify a file in place")
             else
-                output = Output(:file, outputfile, stdout(), true, false)
+                output = Output(:file, outputfile, stdout, true, false)
             end
         end
 
@@ -326,13 +327,13 @@ function main(argv)
                 str = "Checking `$(input_pretty)` "
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
-                printstyled(stderr(), str * dots * " "; color = :blue)
+                printstyled(stderr, str * dots * " "; color = :blue)
             else
                 to = output.output_is_samefile ? " " : " -> `$(relpath(output.file))` "
                 str = "Formatting `$(inputfile)`$(to)"
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
-                printstyled(stderr(), str * dots * " "; color = :blue)
+                printstyled(stderr, str * dots * " "; color = :blue)
             end
         end
 
@@ -411,19 +412,20 @@ function main(argv)
                         close(io)
                     end
                 end
+                color = supports_color(stderr) ? "always" : "never"
                 # juliac: Cmd string parsing uses dynamic dispatch
                 # cmd = ```
-                # $(git) --no-pager diff --color=always --no-index --no-prefix
+                # $(git) --no-pager diff --color=$(color) --no-index --no-prefix
                 #     $(relpath(A, dir)) $(relpath(B, dir))
                 # ```
                 git_argv = String[
-                    Sys.which("git"), "--no-pager", "diff", "--color=always", "--no-index", "--no-prefix",
+                    Sys.which("git"), "--no-pager", "diff", "--color=$(color)", "--no-index", "--no-prefix",
                     relpath(A, dir), relpath(B, dir),
                 ]
                 cmd = Cmd(git_argv)
                 # `ignorestatus` because --no-index implies --exit-code
                 cmd = setenv(ignorestatus(cmd); dir = dir)
-                cmd = pipeline(cmd, stdout = stderr(), stderr = stderr())
+                cmd = pipeline(cmd, stdout = stderr, stderr = stderr)
                 run_cmd(cmd)
             end
         end

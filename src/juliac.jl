@@ -1,47 +1,60 @@
 # SPDX-License-Identifier: MIT
 
-# juliac-compatible replacement for `read(stdin)`
-function read_juliac()
+# Minimal juliac-compatible IO implementation for stdin/stdout/stderr
+struct RawIO <: Base.IO
+    fd::RawFD
+end
+
+function Base.unsafe_write(io::RawIO, buf::Ptr{UInt8}, count::UInt)
+    n = @ccall write(io.fd::Cint, buf::Ptr{Cvoid}, count::Csize_t)::Cssize_t
+    return n % Int
+end
+
+function Base.write(io::RawIO, byte::UInt8)
+    n = @ccall write(io.fd::Cint, Ref(byte)::Ptr{Cvoid}, 1::Csize_t)::Cssize_t
+    return n % Int
+end
+
+# TODO: This could potentially hook into `Base.readbytes!` instead to make this more
+# generally useful but for the usecase here we just need to read all the bytes until EOF.
+function Base.read(io::RawIO)
+    @assert io === stdin
     bytes = UInt8[]
-    size = 1
-    nmemb = 1024
-    buf = zeros(UInt8, nmemb)
-    file = Libc.FILE(RawFD(0), "r") # FILE constructor calls `fdopen`
-    local fread, feof, ferror # Silence of the Langs(erver)
+    bufsize = 1024
+    buf = Vector{UInt8}(undef, bufsize)
     while true
-        nread = @ccall fread(buf::Ptr{UInt8}, size::Csize_t, nmemb::Cint, file::Ptr{Libc.FILE})::Csize_t
+        nread = @ccall read(io.fd::Cint, buf::Ptr{Cvoid}, bufsize::Csize_t)::Cssize_t
+        nread == -1 && systemerror("read")
+        nread == 0 && break # eof
         append!(bytes, @view(buf[1:nread]))
-        if nread < nmemb
-            if (@ccall feof(file::Ptr{Libc.FILE})::Cint) != 0
-                close(file)
-                break
-            else
-                @assert (@ccall ferror(file::Ptr{Libc.FILE})::Cint) != 0
-                close(file)
-                error("ferror: fread failed")
-            end
-        end
     end
     return bytes
 end
 
-# juliac-compatible `Base.printstyled` that simply forces color
-# TODO: detect color support (and maybe support `--color=(yes|no)`?), right now color is
-# forced. For juliac we can detect whether stdout/stderr is a tty with
-# `(@ccall isatty(RawFD(1)::Cint)::Cint) == 1`.
-function printstyled_juliac(io::IO, str::String; bold = false, color::Symbol = :normal)
-    @assert io === Core.stdout || io === Core.stderr
+# juliac-compatible `Base.printstyled`
+function printstyled_juliac(io::RawIO, str::String; bold = false, color::Symbol = :normal)
+    # TODO: Base.printstyled splits on \n and prints each line separately
     @assert !occursin('\n', str)
-    color === :red && write(io, "\e[31m")
-    color === :green && write(io, "\e[32m")
-    color === :blue && write(io, "\e[34m")
-    color === :normal && write(io, "\e[0m")
-    bold && write(io, "\e[1m")
+    use_color = isatty(io)
+    if use_color
+        color === :red && write(io, "\e[31m")
+        color === :green && write(io, "\e[32m")
+        color === :blue && write(io, "\e[34m")
+        color === :normal && write(io, "\e[0m")
+        bold && write(io, "\e[1m")
+    end
     print(io, str)
-    bold && write(io, "\e[22m")
-    color in (:red, :green, :blue) && write(io, "\e[39m")
+    if use_color
+        bold && write(io, "\e[22m")
+        color in (:red, :green, :blue) && write(io, "\e[39m")
+    end
     return
 end
+
+function isatty(io::RawIO)
+    return (@ccall isatty(io.fd::Cint)::Cint) == 1
+end
+supports_color(io::RawIO) = isatty(io)
 
 # juliac-compatible `Base.showerror`
 function sprint_showerror_juliac(err::Exception)
@@ -121,10 +134,10 @@ end
 function run_juliac(cmd::Base.CmdRedirect)
     # Unpack the redirection layers
     @assert cmd.stream_no == 2
-    @assert cmd.handle::Core.CoreSTDERR === Core.stderr
+    @assert cmd.handle::RawIO === stderr
     cmd′ = cmd.cmd::Base.CmdRedirect
     @assert cmd′.stream_no == 1
-    @assert cmd′.handle::Core.CoreSTDERR === Core.stderr
+    @assert cmd′.handle::RawIO === stderr
     cmd′′ = cmd′.cmd::Cmd
     @assert cmd′′.ignorestatus
     argv = cmd′′.exec
