@@ -130,9 +130,7 @@ function run_juliac(cmd::Base.CmdRedirect)
     argv = cmd′′.exec
     dir = cmd′′.dir
     # Run the command
-    bytes = pipe_fork_exec(argv, dir)
-    # Write output
-    write(Core.stderr, bytes)
+    pipe_fork_exec(argv, dir)
     return
 end
 
@@ -145,6 +143,7 @@ end
 
 function pipe_fork_exec(argv::Vector{String}, dir::String)
     local pipe, fork, dup2, chdir, execv, waitpid # Silence of the Langs(erver)
+    STDOUT_FILENO, STDERR_FILENO = 1, 2
     # Set up the pipe
     fds = Vector{Cint}(undef, 2)
     READ_END, WRITE_END = 1, 2
@@ -161,7 +160,6 @@ function pipe_fork_exec(argv::Vector{String}, dir::String)
         err = @ccall close(fds[READ_END]::Cint)::Cint
         err == -1 && systemerror("close")
         # Duplicate write end of the pipe to stdout and stderr
-        STDOUT_FILENO, STDERR_FILENO = 1, 2
         err = @ccall dup2(fds[WRITE_END]::Cint, STDOUT_FILENO::Cint)::Cint
         err == -1 && systemerror("dup2")
         err = @ccall dup2(fds[WRITE_END]::Cint, STDERR_FILENO::Cint)::Cint
@@ -180,18 +178,24 @@ function pipe_fork_exec(argv::Vector{String}, dir::String)
     # Close write end of the pipe
     err = @ccall close(fds[WRITE_END]::Cint)::Cint
     err == -1 && systemerror("close")
-    bytes = UInt8[]
-    buf = Vector{UInt8}(undef, 1024)
+    # Shuffle bytes from the pipe to stderr
+    bufsize = 1024
+    buf = Vector{UInt8}(undef, bufsize)
     while true
-        nread = @ccall read(fds[READ_END]::Cint, buf::Ptr{Cvoid}, 1024::Csize_t)::Cssize_t
+        # Read bytes from the pipe
+        nread = @ccall read(fds[READ_END]::Cint, buf::Ptr{Cvoid}, bufsize::Csize_t)::Cssize_t
         nread == -1 && systemerror("read")
         nread == 0 && break # eof
-        append!(bytes, @view(buf[1:nread]))
+        # Write bytes to stderr
+        nwrite = @ccall write(STDERR_FILENO::Cint, buf::Ptr{Cvoid}, nread::Csize_t)::Cssize_t
+        nread == -1 && systemerror("write")
+        @assert nwrite == nread
     end
-    err = @ccall close(fds[READ_END]::Cint)::Cint # Close the read end of the pipe
+    # Close the read end of the pipe
+    err = @ccall close(fds[READ_END]::Cint)::Cint
     err == -1 && systemerror("close")
 
-    # Check exit status of the child
+    # Wait for, and check exit status of, the child
     status = Ref{Cint}()
     wpid = @ccall waitpid(cpid::Cint, status::Ref{Cint}, 0::Cint)::Cint
     wpid == -1 && systemerror("waitpid")
@@ -199,5 +203,5 @@ function pipe_fork_exec(argv::Vector{String}, dir::String)
         error("child process did not exit normally")
     end
     # crc = WEXITSTATUS(status) # ignore this like `ignorestatus(cmd)`
-    return bytes
+    return
 end
