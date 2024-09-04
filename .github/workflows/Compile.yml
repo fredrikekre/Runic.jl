@@ -1,0 +1,36 @@
+name: Compile
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'release-'
+    tags:
+      - '*'
+  pull_request:
+
+jobs:
+  compile:
+    name: juliac - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+    steps:
+      - uses: actions/checkout@v4
+      # - uses: julia-actions/setup-julia@v2
+      #   with:
+      #     version: 'nightly'
+      - uses: julia-actions/install-juliaup@v2
+        with:
+          channel: 'pr55047' # https://github.com/JuliaLang/julia/pull/55047
+      - uses: julia-actions/cache@v2
+      - name: Compile Runic with juliac
+        run: |
+          make -C juliac
+      - name: Smoke test compiled binary
+        run: |
+          ./juliac/runicc --check --diff .
