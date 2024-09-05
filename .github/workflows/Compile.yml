@@ -27,6 +27,11 @@ jobs:
       - uses: julia-actions/install-juliaup@v2
         with:
           channel: 'pr55047' # https://github.com/JuliaLang/julia/pull/55047
+      - name: Patch julia-config.jl
+        run: |
+          juliaconfig=$(julia -e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR,"julia", "julia-config.jl"))')
+          patch -p1 "${juliaconfig}" juliac/rpath-private-libs-macos.patch
+        if: ${{ matrix.os == 'macOS-latest' }}
       - uses: julia-actions/cache@v2
       - name: Compile Runic with juliac
         run: |
