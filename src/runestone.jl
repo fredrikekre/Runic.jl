@@ -308,6 +308,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
         if opening_leaf_idx === nothing
             # Implicit tuple without (), for example arguments in a do-block
             implicit_tuple = true
+            @assert kind(node) === K"tuple"
             opening_leaf_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
             if opening_leaf_idx === nothing
                 # All whitespace... return?
@@ -366,7 +367,13 @@ function spaces_in_listlike(ctx::Context, node::Node)
     if kind(node) in KSet"call dotcall macrocall"
         require_trailing_comma = false
     elseif implicit_tuple
-        require_trailing_comma = false
+        # Trailing commas in implicit tuples in the LHS of an assignment, e.g. `x, = 1, 2`,
+        # is required for single item tuples and allowed for multiple items (to allow e.g.
+        # `x, y, = z` signaling that z contains more items).
+        # Note that an implicit single item tuple can never(?) end up on the RHS so there is
+        # no need to make sure this is the LHS node.
+        require_trailing_comma = n_items == 1 && ctx.lineage_kinds[end] === K"="
+        allow_trailing_comma = ctx.lineage_kinds[end] === K"="
     elseif kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
