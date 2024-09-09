@@ -824,6 +824,10 @@ end
         # implicit tuple
         @test format_string("a,\n$(sp)b") == "a,\n    b"
         @test format_string("a,\n$(sp)b + \nb") == "a,\n    b +\n    b"
+        # implicit tuple in destructuring (LHS of K"=")
+        @test format_string("a,$(sp)=$(sp)z") == "a, = z"
+        @test format_string("a,$(sp)b$(sp)=$(sp)z") == "a, b = z"
+        @test format_string("a,$(sp)b$(sp),$(sp)=$(sp)z") == "a, b, = z"
         # K"cartesian_iterator"
         @test format_string("for i in I,\n$(sp)j in J\n# body\nend") ==
             "for i in I,\n        j in J\n    # body\nend"
