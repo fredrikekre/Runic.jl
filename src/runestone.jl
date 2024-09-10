@@ -3372,26 +3372,33 @@ function spaces_around_comments(ctx::Context, node::Node)
     prev_kid_ends_with_ws = true
     ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
     for (i, kid) in pairs(kids)
-        if kind(kid) === K"Comment" ||
-                (fl = first_leaf(kid); fl !== nothing && kind(fl) === K"Comment")
-            # TODO: In the case where the comment is found within the kid the whitespace
-            # should maybe be added right before the comment in the tree (which is how
-            # JuliaSyntax would have parsed the source if the space was already there). I
-            # don't know if this really matters though since it is already pretty random
-            # where whitespace ends up.
-            if !prev_kid_ends_with_ws
-                kids′ = kids′ === kids ? kids[1:(i - 1)] : kids′
+        kid′ = kid
+        if !prev_kid_ends_with_ws && (
+                kind(kid) === K"Comment" ||
+                    (fl = first_leaf(kid); fl !== nothing && kind(fl) === K"Comment")
+            )
+            @assert !prev_kid_ends_with_ws
+            kids′ = kids′ === kids ? kids[1:(i - 1)] : kids′
+            replace_bytes!(ctx, " ", 0)
+            if kind(kid) === K"Comment"
                 push!(kids′, ws)
-                replace_bytes!(ctx, " ", 0)
                 accept_node!(ctx, ws)
+            else
+                @assert (fl = first_leaf(kid); fl !== nothing && kind(fl) === K"Comment")
+                # When the comment is found within the kid the whitespace is added right
+                # before the comment inside of the kid instead of in this outer context.
+                # This does not necessarily match how JuliaSyntax would have parsed it, but
+                # seems to work better than the alternative.
+                kid′ = add_before_first_leaf(kid, ws)
+                @assert span(kid′) == span(kid) + 1
             end
         end
         if kids′ !== kids
-            push!(kids′, kid)
+            push!(kids′, kid′)
         end
-        accept_node!(ctx, kid)
-        prev_kid_ends_with_ws = kind(kid) in KSet"Whitespace NewlineWs" ||
-            (ll = last_leaf(kid); ll !== nothing && kind(ll) in KSet"Whitespace NewlineWs")
+        accept_node!(ctx, kid′)
+        prev_kid_ends_with_ws = kind(kid′) in KSet"Whitespace NewlineWs" ||
+            (ll = last_leaf(kid′); ll !== nothing && kind(ll) in KSet"Whitespace NewlineWs")
     end
     # Reset the stream and return
     seek(ctx.fmt_io, pos)
