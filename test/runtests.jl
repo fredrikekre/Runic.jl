@@ -83,9 +83,10 @@ end
         @test format_string("1 + 1$(sp)# comment") == "1 + 1$(csp)# comment"
         @test format_string("(a,$(sp)# comment\nb)") ==
             "(\n    a,$(csp)# comment\n    b,\n)"
-        # Edgecase where the comment ends up as the first leaf inside the call
+        # Edgecases where the comment ends up as the first leaf inside a node
         @test format_string("(a,$(sp)# comment\nb + b)") ==
             "(\n    a,$(csp)# comment\n    b + b,\n)"
+        @test format_string("if c$(sp)# a\n    b\nend") == "if c$(csp)# a\n    b\nend"
     end
     let str = "a = 1  # a comment\nab = 2 # ab comment\n"
         @test format_string(str) == str

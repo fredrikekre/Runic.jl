@@ -423,6 +423,21 @@ function replace_last_leaf(node::Node, kid′::Union{Node, NullNode})
     end
 end
 
+# Insert a node before the first leaf (at the same level)
+# TODO: Currently only works for inserting a space before a comment
+function add_before_first_leaf(node::Node, kid′::Union{Node, NullNode})
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+    @assert length(kids) > 0
+    kids′ = copy(kids)
+    if kind(kids′[1]) === K"Comment"
+        pushfirst!(kids′, kid′)
+    else
+        kids′[1] = add_before_first_leaf(kids′[1], kid′)
+    end
+    return make_node(node, kids′)
+end
+
 function last_leaf(node::Node)
     if is_leaf(node)
         return node
