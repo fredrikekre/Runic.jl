@@ -21,17 +21,9 @@ jobs:
           - macOS-latest
     steps:
       - uses: actions/checkout@v4
-      # - uses: julia-actions/setup-julia@v2
-      #   with:
-      #     version: 'nightly'
-      - uses: julia-actions/install-juliaup@v2
+      - uses: julia-actions/setup-julia@v2
         with:
-          channel: 'pr55047' # https://github.com/JuliaLang/julia/pull/55047
-      - name: Patch julia-config.jl
-        run: |
-          juliaconfig=$(julia -e 'print(joinpath(Sys.BINDIR, Base.DATAROOTDIR,"julia", "julia-config.jl"))')
-          patch -p1 "${juliaconfig}" juliac/rpath-private-libs-macos.patch
-        if: ${{ matrix.os == 'macOS-latest' }}
+          version: 'nightly'
       - uses: julia-actions/cache@v2
       - name: Compile Runic with juliac
         run: |
