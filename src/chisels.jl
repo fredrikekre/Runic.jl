@@ -779,6 +779,57 @@ function kmatch(kids, kinds, i = firstindex(kids))
     return true
 end
 
+# Extract the macro name as written in the source.
+function macrocall_name(ctx, node)
+    @assert kind(node) === K"macrocall"
+    kids = verified_kids(node)
+    pred = x -> kind(x) in KSet"MacroName StringMacroName CmdMacroName core_@cmd"
+    mkind = kind(first_leaf_predicate(node, pred)::Node)
+    if kmatch(kids, KSet"@ MacroName")
+        p = position(ctx.fmt_io)
+        bytes = read(ctx.fmt_io, span(kids[1]) + span(kids[2]))
+        seek(ctx.fmt_io, p)
+        return String(bytes)
+    elseif kmatch(kids, KSet".") || kmatch(kids, KSet"CmdMacroName") ||
+            kmatch(kids, KSet"StringMacroName")
+        bytes = read_bytes(ctx, kids[1])
+        if mkind === K"CmdMacroName"
+            append!(bytes, "_cmd")
+        elseif mkind === K"StringMacroName"
+            append!(bytes, "_str")
+        end
+        return String(bytes)
+    elseif kmatch(kids, KSet"core_@cmd")
+        bytes = read_bytes(ctx, kids[1])
+        @assert length(bytes) == 0
+        return "core_@cmd"
+    else
+        # Don't bother looking in more complex expressions, just return unknown
+        return "<unknown macro>"
+    end
+end
+
+# Inserting `return` modifies the AST in a way that is visible to macros.. In general it is
+# never safe to change the AST inside a macro, but we make an exception for some common
+# "known" macros in order to be able to format functions that e.g. have an `@inline`
+# annotation in front.
+const MACROS_SAFE_TO_INSERT_RETURN = let set = Set{String}()
+    for m in (
+            "inline", "noinline", "propagate_inbounds", "generated", "eval",
+            "assume_effects", "doc",
+        )
+        push!(set, "@$m", "Base.@$m")
+    end
+    push!(set, "Core.@doc")
+    set
+end
+function safe_to_insert_return(ctx, node)
+    for m in ctx.lineage_macros
+        m in MACROS_SAFE_TO_INSERT_RETURN || return false
+    end
+    return true
+end
+
 ##########################
 # Utilities for IOBuffer #
 ##########################
