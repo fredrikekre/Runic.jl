@@ -27,15 +27,5 @@ jobs:
     steps:
       - uses: JuliaRegistries/TagBot@v1
         with:
-          changelog: |
-            {% if custom %}
-            {{ custom }}
-            {% endif %}
-
-            See [`CHANGELOG.md`](https://github.com/fredrikekre/Prometheus.jl/blob/master/CHANGELOG.md) for notable changes.
-
-            {% if previous_release %}
-            [Diff since {{ previous_release }}]({{ compare_url }})
-            {% endif %}
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
