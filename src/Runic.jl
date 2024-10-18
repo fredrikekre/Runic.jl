@@ -496,6 +496,13 @@ function format_tree!(ctx::Context)
     end
     # Truncate the output at the root span
     truncate(ctx.fmt_io, span(root′))
+    # Check that the output is parseable
+    try
+        fmt_str = String(read(seekstart(ctx.fmt_io)))
+        JuliaSyntax.parseall(JuliaSyntax.GreenNode, fmt_str; ignore_warnings = true, version = v"2-")
+    catch
+        throw(AssertionError("re-parsing the formatted output failed"))
+    end
     # Set the final tree
     ctx.fmt_tree = root′
     return nothing
