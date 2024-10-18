@@ -379,6 +379,9 @@ end
     @test format_string("f(r\"\"\"\nf\n\"\"\")") == "f(\n    r\"\"\"\n    f\n    \"\"\"\n)"
     @test format_string("f(```\nf\n```)") == "f(\n    ```\n    f\n    ```\n)"
     @test format_string("f(x```\nf\n```)") == "f(\n    x```\n    f\n    ```\n)"
+    @test format_string("(a, @m begin\nend)") == "(\n    a, @m begin\n    end\n)"
+    @test format_string("(\na, x -> @m x[i]\n)") == "(\n    a, x -> @m x[i]\n)"
+    @test format_string("(\na, x -> @m(x[i])\n)") == "(\n    a, x -> @m(x[i]),\n)"
     # Weird cornercase where a trailing comma messes some cases up (don't recall...)
     @test format_string("{\n@f\n}") == "{\n    @f\n}"
 end

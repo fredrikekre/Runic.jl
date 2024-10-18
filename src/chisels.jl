@@ -630,6 +630,20 @@ function last_leaf_predicate(node::Node, pred::F) where {F}
     end
 end
 
+function predicate_contains(pred::F, node::Node) where {F}
+    if pred(node)::Bool
+        return true
+    elseif is_leaf(node)
+        return false
+    else
+        for k in verified_kids(node)
+            r = predicate_contains(pred, k)
+            r && return r
+        end
+        return false
+    end
+end
+
 function contains_outer_newline(kids::Vector{Node}, oidx::Int, cidx::Int; recurse = true)
     pred = x -> kind(x) === K"NewlineWs" || !JuliaSyntax.is_whitespace(x)
     for i in (oidx + 1):(cidx - 1)
