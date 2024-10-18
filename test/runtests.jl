@@ -627,24 +627,22 @@ end
         @test format_string(
             "try\n$(sp)x\n$(sp)finally\n$(sp)y\n$(sp)catch err\n$(sp)z\n$(sp)end"
         ) == "try\n    x\nfinally\n    y\ncatch err\n    z\nend"
-        if VERSION >= v"1.8"
-            # try-catch-else-end
-            @test format_string(
-                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
-            ) == "try\n    x\ncatch\n    y\nelse\n    z\nend"
-            # try-catch(err)-else-end
-            @test format_string(
-                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
-            ) == "try\n    x\ncatch err\n    y\nelse\n    z\nend"
-            # try-catch-else-finally-end
-            @test format_string(
-                "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
-            ) == "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
-            # try-catch(err)-else-finally-end
-            @test format_string(
-                "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
-            ) == "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
-        end
+        # try-catch-else-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
+        ) == "try\n    x\ncatch\n    y\nelse\n    z\nend"
+        # try-catch(err)-else-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)end"
+        ) == "try\n    x\ncatch err\n    y\nelse\n    z\nend"
+        # try-catch-else-finally-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)catch\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
+        ) == "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
+        # try-catch(err)-else-finally-end
+        @test format_string(
+            "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
+        ) == "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         # do-end
         @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
         @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
@@ -768,9 +766,7 @@ end
             @test format_string("a $(d)+\n$(sp)b") == "a $(d)+\n    b"
             @test format_string("a $(d)+ b $(d)*\n$(sp)c") == "a $(d)+ b $(d)*\n    c"
             @test format_string("a $(d)+\n$(sp)b $(d)*\n$(sp)c") == "a $(d)+\n    b $(d)*\n    c"
-            if !(VERSION < v"1.7" && d == ".")
-                @test format_string("a $(d)||\n$(sp)b") == "a $(d)||\n    b"
-            end
+            @test format_string("a $(d)||\n$(sp)b") == "a $(d)||\n    b"
         end
         # assignment
         for nl in ("\n", "\n\n")
@@ -1070,20 +1066,18 @@ end
         # try-finally-catch(err)-end
         @test format_string("try$(d)x$(d)finally$(d)y$(d)catch err$(d)z$(d)end") ==
             "try\n    x\nfinally\n    y\ncatch err\n    z\nend"
-        if VERSION >= v"1.8"
-            # try-catch-else-end
-            @test format_string("try$(d)x$(d)catch\ny$(d)else$(d)z$(d)end") ==
-                "try\n    x\ncatch\n    y\nelse\n    z\nend"
-            # try-catch(err)-else-end
-            @test format_string("try$(d)x$(d)catch err$(d)y$(d)else$(d)z$(d)end") ==
-                "try\n    x\ncatch err\n    y\nelse\n    z\nend"
-            # try-catch-else-finally-end
-            @test format_string("try$(d)x$(d)catch\ny$(d)else$(d)z$(d)finally$(d)z$(d)end") ==
-                "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
-            # try-catch(err)-else-finally-end
-            @test format_string("try$(d)x$(d)catch err$(d)y$(d)else$(d)z$(d)finally$(d)z$(d)end") ==
-                "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
-        end
+        # try-catch-else-end
+        @test format_string("try$(d)x$(d)catch\ny$(d)else$(d)z$(d)end") ==
+            "try\n    x\ncatch\n    y\nelse\n    z\nend"
+        # try-catch(err)-else-end
+        @test format_string("try$(d)x$(d)catch err$(d)y$(d)else$(d)z$(d)end") ==
+            "try\n    x\ncatch err\n    y\nelse\n    z\nend"
+        # try-catch-else-finally-end
+        @test format_string("try$(d)x$(d)catch\ny$(d)else$(d)z$(d)finally$(d)z$(d)end") ==
+            "try\n    x\ncatch\n    y\nelse\n    z\nfinally\n    z\nend"
+        # try-catch(err)-else-finally-end
+        @test format_string("try$(d)x$(d)catch err$(d)y$(d)else$(d)z$(d)finally$(d)z$(d)end") ==
+            "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         # do-end
         @test format_string("open() do\na$(d)end") == "open() do\n    a\nend"
         @test format_string("open() do\nend") == "open() do\nend"

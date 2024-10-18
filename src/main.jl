@@ -1,10 +1,7 @@
 # SPDX-License-Identifier: MIT
 
-@static if VERSION >= v"1.8"
-    errno::Cint = 0
-else
-    errno = 0
-end
+# Return code of main
+errno::Cint = 0
 
 # Check whether we are compiling with juliac
 using Preferences: @load_preference
