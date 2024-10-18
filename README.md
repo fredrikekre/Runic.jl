@@ -177,7 +177,7 @@ any of the input files are incorrectly formatted. As an example, the following i
 can be used:
 
 ```sh
-git ls-files -z -- '*.jl' | xargs -0 julia -m Runic --check --diff
+git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia -m Runic --check --diff
 ```
 
 This will run Runic's check mode (`--check`) on all `.jl` files in the repository and print
@@ -187,7 +187,8 @@ formatted the exit code will be non-zero.
 
 ### Github Actions
 
-Here is a complete workflow file for running Runic on Github Actions:
+You can use [`fredrikekre/runic-action`](https://github.com/fredrikekre/runic-action) to run
+Runic on Github Actions:
 
 ```yaml
 name: Runic formatting
@@ -205,17 +206,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
+      # - uses: julia-actions/setup-julia@v2
+      #   with:
+      #     version: '1'
+      # - uses: julia-actions/cache@v2
+      - uses: fredrikekre/runic-action@v1
         with:
-          version: "nightly" # Only nightly have the -m flag currently
-      - uses: julia-actions/cache@v2
-      - name: Install Runic
-        run: |
-          julia --color=yes --project=@runic -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
-      - name: Run Runic
-        run: |
-          git ls-files -z -- '*.jl' | xargs -0 julia --project=@runic -m Runic --check --diff
+          version: '1'
 ```
+
+See [`fredrikekre/runic-action`](https://github.com/fredrikekre/runic-action) for details.
+
+> [!IMPORTANT]
+> It is *highly recommended* to pin the Runic version to a full version number (e.g.
+> `major.minor.patch`) to avoid CI failures due to changes in Runic.jl because even
+> formatting bug fixes may result in formatting changes that would then fail the workflow.
 
 ### Git Hooks
 
