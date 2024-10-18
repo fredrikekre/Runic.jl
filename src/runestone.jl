@@ -3408,3 +3408,197 @@ function spaces_around_comments(ctx::Context, node::Node)
         return make_node(node, kids′)
     end
 end
+
+function return_node(ctx::Context, ret::Node)
+    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    kids = [
+        Node(JuliaSyntax.SyntaxHead(K"return", 0), 6),
+    ]
+    if is_leaf(ret)
+        replace_bytes!(ctx, "return ", 0)
+        push!(kids, ws)
+        push!(kids, ret)
+    else
+        @assert kind(first_leaf(ret)) !== K"NewlineWs"
+        has_ws = kind(first_leaf(ret)) === K"Whitespace"
+        if has_ws
+            replace_bytes!(ctx, "return", 0)
+            push!(kids, ret)
+        else
+            replace_bytes!(ctx, "return ", 0)
+            push!(kids, ws)
+            push!(kids, ret)
+        end
+    end
+    return Node(JuliaSyntax.SyntaxHead(K"return", 0), kids)
+end
+
+function has_return(node::Node)
+    kids = verified_kids(node)
+    if kind(node) in KSet"let catch else finally"
+        idx = findfirst(x -> kind(x) === K"block", kids)::Int
+        if kind(node) === K"let"
+            idx = findnext(x -> kind(x) === K"block", kids, idx + 1)::Int
+        end
+        return has_return(kids[idx])
+    elseif kind(node) in KSet"try if elseif"
+        # Look for the initial try/if block and then for
+        # catch/else/finally (for try) or elseif/else (for if).
+        pred = function(x)
+            return !is_leaf(x) && kind(x) in KSet"catch else finally elseif block"
+        end
+        idx = findfirst(pred, kids)
+        while idx !== nothing
+            has_return(kids[idx]) && return true
+            idx = findnext(pred, kids, idx + 1)
+        end
+        return false
+    elseif kind(node) === K"macrocall"
+        # Check direct kids but also recurse into blocks to catch e.g. `@foo begin ... end`.
+        idx = findfirst(x -> kind(x) === K"return", kids)
+        idx === nothing || return true
+        return any(kids) do x
+            return !is_leaf(x) && kind(x) in KSet"let try if block macrocall" && has_return(x)
+        end
+    elseif kind(node) === K"block"
+        # Don't care whether this is the last expression,
+        # that is the job of a linter or something I guess.
+        return findfirst(x -> kind(x) === K"return", kids) !== nothing
+    else
+        error("unreachable")
+    end
+end
+
+function explicit_return_block(ctx, node)
+    @assert kind(node) === K"block"
+    if has_return(node)
+        # If the block already has a return node (anywhere) we accept it and move on.
+        return nothing
+    end
+    kids = verified_kids(node)
+    kids′ = kids
+    rexpr_idx = findlast(!JuliaSyntax.is_whitespace, kids′)
+    if rexpr_idx === nothing
+        # Empty block. TODO: Perhaps add `return nothing`?
+        return nothing
+    end
+    rexpr = kids′[rexpr_idx]
+    @assert kind(rexpr) !== K"return" # Should have been caught by has_return
+    if is_leaf(rexpr) ||
+            kind(rexpr) in KSet"call dotcall tuple vect ref hcat typed_hcat vcat typed_vcat \
+                ? && || :: juxtapose <: >: comparison string . -> comprehension do macro \
+                typed_comprehension where parens curly function quote global local =" ||
+            is_string_macro(rexpr) || is_assignment(rexpr) ||
+            (kind(rexpr) in KSet"let if try" && !has_return(rexpr)) ||
+            (kind(rexpr) === K"macrocall" && !has_return(rexpr)) ||
+            (is_begin_block(rexpr) && !has_return(rexpr)) ||
+            kind(rexpr) === K"quote" && JuliaSyntax.has_flags(rexpr, JuliaSyntax.COLON_QUOTE)
+        # The cases caught in this branch are simple, just wrap the last expression in a
+        # return node. Also make sure the previous node is a K"NewlineWs".
+        for i in 1:(rexpr_idx - 1)
+            accept_node!(ctx, kids′[i])
+        end
+        # If this is a call node, and the call the function name contains `throw` or `error` we
+        # bail because `return throw(...)` looks kinda stupid.
+        if kind(rexpr) === K"call"
+            call_kids = verified_kids(rexpr)
+            fname_idx = findfirst(!JuliaSyntax.is_whitespace, call_kids)::Int
+            local fname
+            let p = position(ctx.fmt_io)
+                for i in 1:(fname_idx - 1)
+                    accept_node!(ctx, call_kids[i])
+                end
+                fname = String(read_bytes(ctx, call_kids[fname_idx]))
+                seek(ctx.fmt_io, p)
+            end
+            if contains(fname, "throw") || contains(fname, "error")
+                return nothing
+            end
+        end
+        # We will make changes so copy
+        kids′ = kids′ === kids ? copy(kids) : kids′
+        # Make sure the previous node is a K"NewlineWs"
+        if !kmatch(kids′, KSet"NewlineWs", rexpr_idx - 1)
+            spn = 0
+            @assert kind(first_leaf(rexpr)) !== K"NewlineWs"
+            # Can it happen that there are whitespace hidden in the previous node?
+            # Let's see if this assert ever fire.
+            if rexpr_idx > 1
+                prev = kids′[rexpr_idx - 1]
+                if !is_leaf(prev)
+                    @assert !(kind(last_leaf(prev)) in KSet"Whitespace NewlineWs")
+                end
+            end
+            # Check whether there are whitespace we need to overwrite
+            if kmatch(kids′, KSet"Whitespace", rexpr_idx - 1)
+                # The previous node is whitespace
+                spn = span(popat!(kids′, rexpr_idx - 1))
+                seek(ctx.fmt_io, position(ctx.fmt_io) - spn)
+                rexpr_idx -= 1
+                @assert kind(first_leaf(rexpr)) !== K"Whitespace"
+            elseif kind(first_leaf(rexpr)) === K"Whitespace"
+                # The first child in the return node is whitespace
+                spn = span(first_leaf(rexpr))
+                rexpr = replace_first_leaf(rexpr, nullnode)
+            end
+            nl = "\n" * " "^(4 * ctx.indent_level)
+            nlnode = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), sizeof(nl))
+            insert!(kids′, rexpr_idx, nlnode)
+            rexpr_idx += 1
+            replace_bytes!(ctx, nl, spn)
+            accept_node!(ctx, nlnode)
+        end
+        ret = return_node(ctx, rexpr)
+        kids′[rexpr_idx] = ret
+        return make_node(node, kids′)
+    elseif kind(rexpr) in KSet"for while"
+        # For `for` and `while` loops we add `return` after the block.
+        @assert kind(kids′[end]) === K"NewlineWs"
+        @assert kind(last_leaf(rexpr)) === K"end"
+        insert_idx = lastindex(kids)
+        kids′ = kids′ === kids ? copy(kids) : kids′
+        for i in 1:(insert_idx - 1)
+            accept_node!(ctx, kids′[i])
+        end
+        # Insert newline
+        nl = "\n" * " "^(4 * ctx.indent_level)
+        nlnode = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), sizeof(nl))
+        insert!(kids′, insert_idx, nlnode)
+        replace_bytes!(ctx, nl, 0)
+        accept_node!(ctx, nlnode)
+        # Insert `return`
+        replace_bytes!(ctx, "return", 0)
+        retnode = Node(
+            JuliaSyntax.SyntaxHead(K"return", 0), [
+                Node(JuliaSyntax.SyntaxHead(K"return", 0), 6),
+            ]
+        )
+        insert!(kids′, insert_idx + 1, retnode)
+        return make_node(node, kids′)
+    else
+        # error("Unhandled node in explicit_return_block: $(kind(rexpr))")
+    end
+    return nothing
+end
+
+function explicit_return(ctx::Context, node::Node)
+    if !(!is_leaf(node) && kind(node) in KSet"function macro do")
+        return nothing
+    end
+    if !safe_to_insert_return(ctx, node)
+        return nothing
+    end
+    kids = verified_kids(node)
+    pos = position(ctx.fmt_io)
+    block_idx = findlast(x -> kind(x) === K"block", verified_kids(node))
+    block_idx === nothing && return nothing
+    for i in 1:(block_idx - 1)
+        accept_node!(ctx, kids[i])
+    end
+    block′ = explicit_return_block(ctx, kids[block_idx])
+    seek(ctx.fmt_io, pos)
+    block′ === nothing && return nothing
+    kids′ = copy(kids)
+    kids′[block_idx] = block′
+    return make_node(node, kids′)
+end

@@ -484,9 +484,9 @@ end
         @test format_string("try\nerror()\ncatch$(sp)e\nend") == "try\n    error()\ncatch e\nend"
         @test format_string("A$(sp)where$(sp){T}") == "A where {T}"
         @test format_string("A$(sp)where$(sp){T}$(sp)where$(sp){S}") == "A where {T} where {S}"
-        @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
-        @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
-        @test format_string("f()$(sp)do; y end") == "f() do;\n    y\nend"
+        @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    return y\nend"
+        @test format_string("f()$(sp)do\ny\nend") == "f() do\n    return y\nend"
+        @test format_string("f()$(sp)do; y end") == "f() do;\n    return y\nend"
         # After `where` (anywhere else?) a newline can be used instead of a space
         @test format_string("A$(sp)where$(sp)\n{A}") == "A where\n{A}"
     end
@@ -549,14 +549,14 @@ end
     for sp in ("", "  ", "    ", "      ")
         # function-end
         @test format_string("function f()\n$(sp)x\n$(sp)end") ==
-            "function f()\n    x\nend"
+            "function f()\n    return x\nend"
         @test format_string("function f end") == "function f end"
         @test_broken format_string("function f\nend") == "function f\nend" # TODO
         @test format_string("function ∉ end") == "function ∉ end"
         # macro-end
         @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
-            "macro f()\n    x\nend"
-        @test format_string("macro f() x end") == "macro f()\n    x\nend"
+            "macro f()\n    return x\nend"
+        @test format_string("macro f() x end") == "macro f()\n    return x\nend"
         # let-end
         @test format_string("let a = 1\n$(sp)x\n$(sp)end") == "let a = 1\n    x\nend"
         @test format_string("let\n$(sp)x\n$(sp)end") == "let\n    x\nend"
@@ -644,8 +644,8 @@ end
             "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
         ) == "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         # do-end
-        @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
-        @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
+        @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    return a\nend"
+        @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    return a\nend"
         # module-end, baremodule-end
         for b in ("", "bare")
             # Just a module
@@ -742,7 +742,7 @@ end
         @test format_string("begin\n    x end") == "begin\n    x\nend"
         # Functors
         @test format_string("function$(sp)(a::A)(b)\nx\nend") ==
-            "function (a::A)(b)\n    x\nend"
+            "function (a::A)(b)\n    return x\nend"
         # TODO: Spaces after function keyword isn't removed.
         @test format_string("function$(sp)(a * b)\nreturn\nend") ==
             "function$(sp)(a * b)\n    return\nend"
@@ -780,7 +780,7 @@ end
             # Blocklike RHS
             for thing in (
                     "if c\n    x\nend", "try\n    x\ncatch\n    y\nend",
-                    "let c = 1\n    c\nend", "function()\n    x\nend",
+                    "let c = 1\n    c\nend", "function()\n    return x\nend",
                     "\"\"\"\nfoo\n\"\"\"", "r\"\"\"\nfoo\n\"\"\"",
                     "```\nfoo\n```", "r```\nfoo\n```", "```\nfoo\n```x",
                 )
@@ -869,8 +869,8 @@ end
         @test format_string(f * nl^n * g) == f * nl^m * g
         @test format_string("module A" * nl^n * "end") == "module A" * nl^m * "end"
         @test format_string("function f()" * nl^n * "end") == "function f()" * nl^m * "end"
-        @test format_string("function f()" * nl^2 * "x = 1" * nl^n * "end") ==
-            "function f()" * nl^2 * "    x = 1" * nl^m * "end"
+        @test format_string("function f()" * nl^2 * "return x" * nl^n * "end") ==
+            "function f()" * nl^2 * "    return x" * nl^m * "end"
     end
 end
 
@@ -1079,22 +1079,22 @@ end
         @test format_string("try$(d)x$(d)catch err$(d)y$(d)else$(d)z$(d)finally$(d)z$(d)end") ==
             "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         # do-end
-        @test format_string("open() do\na$(d)end") == "open() do\n    a\nend"
+        @test format_string("open() do\na$(d)end") == "open() do\n    return a\nend"
         @test format_string("open() do\nend") == "open() do\nend"
         @test_broken format_string("open() do;a$(d)end") == "open() do\n    a\nend"
         @test_broken format_string("open() do ;a$(d)end") == "open() do\n    a\nend"
-        @test format_string("open() do io$(d)a end") == "open() do io\n    a\nend"
+        @test format_string("open() do io$(d)a end") == "open() do io\n    return a\nend"
         # let-end
         @test format_string("let a = 1\nx$(d)end") == "let a = 1\n    x\nend"
         @test format_string("let\nx$(d)end") == "let\n    x\nend"
         @test format_string("let a = 1 # a\nx$(d)end") == "let a = 1 # a\n    x\nend"
         # function-end
-        @test format_string("function f()$(d)x$(d)end") == "function f()\n    x\nend"
-        @test format_string("function()$(d)x$(d)end") == "function()\n    x\nend"
-        @test format_string("function ()$(d)x$(d)end") == "function ()\n    x\nend"
+        @test format_string("function f()$(d)x$(d)end") == "function f()\n    return x\nend"
+        @test format_string("function()$(d)x$(d)end") == "function()\n    return x\nend"
+        @test format_string("function ()$(d)x$(d)end") == "function ()\n    return x\nend"
         @test format_string("function f end") == "function f end"
         # macro-end
-        @test format_string("macro f()$(d)x$(d)end") == "macro f()\n    x\nend"
+        @test format_string("macro f()$(d)x$(d)end") == "macro f()\n    return x\nend"
         # quote-end
         @test format_string("quote$(d)x$(d)end") == "quote\n    x\nend"
         # begin-end
@@ -1213,7 +1213,8 @@ end
             "begin", "quote", "for i in I", "let", "let x = 1", "while cond",
             "if cond", "macro f()", "function f()", "f() do", "f() do x",
         )
-        @test format_string("$(prefix)\n$(body)\nend") == "$prefix\n$(bodyfmt)\nend"
+        rx = prefix in ("function f()", "macro f()", "f() do", "f() do x") ? "    return x\n" : ""
+        @test format_string("$(prefix)\n$(body)$(rx)\nend") == "$prefix\n$(bodyfmt)$(rx)\nend"
     end
     @test format_string(
         "if cond1\n$(body)\nelseif cond2\n$(body)\nelseif cond3\n$(body)\nelse\n$(body)\nend"
@@ -1250,6 +1251,93 @@ end
     end
 end
 
+@testset "explicit return" begin
+    for f in ("function f()", "function ()", "f() do", "macro m()")
+        # Simple cases just prepend `return`
+        for r in (
+                "x", "*", "x, y", "(x, y)", "f()", "[1, 2]", "Int[1, 2]", "[1 2]", "Int[1 2]",
+                "[1 2; 3 4]", "Int[1 2; 3 4]", "x ? y : z", "x && y", "x || y", ":x", ":(x)",
+                ":(x; y)", "1 + 2", "f.(x)", "x .+ y", "x::Int", "2x", "T <: Integer",
+                "T >: Int", "Int <: T <: Integer", "x < y > z", "\"foo\"", "\"\"\"foo\"\"\"",
+                "a.b", "a.b.c", "x -> x^2", "[x for x in X]", "Int[x for x in X]",
+                "A{T} where {T}", "(@m a, b)", "A{T}",
+                "r\"foo\"", "r\"foo\"m", "`foo`", "```foo```", "r`foo`",
+                "f() do\n        return x\n    end", "f() do x\n        return x\n    end",
+                "function f()\n        return x\n    end",
+                "function ()\n        return x\n    end",
+                "quote\n        x\n    end", "begin\n        x\n    end",
+                "let\n        x\n    end", "let x = 42\n        x\n    end",
+                "x = 1", "x += 1", "x -= 1", "global x = 1", "local x = 1",
+                "@inbounds x[i]", "@inline f(x)",
+                "if c\n        x\n    end",
+                "if c\n        x\n    else\n        y\n    end",
+                "if c\n        x\n    elseif d\n        z\n    else\n        y\n    end",
+                "try\n        x\n    catch\n        y\n    end",
+                "try\n        x\n    catch e\n        y\n    end",
+                "try\n        x\n    catch\n        y\n    finally\n        z\n    end",
+                "try\n        x\n    catch\n        y\n    else\n        z\n    finally\n        z\n    end",
+            )
+            @test format_string("$f\n    $r\nend") == "$f\n    return $r\nend"
+            @test format_string("$f\n    x;$r\nend") == "$f\n    x\n    return $r\nend"
+            @test format_string("$f\n    x; $r\nend") == "$f\n    x\n    return $r\nend"
+            # Nesting
+            @test format_string("$f\n    $f\n        $r\n    end\nend") ==
+                format_string("$f\n    return $f\n        return $r\n    end\nend")
+        end
+        # If the last expression is a call and the function name contains throw or error
+        # there should be no return
+        for r in ("throw(ArgumentError())", "error(\"foo\")", "rethrow()", "throw_error()")
+            @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
+        end
+        # If the last expression is a macro call with return inside there should be no
+        # return on the outside
+        for r in (
+                "@inbounds return x[i]", "@inbounds @inline return x[i]",
+                "@inbounds begin\n        return x[i]\n    end",
+            )
+            @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
+        end
+        # Safe/known macros
+        @test format_string("@inline $f\n    x\nend") ==
+            "@inline $f\n    return x\nend"
+        @test format_string("Base.@noinline $f\n    x\nend") ==
+            "Base.@noinline $f\n    return x\nend"
+        # Unsafe/unknown macros
+        @test format_string("@kernel $f\n    x\nend") == "@kernel $f\n    x\nend"
+        # `for` and `while` append `return` to the end
+        for r in ("for i in I\n    end", "while i in I\n    end")
+            @test format_string("$f\n    $r\nend") == "$f\n    $r\n    return\nend"
+            @test format_string("$f\n    $r\n    # comment\nend") ==
+                "$f\n    $r\n    # comment\n    return\nend"
+        end
+        # If there already is a `return` anywhere (not necessarily the last expression)
+        # there will be no additional `return` added on the last expression.
+        # `for` and `while` append `return` to the end
+        let str = "$f\n    return 42\n    1337\nend"
+            @test format_string(str) == str
+        end
+        # if/let/begin/try with a `return` inside should be left alone
+        for r in (
+                "if c\n        return x\n    end",
+                "if c\n        return x\n    else\n        y\n    end",
+                "if c\n        x\n    else\n        return y\n    end",
+                "if c\n        return x\n    elseif d\n        y\n    else\n        y\n    end",
+                "if c\n        x\n    elseif d\n        return y\n    else\n        z\n    end",
+                "if c\n        x\n    elseif d\n        y\n    else\n        return z\n    end",
+                "let\n        return x\n    end",
+                "let x = 1\n        return x\n    end",
+                "begin\n        return x\n    end",
+                "try\n        return x\n    catch\n        y\n    end",
+                "try\n        x\n    catch e\n        return y\n    end",
+                "try\n        x\n    catch\n        y\n    finally\n        return z\n    end",
+                "try\n        x\n    catch\n        y\n    else\n        return z\n    finally\n        z\n    end",
+            )
+            str = "$f\n    $r\nend"
+            @test format_string(str) == str
+        end
+    end
+end
+
 @testset "# runic: (on|off)" begin
     for exc in ("", "!"), word in ("runic", "format")
         on = "#$(exc) $(word): on"
@@ -1268,6 +1356,7 @@ end
                 1+1
                 $on
                 1+1
+                return
             end
             """
         ) == """
@@ -1276,6 +1365,7 @@ end
                 1+1
                 $on
                 1 + 1
+                return
             end
             """
         @test format_string(
@@ -1285,6 +1375,7 @@ end
                 1+1
                 $bon
                 1+1
+                return
             end
             """
         ) == """
@@ -1293,6 +1384,7 @@ end
                 1 + 1
                 $bon
                 1 + 1
+                return
             end
             """
         @test format_string(
@@ -1301,6 +1393,7 @@ end
                 $off
                 1+1
                 1+1
+                return
             end
             """
         ) == """
@@ -1308,6 +1401,7 @@ end
                 $off
                 1 + 1
                 1 + 1
+                return
             end
             """
     end
@@ -1329,7 +1423,7 @@ if Sys.isunix() && isdir(share_julia)
                             @warn "JuliaSyntax.ParseError for $path" err
                             @test_broken false
                         else
-                            @error "Error when formatting file $path"
+                            @error "Error when formatting file $path" err
                             @test false
                         end
                     end
