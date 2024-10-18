@@ -802,9 +802,9 @@ end
             @test format_string("$(verb) A:\n$(sp)a,\n$(sp)b") == "$(verb) A:\n    a,\n    b"
         end
         # export/public/global/local
-        for verb in ("export", "public", "global", "local")
-            @test format_string("$(verb) a,\n$(sp)b") == "$(verb) a,\n    b"
-            @test format_string("$(verb)\n$(sp)a,\n$(sp)b") == "$(verb)\n    a,\n    b"
+        for verb in ("export", "public", "global", "local"), b in ("b", "var\"b\"")
+            @test format_string("$(verb) a,\n$(sp)$(b)") == "$(verb) a,\n    $(b)"
+            @test format_string("$(verb)\n$(sp)a,\n$(sp)$(b)") == "$(verb)\n    a,\n    $(b)"
         end
         # ternary
         @test format_string("a ?\n$(sp)b : c") == "a ?\n    b : c"

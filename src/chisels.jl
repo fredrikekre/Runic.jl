@@ -505,8 +505,28 @@ end
 # K"global" and K"local" nodes can be either `global a, b, c` or `global a = 1`. This method
 # checks whether the node is of the former kind.
 function is_global_local_list(node)
-    return kind(node) in KSet"global local" && !is_leaf(node) &&
-        all(x -> kind(x) in KSet"global local Identifier , Whitespace NewlineWs Comment", verified_kids(node))
+    if !(kind(node) in KSet"global local" && !is_leaf(node))
+        return false
+    end
+    kids = verified_kids(node)
+    # If it contains assignments it is not a list
+    if any(x -> is_assignment(x), kids)
+        return false
+    end
+    # If it contains K"," it is a list
+    if any(x -> kind(x) === K",", kids)
+        return true
+    end
+    # If we reach here we have a single item list (`local a`) or something like
+    # ```
+    # global function f()
+    #     # ...
+    # end
+    # ```
+    # For now we only say it is a list if the item is in the subset below
+    idx = findfirst(x -> kind(x) in KSet"global local", kids)::Int
+    idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, idx + 1)::Int
+    return kind(kids[idx]) in KSet"Identifier var"
 end
 
 function unwrap_to_call_or_tuple(x)
