@@ -5,15 +5,6 @@ module Runic
 using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
-# Julia compat for const struct fields
-@eval macro $(Symbol("const"))(field)
-    if VERSION >= v"1.8.0-DEV.1148"
-        Expr(:const, esc(field))
-    else
-        return esc(field)
-    end
-end
-
 # Debug and assert utilities
 include("debug.jl")
 include("JuliaSyntax.jl")
@@ -121,11 +112,11 @@ end
 
 mutable struct Context
     # Input
-    @const src_str::String
-    @const src_tree::Node
-    @const src_io::IOBuffer
+    const src_str::String
+    const src_tree::Node
+    const src_io::IOBuffer
     # Output
-    @const fmt_io::IOBuffer
+    const fmt_io::IOBuffer
     fmt_tree::Union{Node, Nothing}
     # User settings
     quiet::Bool

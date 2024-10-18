@@ -4,11 +4,6 @@
 # Debug info #
 ##############
 
-# @lock is defined but not exported in older Julia versions
-if VERSION < v"1.7.0"
-    using Base: @lock
-end
-
 # Code derived from ToggleableAsserts.jl kept in a separate file
 include("ToggleableAsserts.jl")
 
