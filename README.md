@@ -111,10 +111,10 @@ In addition to the CLI there is also the two function `Runic.format_file` and
 #### Neovim
 
 Runic can be used as a formatter in [Neovim](https://neovim.io/) using
-[`conform.nvim`](https://github.com/stevearc/conform.nvim). Refer to the `conform.nvim`
+[conform.nvim](https://github.com/stevearc/conform.nvim). Refer to the conform.nvim
 repository for installation and setup instructions.
 
-Runic is not (yet) available directly in `conform.nvim` so the following configuration needs
+Runic is not (yet) available directly in conform so the following configuration needs
 to be passed to the setup function. This assumes Runic is installed in the `@runic` shared
 project as suggested in the [Installation](#installation) section above. Adjust the
 `--project` flag if you installed Runic elsewhere.
@@ -144,6 +144,10 @@ enabled by adding the following to your configuration:
 vim.o.formatexpr = "v:lua.require('conform').formatexpr()"
 ```
 
+> [!IMPORTANT]
+> Note that conform is a third party plugin. It works as advertised but use it at your own
+> risk.
+
 #### VS Code
 
 Runic can be used as a formatter in [VS Code](https://code.visualstudio.com/) using the
@@ -165,7 +169,7 @@ Using the "Format Document" VS Code command will now format the file using Runic
 the first time you execute the command you will be prompted to select a formatter since the
 Julia language extension also comes with a formatter.
 
-> [!WARNING]
+> [!IMPORTANT]
 > Note that Custom Local Formatters is a third party extension. It works as advertised but
 > use it at your own risk.
 
