@@ -21,6 +21,9 @@ that is appreciated by most Go programmers, see for example the following
     - [CLI](#cli)
     - [Editor integration](#editor-integration)
  - [Checking formatting](#checking-formatting)
+    - [Github Actions](#github-actions)
+    - [Git hooks](#git-hooks)
+    - [Ignore formatting commits in git blame](#ignore-formatting-commits-in-git-blame)
  - [Formatting specification](#formatting-specification)
 
 ## Installation
@@ -181,7 +184,7 @@ any of the input files are incorrectly formatted. As an example, the following i
 can be used:
 
 ```sh
-git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia -m Runic --check --diff
+git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
 ```
 
 This will run Runic's check mode (`--check`) on all `.jl` files in the repository and print
@@ -226,7 +229,7 @@ See [`fredrikekre/runic-action`](https://github.com/fredrikekre/runic-action) fo
 > `major.minor.patch`) to avoid CI failures due to changes in Runic.jl because even
 > formatting bug fixes may result in formatting changes that would then fail the workflow.
 
-### Git Hooks
+### Git hooks
 
 Runic can be run in a
 [Git pre-commit hook](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks)
@@ -243,6 +246,32 @@ exec 1>&2
 git diff-index -z --name-only --diff-filter=AM master | \
     grep -z '\.jl$' | \
     xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
+```
+
+### Ignore formatting commits in git blame
+
+When setting up Runic formatting for a repository for the first time (or when upgrading to a
+new version of Runic) the formatting commit will likely result in a large diff with mostly
+non functional changes such as e.g. whitespace. Since the diff is large it is likely that it
+will show up and interfere when using [`git-blame`](https://git-scm.com/docs/git-blame). To
+ignore commits during `git-blame` you can i) add them to a file `.git-blame-ignore-revs` and
+ii) tell git to use this file as ignore file by running
+
+```
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+See the [git-blame
+documentation](https://git-scm.com/docs/git-blame#Documentation/git-blame.txt---ignore-revs-fileltfilegt)
+for details.
+
+For example, such a file may look like this:
+```
+# Adding Runic formatting
+<commit hash of formatting commit>
+
+# Upgrading Runic from 1.0 to 2.0
+<commit hash of formatting commit>
 ```
 
 ## Formatting specification
