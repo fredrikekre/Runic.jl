@@ -3584,7 +3584,7 @@ function explicit_return_block(ctx, node)
 end
 
 function explicit_return(ctx::Context, node::Node)
-    if !(!is_leaf(node) && kind(node) in KSet"function macro do")
+    if !(!is_leaf(node) && kind(node) in KSet"function macro")
         return nothing
     end
     if !safe_to_insert_return(ctx, node)

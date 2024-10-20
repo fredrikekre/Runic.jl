@@ -487,9 +487,9 @@ end
         @test format_string("try\nerror()\ncatch$(sp)e\nend") == "try\n    error()\ncatch e\nend"
         @test format_string("A$(sp)where$(sp){T}") == "A where {T}"
         @test format_string("A$(sp)where$(sp){T}$(sp)where$(sp){S}") == "A where {T} where {S}"
-        @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    return y\nend"
-        @test format_string("f()$(sp)do\ny\nend") == "f() do\n    return y\nend"
-        @test format_string("f()$(sp)do; y end") == "f() do;\n    return y\nend"
+        @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
+        @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
+        @test format_string("f()$(sp)do; y end") == "f() do;\n    y\nend"
         # After `where` (anywhere else?) a newline can be used instead of a space
         @test format_string("A$(sp)where$(sp)\n{A}") == "A where\n{A}"
     end
@@ -647,8 +647,8 @@ end
             "try\n$(sp)x\n$(sp)catch err\n$(sp)y\n$(sp)else\n$(sp)z\n$(sp)finally\n$(sp)z\n$(sp)end"
         ) == "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         # do-end
-        @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    return a\nend"
-        @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    return a\nend"
+        @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
+        @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
         # module-end, baremodule-end
         for b in ("", "bare")
             # Just a module
@@ -1082,11 +1082,11 @@ end
         @test format_string("try$(d)x$(d)catch err$(d)y$(d)else$(d)z$(d)finally$(d)z$(d)end") ==
             "try\n    x\ncatch err\n    y\nelse\n    z\nfinally\n    z\nend"
         # do-end
-        @test format_string("open() do\na$(d)end") == "open() do\n    return a\nend"
+        @test format_string("open() do\na$(d)end") == "open() do\n    a\nend"
         @test format_string("open() do\nend") == "open() do\nend"
         @test_broken format_string("open() do;a$(d)end") == "open() do\n    a\nend"
         @test_broken format_string("open() do ;a$(d)end") == "open() do\n    a\nend"
-        @test format_string("open() do io$(d)a end") == "open() do io\n    return a\nend"
+        @test format_string("open() do io$(d)a end") == "open() do io\n    a\nend"
         # let-end
         @test format_string("let a = 1\nx$(d)end") == "let a = 1\n    x\nend"
         @test format_string("let\nx$(d)end") == "let\n    x\nend"
@@ -1216,7 +1216,7 @@ end
             "begin", "quote", "for i in I", "let", "let x = 1", "while cond",
             "if cond", "macro f()", "function f()", "f() do", "f() do x",
         )
-        rx = prefix in ("function f()", "macro f()", "f() do", "f() do x") ? "    return x\n" : ""
+        rx = prefix in ("function f()", "macro f()") ? "    return x\n" : ""
         @test format_string("$(prefix)\n$(body)$(rx)\nend") == "$prefix\n$(bodyfmt)$(rx)\nend"
     end
     @test format_string(
@@ -1255,7 +1255,7 @@ end
 end
 
 @testset "explicit return" begin
-    for f in ("function f()", "function ()", "f() do", "macro m()")
+    for f in ("function f()", "function ()", "macro m()")
         # Simple cases just prepend `return`
         for r in (
                 "x", "*", "x, y", "(x, y)", "f()", "[1, 2]", "Int[1, 2]", "[1 2]", "Int[1 2]",
@@ -1265,7 +1265,7 @@ end
                 "a.b", "a.b.c", "x -> x^2", "[x for x in X]", "Int[x for x in X]",
                 "A{T} where {T}", "(@m a, b)", "A{T}",
                 "r\"foo\"", "r\"foo\"m", "`foo`", "```foo```", "r`foo`",
-                "f() do\n        return x\n    end", "f() do x\n        return x\n    end",
+                "f() do\n        x\n    end", "f() do x\n        x\n    end",
                 "function f()\n        return x\n    end",
                 "function ()\n        return x\n    end",
                 "quote\n        x\n    end", "begin\n        x\n    end",

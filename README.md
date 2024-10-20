@@ -411,9 +411,8 @@ x = a + b *
 
 ### Explicit `return`
 
-Explicit `return` statements are ensured in function/macro definitions as well as in
-`do`-blocks by adding `return` in front of the last expression, with some exceptions listed
-below.
+Explicit `return` statements are ensured in function and macro definitions by adding
+`return` in front of the last expression, with some exceptions listed below.
 
  - If the last expression is a `for` or `while` loop (which both always evaluate to
    `nothing`) `return` is added *after* the loop.
@@ -423,6 +422,8 @@ below.
    there is no `return` inside the block.
  - If the last expression is a macro call, the `return` is only added in case there is no
    `return` inside the macro.
+ - No `return` is added in short form functions (`f(...) = ...`), short form anonymous
+   functions (`(...) -> ...`), and `do`-blocks (`f(...) do ...; ...; end`).
  - If the last expression is a function call, and the function name is (or contains) `throw`
    or `error`, no `return` is added. This is because it is already obvious that these calls
    terminate the function and don't return any value.
@@ -448,14 +449,6 @@ Examples:
  macro m(args...)
 -    :(generate_expr(args...))
 +    return :(generate_expr(args...))
- end
-
- function g()
--    open("/dev/random", "r") do f
--        read(f, 8)
-+    return open("/dev/random", "r") do f
-+        return read(f, 8)
-     end
  end
 ```
 
