@@ -2936,9 +2936,31 @@ function indent_comparison(ctx::Context, node::Node)
     return continue_all_newlines(ctx, node)
 end
 
+# Indent a nested documented module
+function indent_doc_module(ctx::Context, node::Node; do_indent::Bool)
+    @assert kind(node) === K"doc"
+    kids = verified_kids(node)
+    mod_idx = findfirst(x -> kind(x) === K"module", kids)::Int
+    pos = position(ctx.fmt_io)
+    for i in 1:(mod_idx - 1)
+        accept_node!(ctx, kids[i])
+    end
+    mod′ = indent_module(ctx, kids[mod_idx]; do_indent = do_indent)
+    seek(ctx.fmt_io, pos)
+    if mod′ === nothing
+        return nothing
+    end
+    kids′ = copy(kids)
+    kids′[mod_idx] = mod′
+    return make_node(node, kids′)
+end
+
 # Indent a nested module
 function indent_module(ctx::Context, node::Node; do_indent::Bool = true)
-    @assert kind(node) === K"module"
+    @assert kind(node) in KSet"module doc"
+    if kind(node) === K"doc"
+        return indent_doc_module(ctx, node; do_indent = do_indent)
+    end
     kids = verified_kids(node)
     any_kid_changed = false
     pos = position(ctx.fmt_io)
@@ -2998,7 +3020,10 @@ end
 function indent_toplevel(ctx::Context, node::Node)
     @assert kind(node) === K"toplevel"
     kids = verified_kids(node)
-    mod_idx = findfirst(x -> kind(x) === K"module", kids)
+    mod_idx = findfirst(kids) do x
+        kind(x) === K"module" ||
+            (kind(x) === K"doc" && findfirst(y -> kind(y) === K"module", verified_kids(x)) !== nothing)
+    end
     if mod_idx === nothing
         # No module here
         return nothing
