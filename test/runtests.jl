@@ -384,6 +384,9 @@ end
     @test format_string("(\na, x -> @m(x[i])\n)") == "(\n    a, x -> @m(x[i]),\n)"
     # Weird cornercase where a trailing comma messes some cases up (don't recall...)
     @test format_string("{\n@f\n}") == "{\n    @f\n}"
+    # Non space whitespace (TODO: Not sure if a JuliaSyntax bug or not?)
+    @test format_string(String(UInt8[0x61, 0x20, 0x3d, 0x3d, 0x20, 0xc2, 0xa0, 0x62, 0x3a, 0x63])) ==
+        "a == b:c"
 end
 
 @testset "whitespace around ->" begin
