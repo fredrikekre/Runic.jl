@@ -189,9 +189,7 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
                     # Replace the whitespace node of the kid
                     kid′ = replace_first_leaf(kid, ws)
                     @assert span(kid′) == span(kid) - span(kid_ws) + 1
-                    bytes_to_skip = span(kid) - span(kid′)
-                    @assert bytes_to_skip > 0
-                    replace_bytes!(ctx, "", bytes_to_skip)
+                    replace_bytes!(ctx, " ", span(kid_ws))
                     accept_node!(ctx, kid′)
                     any_changes = true
                     if kids′ === kids
