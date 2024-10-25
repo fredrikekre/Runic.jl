@@ -59,16 +59,26 @@ alias runic="julia --project=@runic -m Runic"
 ```
 
 > [!NOTE]
-> The `-m` command line flag is only available in Julia 1.12 and later. In earlier versions
-> you have to invoke the `main` function explicitly, for example:
+> Running `Runic` in Julia 1.11 and Earlier:
+> You have to invoke the `main` function explicitly, for example:
 > ```sh
 > julia -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
 > ```
+>  as the `-m` command line flag is only available in Julia 1.12 and later.
+> 
 > For this incantation the following shell alias can be used:
 > ```sh
 > alias runic="julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' --"
 > ```
-
+> Example usage:
+> To format all julia files in the current directory inplace, just run:
+> ```sh
+> julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' -- "--inplace" "./"
+> ```
+> or, if an alias was set up:
+> ```sh
+>  runic --inplace ./
+> ```
 ```
 $ julia -m Runic --help
 NAME
