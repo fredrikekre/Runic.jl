@@ -495,7 +495,18 @@ end
         @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
         @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
         @test format_string("f()$(sp)do; y end") == "f() do;\n    y\nend"
-        # After `where` (anywhere else?) a newline can be used instead of a space
+        @test format_string("function f()\n    return$(sp)1\nend") == "function f()\n    return 1\nend"
+        @test format_string("function f()\n    return$(sp)\nend") == "function f()\n    return\nend"
+        for word in ("local", "global"), rhs in ("a", "a, b", "a = 1", "a, b = 1, 2")
+            word == "const" && rhs in ("a", "a, b") && continue
+            @test format_string("$(word)$(sp)$(rhs)") == "$(word) $(rhs)"
+            # After `local`, `global`, and `const` a newline can be used instead of a space
+            @test format_string("$(word)$(sp)\n$(sp)$(rhs)") == "$(word)\n    $(rhs)"
+        end
+        @test_broken format_string("global\n\nx = 1") == "global\n\n    x = 1" # TODO: Fix double peek
+        @test_broken format_string("lobal\n\nx = 1") == "local\n\n    x = 1" # TODO: Fix double peek
+        @test format_string("const$(sp)x = 1") == "const x = 1"
+        # After `where` a newline can be used instead of a space
         @test format_string("A$(sp)where$(sp)\n{A}") == "A where\n{A}"
     end
     @test format_string("try\nerror()\ncatch\nend") == "try\n    error()\ncatch\nend"
@@ -504,6 +515,9 @@ end
     # Some keywords can have a parenthesized expression directly after without the space...
     @test format_string("if(a)\nelseif(b)\nend") == "if (a)\nelseif (b)\nend"
     @test format_string("while(a)\nend") == "while (a)\nend"
+    @test format_string("function f()\n    return(1)\nend") == "function f()\n    return (1)\nend"
+    @test format_string("local(a)") == "local (a)"
+    @test format_string("global(a)") == "global (a)"
 end
 
 @testset "replace ∈ and = with in in for loops and generators" begin
