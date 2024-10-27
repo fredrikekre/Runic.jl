@@ -940,6 +940,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
     while i <= length(kids)
         kid = kids[i]
         if state === :expect_space
+            state = :expect_identifier
             if kind(kid) === K"NewlineWs" || (kind(kid) === K"Whitespace" && span(kid) == 1)
                 any_changes && push!(kids′, kid)
                 accept_node!(ctx, kid)
@@ -952,6 +953,10 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 end
                 accept_node!(ctx, kid′)
                 push!(kids′, kid′)
+            elseif kind(kid) === K"Comment"
+                any_changes && push!(kids′, kid)
+                accept_node!(ctx, kid)
+                state = :expect_space
             else
                 @assert kind(first_leaf(kid)) !== K"Whitespace"
                 # Insert a space
@@ -962,10 +967,8 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 replace_bytes!(ctx, " ", 0)
                 push!(kids′, spacenode)
                 accept_node!(ctx, spacenode)
-                state = :expect_identifier
                 continue # Skip increment of i
             end
-            state = :expect_identifier
         elseif state === :expect_identifier
             state = :expect_comma
             if kind(kid) in KSet"Identifier @ MacroName $ var" || JuliaSyntax.is_operator(kid)

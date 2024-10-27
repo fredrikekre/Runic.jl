@@ -977,6 +977,8 @@ end
         @test format_string("$(verb) $(a)$(sp),\n# b\n$(b)") == "$(verb) $(a),\n    # b\n    $(b)"
         # Inline comments
         @test format_string("$(verb) a$(sp),$(sp)#= b, =#$(sp)c") == "$(verb) a, #= b, =# c"
+        # https://github.com/fredrikekre/Runic.jl/issues/78
+        @test format_string("$(verb)\n    #a\n    a,\n\n    #b\nb") == "$(verb)\n    #a\n    a,\n\n    #b\n    b"
     end
     # Interpolated identifiers (currently only expected in K"quote" and K"macrocall")
     @test format_string(":(export \$a)") == ":(export \$a)"
