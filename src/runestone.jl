@@ -1222,11 +1222,11 @@ end
 # Single space around keywords:
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
-# named function), `if`, `elseif`, `catch` (if followed by variable)
-# TODO: local, const
+# named function), `if`, `elseif`, `catch` and `return` (if followed by something), local,
+# global, const
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
-    keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch while"
+    keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch while return local global const"
     if !(kind(node) in keyword_set)
         return nothing
     end
@@ -1289,10 +1289,10 @@ function spaces_around_keywords(ctx::Context, node::Node)
             end
         elseif state === :looking_for_space
             if (kind(kid) === K"Whitespace" && span(kid) == 1) ||
-                    kind(kid) === K"NewlineWs"
+                    kind(kid) === K"NewlineWs" || kind(first_leaf(kid)) === K"NewlineWs"
                 if kind(kid) === K"NewlineWs"
                     # Is a newline instead of a space accepted for any other case?
-                    @assert kind(node) === K"where"
+                    @assert kind(node) in KSet"where local global const"
                 end
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)
@@ -1325,7 +1325,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 @assert false # Unreachable?
             else
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
-                @assert kind(node) in KSet"where if elseif while do function"
+                @assert kind(node) in KSet"where if elseif while do function return local global"
                 any_changes = true
                 if kids′ === kids
                     kids′ = kids[1:(i - 1)]
@@ -3046,6 +3046,30 @@ function indent_toplevel(ctx::Context, node::Node)
     return any_kid_changed ? make_node(node, kids) : nothing
 end
 
+function indent_local_global(ctx::Context, node::Node)
+    @assert kind(node) in KSet"local global"
+    @assert !is_global_local_list(node)
+    # Something like `local x = 1` or `global function foo(...)`. Continue all newlines
+    # between the keyword and the next non-whitespace node.
+    kids = verified_kids(node)
+    kw = findfirst(x -> is_leaf(x) && kind(x) in KSet"local global", kids)::Int
+    nonws = findnext(!JuliaSyntax.is_whitespace, kids, kw + 1)::Int
+    changed = false
+    for i in (kw + 1):nonws
+        if kind(kids[i]) === K"NewlineWs" && !has_tag(kids[i], TAG_LINE_CONT)
+            kids[i] = add_tag(kids[i], TAG_LINE_CONT)
+            changed = true
+        elseif i == nonws && kind(first_leaf(kids[i])) === K"NewlineWs" &&
+                !has_tag(first_leaf(kids[i]), TAG_LINE_CONT)
+            kid′ = replace_first_leaf(kids[i], add_tag(first_leaf(kids[i]), TAG_LINE_CONT))
+            @assert kid′ !== nothing
+            kids[i] = kid′
+            changed = true
+        end
+    end
+    return changed ? make_node(node, kids) : nothing
+end
+
 function insert_delete_mark_newlines(ctx::Context, node::Node)
     if is_leaf(node)
         return nothing
@@ -3079,6 +3103,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_short_circuit(ctx, node)
     elseif kind(node) in KSet"using import export public" || is_global_local_list(node)
         return indent_using_import_export_public(ctx, node)
+    elseif kind(node) in KSet"local global"
+        return indent_local_global(ctx, node)
     elseif is_variable_assignment(ctx, node)
         return indent_assignment(ctx, node)
     elseif kind(node) === K"parameters"
