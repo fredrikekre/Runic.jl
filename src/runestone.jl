@@ -3451,7 +3451,9 @@ function spaces_around_comments(ctx::Context, node::Node)
             push!(kids′, kid′)
         end
         accept_node!(ctx, kid′)
-        prev_kid_ends_with_ws = kind(kid′) in KSet"Whitespace NewlineWs" ||
+        # Note: This allows (but doesn't require) no space after opening brackets, see
+        # https://github.com/fredrikekre/Runic.jl/issues/81
+        prev_kid_ends_with_ws = kind(kid′) in KSet"Whitespace NewlineWs ( { [" ||
             (ll = last_leaf(kid′); ll !== nothing && kind(ll) in KSet"Whitespace NewlineWs")
     end
     # Reset the stream and return

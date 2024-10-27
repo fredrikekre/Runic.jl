@@ -87,6 +87,11 @@ end
         @test format_string("(a,$(sp)# comment\nb + b)") ==
             "(\n    a,$(csp)# comment\n    b + b,\n)"
         @test format_string("if c$(sp)# a\n    b\nend") == "if c$(csp)# a\n    b\nend"
+        # Allow no space after opening brackets
+        # (https://github.com/fredrikekre/Runic.jl/issues/81)
+        for (o, c) in (("(", ")"), ("[", "]"), ("{", "}"))
+            @test format_string("$(o)$(sp)#= a =#$(sp)$(c)") == "$(o)$(sp)#= a =#$(c)"
+        end
     end
     let str = "a = 1  # a comment\nab = 2 # ab comment\n"
         @test format_string(str) == str
