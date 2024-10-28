@@ -260,9 +260,13 @@ end
                 "$(o)\n    $(a),\n    $(b),\n$(c)"
             # trailing comments
             @test format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b)$(sp)# b\n$(c)") ==
-                "$(o)\n    # x\n    $(a),$(csp)# a\n    $(b)$(tr)$(csp)# b\n$(c)"
+                "$(o)$(sp)# x\n    $(a),$(csp)# a\n    $(b)$(tr)$(csp)# b\n$(c)"
             @test format_string("$(o)$(sp)# x\n$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n$(c)") ==
-                "$(o)\n    # x\n    $(a),$(csp)# a\n    $(b),$(csp)# b\n$(c)"
+                "$(o)$(sp)# x\n    $(a),$(csp)# a\n    $(b),$(csp)# b\n$(c)"
+            @test format_string("$(o)$(sp)#= x =#$(sp)$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n$(c)") ==
+                "$(o)\n    #= x =# $(a),$(csp)# a\n    $(b),$(csp)# b\n$(c)"
+            @test format_string("$(o)$(sp)#= x =#\n$(a)$(sp),$(sp)# a\n$(sp)$(b),$(sp)# b\n$(c)") ==
+                "$(o)$(sp)#= x =#\n    $(a),$(csp)# a\n    $(b),$(csp)# b\n$(c)"
             # comments on separate lines between items
             @test format_string("$(o)\n# a\n$(a)$(sp),\n# b\n$(b)\n$(c)") ==
                 "$(o)\n    # a\n    $(a),\n    # b\n    $(b)$(tr)\n$(c)"

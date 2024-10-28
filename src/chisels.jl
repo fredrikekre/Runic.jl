@@ -382,6 +382,17 @@ function second_leaf(node::Node)
     return nth_leaf(node, 2)
 end
 
+# TODO: This should probably be merged with kmatch or something...
+function peek_leafs(node::Node, leaf_kinds::Tuple)
+    for (i, leaf_kind) in pairs(leaf_kinds)
+        ith = nth_leaf(node, i)
+        if ith === nothing || kind(ith) !== leaf_kind
+            return false
+        end
+    end
+    return true
+end
+
 # Return number of non-whitespace kids, basically the length the equivalent
 # (expr::Expr).args
 function meta_nargs(node::Node)
