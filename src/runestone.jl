@@ -2366,11 +2366,25 @@ function indent_listlike(
     # Next we expect the leading newline
     @assert multiline
     kid = kids[open_idx + 1]
+    idx_after_leading_nl = open_idx + 2
     if kind(kid) === K"NewlineWs" ||
-            kind(first_leaf(kid)) === K"NewlineWs"
+            kind(first_leaf(kid)) === K"NewlineWs" ||
+            peek_leafs(kid, KSet"Comment NewlineWs") || peek_leafs(kid, KSet"Whitespace Comment NewlineWs")
         # Newline or newlinde hidden in first item
         any_kid_changed && push!(kids′, kid)
         accept_node!(ctx, kid)
+    elseif kmatch(kids, KSet"Comment NewlineWs", open_idx + 1)
+        for i in (open_idx + 1):(open_idx + 2)
+            accept_node!(ctx, kids[i])
+            any_kid_changed && push!(kids′, kids[i])
+        end
+        idx_after_leading_nl = idx_after_leading_nl + 1
+    elseif kmatch(kids, KSet"Whitespace Comment NewlineWs", open_idx + 1)
+        for i in (open_idx + 1):(open_idx + 3)
+            accept_node!(ctx, kids[i])
+            any_kid_changed && push!(kids′, kids[i])
+        end
+        idx_after_leading_nl = idx_after_leading_nl + 2
     else
         # Need to insert a newline
         if kind(kid) === K"Whitespace"
@@ -2458,7 +2472,7 @@ function indent_listlike(
         end
     end
     # Bring all kids between the opening and closing token to the new list
-    for i in (open_idx + 2):(close_idx - 2)
+    for i in idx_after_leading_nl:(close_idx - 2)
         kid = kids[i]
         any_kid_changed && push!(kids′, kid)
         accept_node!(ctx, kid)
