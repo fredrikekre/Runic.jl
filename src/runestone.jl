@@ -2026,6 +2026,12 @@ function indent_block(
         if kind(kids′[insert_idx]) === K"Whitespace"
             kids′, ws = popatview!(kids′, insert_idx)
             wsspn = span(ws)
+        elseif !is_leaf(kids′[insert_idx]) &&
+                kind(first_leaf(kids′[insert_idx])) === K"Whitespace"
+            ws = first_leaf(kids′[insert_idx])
+            kids′[insert_idx] = replace_first_leaf(kids′[insert_idx], nullnode)
+            any_kid_changed = true
+            wsspn = span(ws)
         end
         # If we end up in this code path we are most likely splitting a single line block
         # into multiples lines. This means that we haven't yet updated the indent level for

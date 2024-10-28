@@ -1135,6 +1135,8 @@ end
         for mut in ("", "mutable ")
             @test format_string("$(mut)struct A$(d)x$(d)end") == "$(mut)struct A\n    x\nend"
         end
+        # https://github.com/fredrikekre/Runic.jl/issues/79
+        @test format_string("while true$(d)x += 1\nend") == "while true\n    x += 1\nend"
     end # d-loop
     # module-end, baremodule-end
     for b in ("", "bare")
