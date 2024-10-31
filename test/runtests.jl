@@ -182,8 +182,9 @@ end
             @test format_string("$(sp)a$(sp)$(op)$(sp)\nb$(sp)") ==
                 "$(sp)a $(op)\n    b$(sp)"
             # a op # comment \n b
+            minspace = sp == "" ? " " : sp
             @test format_string("$(sp)a$(sp)$(op)$(sp)# comment\nb$(sp)") ==
-                "$(sp)a $(op) # comment\n    b$(sp)"
+                "$(sp)a $(op)$(minspace)# comment\n    b$(sp)"
         end
         # Exceptions to the rule: `:`, `..`, and `^`
         # a:b
