@@ -231,7 +231,7 @@ function check_format_toggle(ctx::Context, node::Node, kid::Node, i::Int)::Union
     # Check if the kid is a comment
     kind(kid) === K"Comment" || return nothing
     # Check the comment content
-    reg = r"^#(!)? (runic|format): (on|off)$"
+    reg = r"#(!)? (runic|format): (on|off)"
     str = String(read_bytes(ctx, kid))
     offmatch = match(reg, str)
     offmatch === nothing && return nothing

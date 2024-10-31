@@ -1442,6 +1442,11 @@ end
                 return
             end
             """
+        # Extra stuff in the toggle comments
+        @test format_string("1+1\n$off #src\n1+1\n$on #src\n1+1") ==
+            "1 + 1\n$off #src\n1+1\n$on #src\n1 + 1"
+        @test format_string("1+1\n#src $off\n1+1\n#src $on\n1+1") ==
+            "1 + 1\n#src $off\n1+1\n#src $on\n1 + 1"
     end
 end
 
