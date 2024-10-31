@@ -318,7 +318,16 @@ Runic.
 
 The source comments `# runic: off` and `# runic: on` will toggle the formatting off and on,
 respectively. The comments must be on their own line, they must be on the same level in the
-syntax tree, and they must come in pairs.
+syntax tree, and they must come in pairs. An exception to the pairing rule is made at top
+level where a `# runic: off` comment will disable formatting for the remainder of the file.
+This is so that a full file can be excluded from formatting without having to add a
+`# runic: on` comment at the end of the file.
+
+> [!NOTE]
+> Note that it is enough that a comment contain the substring `# runic: off` or
+> `# runic: on` so that they can be combined with other "pragmas" such as e.g.
+> [Literate.jl line filters](https://fredrikekre.github.io/Literate.jl/v2/fileformat/#Filtering-lines)
+> like `#src`.
 
 > [!NOTE]
 > For compatibility with [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl) the
@@ -338,11 +347,6 @@ function foo()
     return A * a
 end
 ```
-
-An exception to the pairing rule is made at top level where a `# runic: off` comment will
-disable formatting for the remainder of the file. This is so that a full file can be
-excluded from formatting without having to add a `# runic: on` comment at the end of the
-file.
 
 ### Line width limit
 
