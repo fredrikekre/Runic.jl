@@ -149,6 +149,8 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
     looking_for_x = false
     n_x_leaves_visited = 0
 
+    peek(kids, i) = i < length(kids) ? kind(kids[i + 1]) : nothing
+
     for (i, kid) in pairs(kids)
         if kind(kid) === K"NewlineWs" ||
                 (i == 1 && kind(kid) === K"Whitespace")
@@ -160,7 +162,8 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
             any_changes && push!(kids′, kid)
             looking_for_whitespace = false
         elseif looking_for_whitespace
-            if kind(kid) === K"Whitespace" && span(kid) == 1
+            if (kind(kid) === K"Whitespace" && span(kid) == 1) ||
+                    (kind(kid) === K"Whitespace" && peek(kids, i) === K"Comment" && peek(kids, i + 1) === K"NewlineWs")
                 # All good, just advance the IO
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)
