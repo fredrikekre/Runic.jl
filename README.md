@@ -231,10 +231,24 @@ See [`fredrikekre/runic-action`](https://github.com/fredrikekre/runic-action) fo
 
 ### Git hooks
 
-Runic can be run in a
-[Git pre-commit hook](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks)
-to automatically check formatting before committing. Here is an example hook
-(`.git/hooks/pre-commit`):
+Runic can be used together with [`pre-commit`](https://pre-commit.com/) using
+[`fredrikekre/runic-pre-commit`](https://github.com/fredrikekre/runic-pre-commit). After
+installing `pre-commit` you can add the following to your `.pre-commit-config.yaml` to run
+Runic before each commit:
+
+```yaml
+repos:
+  - repo: https://github.com/fredrikekre/runic-pre-commit
+    rev: v1.0.0
+    hooks:
+      - id: runic
+```
+
+See [`fredrikekre/runic-pre-commit`](https://github.com/fredrikekre/runic-pre-commit) for
+details.
+
+If you don't want to use `pre-commit` you can also use a plain git hook. Here is an example
+hook (`.git/hooks/pre-commit`):
 
 ```sh
 #!/usr/bin/env bash
