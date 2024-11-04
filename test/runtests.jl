@@ -507,6 +507,8 @@ end
         @test format_string("f()$(sp)do; y end") == "f() do;\n    y\nend"
         @test format_string("function f()\n    return$(sp)1\nend") == "function f()\n    return 1\nend"
         @test format_string("function f()\n    return$(sp)\nend") == "function f()\n    return\nend"
+        @test format_string("module$(sp)A\nend") == "module A\nend"
+        @test format_string("module$(sp)(A)\nend") == "module (A)\nend"
         for word in ("local", "global"), rhs in ("a", "a, b", "a = 1", "a, b = 1, 2")
             word == "const" && rhs in ("a", "a, b") && continue
             @test format_string("$(word)$(sp)$(rhs)") == "$(word) $(rhs)"
@@ -528,6 +530,7 @@ end
     @test format_string("function f()\n    return(1)\nend") == "function f()\n    return (1)\nend"
     @test format_string("local(a)") == "local (a)"
     @test format_string("global(a)") == "global (a)"
+    @test format_string("module(A)\nend") == "module (A)\nend"
 end
 
 @testset "replace ∈ and = with in in for loops and generators" begin
@@ -712,8 +715,8 @@ end
             @test format_string("$(b)module \$A\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module \$A\n    x\nend\nf"
             # parenthesized module name (Why....)
-            @test format_string("$(b)module(A)\n$(sp)x\n$(sp)end\nf") ==
-                "$(b)module(A)\n    x\nend\nf"
+            @test format_string("$(b)module$(sp)(A)\n$(sp)x\n$(sp)end\nf") ==
+                "$(b)module (A)\n    x\nend\nf"
             @test format_string("$(b)module \$(A)\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module \$(A)\n    x\nend\nf"
             # single line module

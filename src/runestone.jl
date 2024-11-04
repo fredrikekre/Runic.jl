@@ -1232,7 +1232,10 @@ end
 # global, const
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
-    keyword_set = KSet"where do mutable struct abstract primitive type function if elseif catch while return local global const"
+    keyword_set = KSet"""
+    where do mutable struct abstract primitive type function if elseif catch while return
+    local global const module baremodule
+    """
     if !(kind(node) in keyword_set)
         return nothing
     end
@@ -1331,7 +1334,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 @assert false # Unreachable?
             else
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
-                @assert kind(node) in KSet"where if elseif while do function return local global"
+                @assert kind(node) in KSet"where if elseif while do function return local global module baremodule"
                 any_changes = true
                 if kids′ === kids
                     kids′ = kids[1:(i - 1)]
@@ -3001,10 +3004,10 @@ function indent_module(ctx::Context, node::Node; do_indent::Bool = true)
     space_idx = 2
     space_node = kids[space_idx]
     if kind(space_node) === K"Whitespace"
-        # Now we need an identifier or var"
+        # Now we need an identifier, var" or parens...
         id_idx = 3
         id_node = kids[id_idx]
-        @assert kind(id_node) in KSet"Identifier var"
+        @assert kind(id_node) in KSet"Identifier var parens"
         block_idx = 4
     else
         # This can be reached if the module name is interpolated or parenthesized, for
