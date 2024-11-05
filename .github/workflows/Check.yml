@@ -20,8 +20,6 @@ jobs:
           - '1.10'
           - '1'
           - 'nightly'
-    env:
-      coverage_flag: ${{ (matrix.version == '1.6' || matrix.version == '1.7') && 'user' || '@' }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -30,20 +28,18 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Install dependencies
         run: |
-          julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+          julia --color=yes --project --code-coverage=@ -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
       - name: Run Runic
         run: |
-          git ls-files -z -- '*.jl' | xargs -0 julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -m Runic --check --diff
+          git ls-files -z -- '*.jl' | xargs -0 julia --color=yes --project --code-coverage=@ -m Runic --check --diff
         if: ${{ matrix.version == 'nightly' }}
       - name: Run Runic
         run: |
-          git ls-files -z -- '*.jl' | xargs -0 julia --color=yes --project --code-coverage=${{ env.coverage_flag }} -e 'using Runic; exit(Runic.main(ARGS))' -- --check --diff
+          git ls-files -z -- '*.jl' | xargs -0 julia --color=yes --project --code-coverage=@ -e 'using Runic; exit(Runic.main(ARGS))' -- --check --diff
         if: ${{ matrix.version != 'nightly' }}
       - uses: julia-actions/julia-processcoverage@v1
-        if: ${{ matrix.version == '1' || matrix.version == 'nightly' }}
       - uses: codecov/codecov-action@v4
         with:
           file: lcov.info
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        if: ${{ matrix.version == '1' || matrix.version == 'nightly' }}
