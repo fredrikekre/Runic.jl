@@ -2,6 +2,9 @@
 
 *A code formatter with rules set in stone.*
 
+[![Test](https://github.com/fredrikekre/Runic.jl/actions/workflows/Test.yml/badge.svg?branch=master&event=push)](https://github.com/fredrikekre/Runic.jl/actions/workflows/Test.yml)
+[![codecov](https://codecov.io/gh/fredrikekre/Runic.jl/graph/badge.svg?token=GWKJKBZ5FB)](https://codecov.io/gh/fredrikekre/Runic.jl)
+
 Runic is a formatter for the [Julia programming language](https://julialang.org/) built on
 top of [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl).
 
