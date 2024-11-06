@@ -805,7 +805,7 @@ end
 # <: and >: operators.
 function spaces_around_operators(ctx::Context, node::Node)
     if !(
-            (is_infix_op_call(node) && !(kind(infix_op_call_op(node)) in KSet": .. ^")) ||
+            (is_infix_op_call(node) && !(kind(infix_op_call_op(node)) in KSet": ^")) ||
                 (kind(node) in KSet"<: >:" && meta_nargs(node) == 3) ||
                 (kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
         )
@@ -1211,17 +1211,17 @@ function spaces_in_import_using(ctx::Context, node::Node)
     end
 end
 
-# no spaces around `:`, `..`, `^`, and `::`
+# no spaces around `:`, `^`, and `::`
 function no_spaces_around_colon_etc(ctx::Context, node::Node)
     if !(
-            (is_infix_op_call(node) && kind(infix_op_call_op(node)) in KSet": .. ^") ||
+            (is_infix_op_call(node) && kind(infix_op_call_op(node)) in KSet": ^") ||
                 (kind(node) === K"::" && !is_leaf(node)) ||
                 (kind(node) in KSet"<: >:" && meta_nargs(node) == 2)
         )
         return nothing
     end
     @assert kind(node) in KSet"call :: <: >:"
-    is_x = x -> is_leaf(x) && kind(x) in KSet": .. ^ :: <: >:"
+    is_x = x -> is_leaf(x) && kind(x) in KSet": ^ :: <: >:"
     return no_spaces_around_x(ctx, node, is_x)
 end
 
