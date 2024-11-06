@@ -490,7 +490,7 @@ function has_newline_after_non_whitespace(node::Node)
         kids = verified_kids(node)
         idx = findlast(!JuliaSyntax.is_whitespace, kids)
         if idx === nothing
-            @assert false
+            unreachable()
             # Everything is whitespace...
             return any(x -> kind(x) === K"NewlineWs", kids)
         end
