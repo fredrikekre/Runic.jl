@@ -1487,6 +1487,13 @@ end
         @test isempty(fd2)
     end
 
+    # runic --version
+    let (rc, fd1, fd2) = runic(["--version"])
+        @test rc == 0
+        @test occursin("runic version $(Runic.RUNIC_VERSION), julia version $(VERSION)", fd1)
+        @test isempty(fd2)
+    end
+
     # runic <stdin >stdout
     for argv in [
             String[], ["-"],

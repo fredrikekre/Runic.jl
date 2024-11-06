@@ -5,6 +5,10 @@ module Runic
 using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
+const RUNIC_VERSION = pkgversion(@__MODULE__)
+# XXX: This should probably be handled by Base.
+Base.include_dependency(joinpath(pkgdir(@__MODULE__), "Project.toml"))
+
 # Debug and assert utilities
 include("debug.jl")
 include("JuliaSyntax.jl")
