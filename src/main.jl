@@ -140,8 +140,16 @@ function print_help()
                -o <file>, --output=<file>
                    File to write formatted output to. If no output is given, or if the file
                    is `-`, output is written to stdout.
+
+               --version
+                   Print Runic and julia version information.
         """
     )
+    return
+end
+
+function print_version()
+    println(stdout, "runic version $(RUNIC_VERSION), julia version $(VERSION)")
     return
 end
 
@@ -204,6 +212,9 @@ function main(argv)
             inplace = true
         elseif x == "--help"
             print_help()
+            return errno
+        elseif x == "--version"
+            print_version()
             return errno
         elseif x == "-q" || x == "--quiet"
             quiet = true
