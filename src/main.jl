@@ -319,14 +319,25 @@ function main(argv)
         if print_progress
             @assert inputfile != "-"
             input_pretty = relpath(inputfile)
+            if Sys.iswindows()
+                input_pretty = replace(input_pretty, "\\" => "/")
+            end
             if check
                 str = "Checking `$(input_pretty)` "
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
                 printstyled(stderr, str * dots * " "; color = :blue)
             else
-                to = output.output_is_samefile ? " " : " -> `$(relpath(output.file))` "
-                str = "Formatting `$(inputfile)`$(to)"
+                if output.output_is_samefile
+                    output_pretty = " "
+                else
+                    output_pretty = relpath(output.file)
+                    if Sys.iswindows()
+                        output_pretty = replace(output_pretty, "\\" => "/")
+                    end
+                    output_pretty = " -> `$(output_pretty)` "
+                end
+                str = "Formatting `$(input_pretty)`$(output_pretty)"
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
                 printstyled(stderr, str * dots * " "; color = :blue)
