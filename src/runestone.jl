@@ -543,7 +543,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     accept_node!(ctx, kid′)
                     any_kid_changed && push!(kids′, kid′)
                 else
-                    @assert false # Unreachable?
+                    unreachable()
                 end
                 # Transition to the next state
                 state = before_last_item ? (:expect_space) : (:expect_closing)
@@ -660,7 +660,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # K"parameters"...
                 state = i == last_item_idx ? (:expect_closing) : (:expect_item)
             else
-                @assert false # Unreachable?
+                unreachable()
             end
         elseif state === :expect_space
             if (kind(kid′) === K"Whitespace" && span(kid′) == 1) ||
@@ -759,7 +759,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             else
-                @assert false # Unreachable?
+                unreachable()
             end
         end # if-state
         any_kid_changed |= this_kid_changed
@@ -780,7 +780,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             accept_node!(ctx, comma)
             state = :expect_closing
         else
-            @assert false # Unreachable?
+            unreachable()
         end
     end
     @assert state === :expect_closing
@@ -896,7 +896,7 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
                     # Remove trailing whitespace
                     ws_kid = last_leaf(kid)
                     if kind(ws_kid) === K"Whitespace"
-                        @assert false # Hope this doesn't happen often...
+                        unreachable()
                     end
                 end
             end
@@ -994,7 +994,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 accept_node!(ctx, kid)
                 state = :expect_space
             else
-                @assert false
+                unreachable()
             end
         else
             @assert state === :expect_comma
@@ -1011,7 +1011,7 @@ function spaces_in_export_public(ctx::Context, node::Node)
                 end
                 state = :expect_comma
             else
-                @assert false
+                unreachable()
             end
         end
         i += 1
@@ -1331,7 +1331,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                     push!(kids′, kid′)
                 end
             elseif !space_after && kind(last_leaf(kid)) === K"Whitespace"
-                @assert false # Unreachable?
+                unreachable()
             else
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
                 @assert kind(node) in KSet"where if elseif while do function return local global module baremodule"
@@ -2514,7 +2514,6 @@ function indent_listlike(
         push!(kids′, kid)
         accept_node!(ctx, kid)
     elseif kind(last_leaf(kid)) === K"NewlineWs"
-        # @assert false # Testcase?
         # Hidden newline without tag
         grandkid = last_leaf(kid)
         @assert !has_tag(grandkid, TAG_PRE_DEDENT)
