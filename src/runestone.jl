@@ -2485,13 +2485,16 @@ function indent_listlike(
     end
     # Kid just before the closing token should be a newline and it should be tagged with
     # pre-dedent.
-    if close_idx - 1 == open_idx + 1
+    if idx_after_leading_nl == close_idx
         # Just a single kid which should then have both leading and trailing newline
         if any_kid_changed
-            # Modify this kid again by popping from the list and backtrack the stream
+            # Modify this kid again by popping from the list
             kid = pop!(kids′)
-            seek(ctx.fmt_io, position(ctx.fmt_io) - span(kid))
+        else
+            kid = kids[close_idx - 1]
         end
+        # Backtrack the stream
+        seek(ctx.fmt_io, position(ctx.fmt_io) - span(kid))
     else
         kid = kids[close_idx - 1]
     end

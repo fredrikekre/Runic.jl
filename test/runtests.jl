@@ -397,6 +397,9 @@ end
     # Non space whitespace (TODO: Not sure if a JuliaSyntax bug or not?)
     @test format_string(String(UInt8[0x61, 0x20, 0x3d, 0x3d, 0x20, 0xc2, 0xa0, 0x62, 0x3a, 0x63])) ==
         "a == b:c"
+    # Edge case with comment and no items
+    @test format_string("[# a\n]") == "[# a\n]"
+    @test format_string("[ # a\n]") == "[ # a\n]"
 end
 
 @testset "whitespace around ->" begin
