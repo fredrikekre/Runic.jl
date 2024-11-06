@@ -186,7 +186,7 @@ end
             @test format_string("$(sp)a$(sp)$(op)$(sp)# comment\nb$(sp)") ==
                 "$(sp)a $(op)$(minspace)# comment\n    b$(sp)"
         end
-        # Exceptions to the rule: `:`, `..`, and `^`
+        # Exceptions to the rule: `:` and `^`
         # a:b
         @test format_string("$(sp)a$(sp):$(sp)b$(sp)") == "$(sp)a:b$(sp)"
         @test format_string("$(sp)a + a$(sp):$(sp)b + b$(sp)") == "$(sp)(a + a):(b + b)$(sp)"
@@ -196,8 +196,6 @@ end
         @test format_string("$(sp)a$(sp):$(sp)b$(sp):$(sp)c$(sp)") == "$(sp)a:b:c$(sp)"
         @test format_string("$(sp)(1 + 2)$(sp):$(sp)(1 + 3)$(sp):$(sp)(1 + 4)$(sp)") ==
             "$(sp)(1 + 2):(1 + 3):(1 + 4)$(sp)"
-        # a..b
-        @test format_string("$(sp)a$(sp)..$(sp)b$(sp)") == "$(sp)a..b$(sp)"
         # a^b
         @test format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "$(sp)a^b$(sp)"
         # Edgecase when formatting whitespace in the next leaf, when the next leaf is a

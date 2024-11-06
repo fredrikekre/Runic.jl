@@ -557,7 +557,7 @@ arguments in function definitions and calls. Examples:
 +foo(a = 1)
 ```
 
-Exceptions to the rule above are `:`, `..`, `^`, `::`, and unary `<:` and `>:`. These are
+Exceptions to the rule above are `:`, `^`, `::`, and unary `<:` and `>:`. These are
 formatted *without* spaces around them. Examples:
 ```diff
 -a : b
