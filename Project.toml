@@ -6,6 +6,9 @@ version = "1.0.0"
 JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 
+[apps]
+runic = {}
+
 [compat]
 JuliaSyntax = "0.4.10"
 Preferences = "1"
