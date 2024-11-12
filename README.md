@@ -179,6 +179,25 @@ Julia language extension also comes with a formatter.
 > Note that Custom Local Formatters is a third party extension. It works as advertised but
 > use it at your own risk.
 
+#### Emacs
+
+Runic can be used as a formatter in [Emacs](https://www.gnu.org/software/emacs/) using [apheleia](https://github.com/radian-software/apheleia).
+Refer to the apheleia repository for installation and setup instruction. 
+
+Runic is not (yet) available directly in apheleia so the
+following configuration needs to be added to your `.emacs`.
+This assumes that Runic is installed in the `@runic` shared project as suggested in the [Installation](#installation) section above.
+
+```
+(push `(runic . ("julia" "--project=@runic" "-e" "using Runic; exit(Runic.main(ARGS))" "--")) apheleia-formatters)
+(push '(julia-mode . runic) apheleia-mode-alist)
+```
+
+> [!IMPORTANT]
+> Note that apheleia is a third party extension. It works as advertised but
+> use it at your own risk.
+
+
 ## Checking formatting
 
 Runic has a check-mode that verifies whether files are correctly formatted or not. This mode
