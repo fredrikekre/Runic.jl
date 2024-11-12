@@ -114,6 +114,17 @@ In addition to the CLI there is also the two function `Runic.format_file` and
 
 ### Editor integration
 
+Most code editors have code formatting capabilities and many can be configured to use Runic.
+Example configuration for some editors are given in the following sections.
+
+ - [Neovim](#neovim)
+ - [VS Code](#vs-code)
+ - [Emacs](#emacs)
+
+> [!IMPORTANT]
+> Note that these configurations depend on third party plugins. They works as advertised but
+> use it at your own risk.
+
 #### Neovim
 
 Runic can be used as a formatter in [Neovim](https://neovim.io/) using
@@ -150,10 +161,6 @@ enabled by adding the following to your configuration:
 vim.o.formatexpr = "v:lua.require('conform').formatexpr()"
 ```
 
-> [!IMPORTANT]
-> Note that conform is a third party plugin. It works as advertised but use it at your own
-> risk.
-
 #### VS Code
 
 Runic can be used as a formatter in [VS Code](https://code.visualstudio.com/) using the
@@ -175,10 +182,6 @@ Using the "Format Document" VS Code command will now format the file using Runic
 the first time you execute the command you will be prompted to select a formatter since the
 Julia language extension also comes with a formatter.
 
-> [!IMPORTANT]
-> Note that Custom Local Formatters is a third party extension. It works as advertised but
-> use it at your own risk.
-
 #### Emacs
 
 Runic can be used as a formatter in [Emacs](https://www.gnu.org/software/emacs/) using [apheleia](https://github.com/radian-software/apheleia).
@@ -192,11 +195,6 @@ This assumes that Runic is installed in the `@runic` shared project as suggested
 (push `(runic . ("julia" "--project=@runic" "-e" "using Runic; exit(Runic.main(ARGS))" "--")) apheleia-formatters)
 (push '(julia-mode . runic) apheleia-mode-alist)
 ```
-
-> [!IMPORTANT]
-> Note that apheleia is a third party extension. It works as advertised but
-> use it at your own risk.
-
 
 ## Checking formatting
 
