@@ -59,6 +59,30 @@ end
     @test KSet"Whitespace ; Whitespace" == (K"Whitespace", K";", K"Whitespace")
 end
 
+@testset "syntax tree normalization" begin
+    function rparse(str)
+        node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, str))
+        Runic.normalize_tree!(node)
+        return node
+    end
+    function check_no_leading_trailing_ws(node)
+        Runic.is_leaf(node) && return
+        kids = Runic.verified_kids(node)
+        if length(kids) > 0
+            @test !JuliaSyntax.is_whitespace(kids[1])
+            @test !JuliaSyntax.is_whitespace(kids[end])
+        end
+        for kid in kids
+            check_no_leading_trailing_ws(kid)
+        end
+    end
+    # Random things found in the ecosystem
+    str = "[\n    # c\n    0.5 1.0\n    1.0 2.0\n    # c\n]"
+    check_no_leading_trailing_ws(rparse(str))
+    str = "[0.5 1.0; 1.0 2.0;;; 4.5 6.0; 6.0 8.0]"
+    check_no_leading_trailing_ws(rparse(str))
+end
+
 @testset "Trailing whitespace" begin
     io = IOBuffer()
     println(io, "a = 1  ") # Trailing space
@@ -516,8 +540,8 @@ end
             # After `local`, `global`, and `const` a newline can be used instead of a space
             @test format_string("$(word)$(sp)\n$(sp)$(rhs)") == "$(word)\n    $(rhs)"
         end
-        @test_broken format_string("global\n\nx = 1") == "global\n\n    x = 1" # TODO: Fix double peek
-        @test_broken format_string("lobal\n\nx = 1") == "local\n\n    x = 1" # TODO: Fix double peek
+        @test format_string("global\n\nx = 1") == "global\n\n    x = 1"
+        @test format_string("local\n\nx = 1") == "local\n\n    x = 1"
         @test format_string("const$(sp)x = 1") == "const x = 1"
         # After `where` a newline can be used instead of a space
         @test format_string("A$(sp)where$(sp)\n{A}") == "A where\n{A}"
@@ -935,6 +959,7 @@ end
         @test format_string("$(verb) $(sp)A$(sp),$(sp)B") == "$(verb) A, B"
         @test format_string("$(verb) A$(sp),\nB") == "$(verb) A,\n    B"
         @test format_string("$(verb) \nA$(sp),\nB") == "$(verb)\n    A,\n    B"
+        @test format_string("$(verb) $(sp)A,$(sp)\n\n$(sp)B") == "$(verb) A,\n\n    B"
         # Colon lists
         for a in ("a", "@a", "*")
             @test format_string("$(verb) $(sp)A: $(sp)$(a)") == "$(verb) A: $(a)"
@@ -1229,6 +1254,8 @@ end
         # Trailing semicolon before ws+comment
         f; # comment
         f;; # comment
+        # Trailing semicolon with whitespace on both sides
+        g ; # comment
     """
     bodyfmt = """
         # Semicolons on their own lines
@@ -1252,6 +1279,8 @@ end
         # Trailing semicolon before ws+comment
         f  # comment
         f   # comment
+        # Trailing semicolon with whitespace on both sides
+        g   # comment
     """
     for prefix in (
             "begin", "quote", "for i in I", "let", "let x = 1", "while cond",
@@ -1453,6 +1482,17 @@ end
             "1 + 1\n$off #src\n1+1\n$on #src\n1 + 1"
         @test format_string("1+1\n#src $off\n1+1\n#src $on\n1+1") ==
             "1 + 1\n#src $off\n1+1\n#src $on\n1 + 1"
+        # Toggles inside literal array expression (fixed by normalization, PR #101)
+        let str = """
+            [
+                $off
+                 1.10  1.20  1.30
+                -2.10 -1.20 +1.30
+                f( a+b )
+                $on
+            ]"""
+            @test format_string(str) == str
+        end
     end
 end
 

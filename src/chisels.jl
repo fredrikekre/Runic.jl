@@ -77,81 +77,97 @@ function stringify_flags(node::Node)
     return String(take!(io))
 end
 
+function pop_if_whitespace!(popf!::F, node) where {F}
+    if !is_leaf(node) && begin
+            kids = verified_kids(node)
+            length(kids) > 0 &&
+                JuliaSyntax.is_whitespace(popf! === popfirst! ? kids[1] : kids[end])
+        end
+        ws = popf!(kids)
+        @assert JuliaSyntax.is_whitespace(ws)
+        node′ = make_node(node, kids)
+        @assert span(node) == span(node′) + span(ws)
+        return node′, ws
+    end
+    return nothing, nothing
+end
+
 # The parser is somewhat inconsistent(?) with where e.g. whitespace nodes end up so in order
 # to simplify the formatting code we normalize some things.
 function normalize_tree!(node)
-    is_leaf(node) && return
+    is_leaf(node) && return node
     kids = verified_kids(node)
 
-    # Move standalone K"NewlineWs" (and other??) nodes from between the var block and the
-    # body block in K"let" nodes.
-    # Note that this happens before the whitespace into block normalization below because
-    # for let we want to move it to the subsequent block instead.
+    # For K"let" the token (K"NewlineWs" or K";") separating the vars block from the
+    # body ends up in between the two K"block" nodes. Move it into the body block.
     if kind(node) === K"let"
         varsidx = findfirst(x -> kind(x) === K"block", kids)::Int
-        bodyidx = findnext(x -> kind(x) === K"block", kids, varsidx + 1)::Int
-        r = (varsidx + 1):(bodyidx - 1)
-        if length(r) > 0
-            items = kids[r]
-            deleteat!(kids, r)
-            bodyidx -= length(r)
-            body = kids[bodyidx]
-            prepend!(verified_kids(body), items)
-            kids[bodyidx] = make_node(body, verified_kids(body))
+        blockidx = findnext(x -> kind(x) === K"block", kids, varsidx + 1)::Int
+        while blockidx != varsidx + 1
+            grandkid = popat!(kids, blockidx - 1)
+            blockidx -= 1
+            block = kids[blockidx]
+            pushfirst!(verified_kids(block), grandkid)
+            kids[blockidx] = make_node(block, verified_kids(block))
         end
+        @assert span(node) == mapreduce(span, +, kids; init = 0)
     end
 
-    # Normalize K"Whitespace" nodes in blocks. For example in `if x y end` the space will be
-    # outside the block just before the K"end" node, but in `if x\ny\nend` the K"NewlineWs"
-    # will end up inside the block.
+    # Normalize K"Whitespace" nodes in blocks. For example in `if x y end` the space
+    # will be outside the block just before the K"end" node, but in `if x\ny\nend` the
+    # K"NewlineWs" will end up inside the block.
     if kind(node) in KSet"function if elseif for while try do macro module baremodule let struct module"
-        blockidx = findfirst(x -> kind(x) === K"block", kids)
-        while blockidx !== nothing && blockidx < length(kids)
-            if kind(kids[blockidx + 1]) !== K"Whitespace"
-                # TODO: This repeats the computation below...
+        blockidx = 0
+        while let
                 blockidx = findnext(x -> kind(x) === K"block", kids, blockidx + 1)
+                blockidx !== nothing && blockidx < length(kids)
+            end
+            if kind(kids[blockidx + 1]) !== K"Whitespace"
                 continue
             end
-            # Pop the ws and push it into the block instead
             block = kids[blockidx]
             blockkids = verified_kids(block)
             @assert !(kind(blockkids[end]) in KSet"Whitespace NewlineWs")
             push!(blockkids, popat!(kids, blockidx + 1))
-            # Remake the block to recompute the span
             kids[blockidx] = make_node(block, blockkids)
-            # Find next block
-            blockidx = findnext(x -> kind(x) === K"block", kids, blockidx + 1)
         end
+        @assert span(node) == mapreduce(span, +, kids; init = 0)
     end
 
-    # Normalize K"Whitespace" nodes in if-elseif-else chains where the node needs to move
-    # many steps into the last else block...
+    # Normalize K"Whitespace" nodes in if-elseif-else chains where the node needs to
+    # move many steps into the last else block.
     if kind(node) === K"if"
         elseifidx = findfirst(x -> kind(x) === K"elseif", kids)
         if elseifidx !== nothing
             endidx = findnext(x -> kind(x) === K"end", kids, elseifidx + 1)::Int
             if elseifidx + 2 == endidx && kind(kids[elseifidx + 1]) === K"Whitespace"
-                # Pop the ws and push it into the last block instead
                 ws = popat!(kids, elseifidx + 1)
                 elseifnode = insert_into_last_else_block(kids[elseifidx], ws)
                 @assert elseifnode !== nothing
                 kids[elseifidx] = elseifnode
             end
         end
+        @assert span(node) == mapreduce(span, +, kids; init = 0)
     end
 
     # Normalize K"Whitespace" nodes in try-catch-finally-else
     if kind(node) === K"try"
-        catchidx = findfirst(x -> kind(x) in KSet"catch finally else", kids)
-        while catchidx !== nothing
+        catchidx = 0
+        while let
+                catchidx = findnext(
+                    x -> kind(x) in KSet"catch finally else", kids, catchidx + 1
+                )
+                catchidx !== nothing
+            end
+            @assert catchidx + 1 <= length(kids)
             if kind(kids[catchidx + 1]) === K"Whitespace"
                 ws = popat!(kids, catchidx + 1)
                 catchnode = insert_into_last_catchlike_block(kids[catchidx], ws)
                 @assert catchnode !== nothing
                 kids[catchidx] = catchnode
             end
-            catchidx = findnext(x -> kind(x) in KSet"catch finally else", kids, catchidx + 1)
         end
+        @assert span(node) == mapreduce(span, +, kids; init = 0)
     end
 
     # Normalize K"NewlineWs" nodes in empty do-blocks
@@ -161,7 +177,7 @@ function normalize_tree!(node)
         @assert tupleidx + 1 == blockidx
         tuple = kids[tupleidx]
         tuplekids = verified_kids(tuple)
-        if kind(tuplekids[end]) === K"NewlineWs"
+        if length(tuplekids) > 0 && kind(tuplekids[end]) === K"NewlineWs"
             # If the tuple ends with a K"NewlineWs" node we move it into the block
             block = kids[blockidx]
             blockkids = verified_kids(block)
@@ -173,13 +189,63 @@ function normalize_tree!(node)
             kids[tupleidx] = make_node(tuple, tuplekids)
             kids[blockidx] = make_node(block, blockkids)
         end
+        @assert span(node) == mapreduce(span, +, kids; init = 0)
     end
 
+    @assert span(node) == mapreduce(span, +, kids; init = 0)
     @assert kids === verified_kids(node)
-    for kid in kids
-        ksp = span(kid)
-        normalize_tree!(kid)
-        @assert span(kid) == ksp
+
+    # Loop over the kids to bubble up whitespace
+    i = 0
+    while i < lastindex(kids)
+        i += 1
+        kid = kids[i]
+
+        # Recursively normalize the kid to bubble up whitespace to the front. This should
+        # never change the node kind or the span, just internally reorganize the tokens.
+        kid′ = normalize_tree!(kid)
+        @assert kid === kid′
+        is_leaf(kid) ||
+            @assert span(kid) == mapreduce(span, +, verified_kids(kid); init = 0)
+
+        # If the kid is a K"block" we don't bubble up whitespace since it is more convenient
+        # to keep it inside the block (see e.g. `indent_block` which relies on this for
+        # making sure blocks starts/ends with a K"NewlineWs").
+        if kind(kid) === K"block"
+            # If this is a begin-block (or quote-block) we can still bubble up the
+            # whitespace since the begin and end tokens are inside of the block. I don't
+            # think this currently happens though so for now we just assert.
+            if is_begin_block(kid)
+                @assert kind(verified_kids(kid)[1]) === K"begin"
+                @assert kind(verified_kids(kid)[end]) === K"end"
+            elseif is_begin_block(kid, K"quote")
+                @assert kind(verified_kids(kid)[1]) === K"quote"
+                @assert kind(verified_kids(kid)[end]) === K"end"
+            elseif is_paren_block(kid)
+                @assert kind(verified_kids(kid)[1]) === K"("
+                @assert kind(verified_kids(kid)[end]) === K")"
+            end
+            continue
+        end
+
+        # Extract any leading whitespace and insert it before the node.
+        while ((kid′, ws) = pop_if_whitespace!(popfirst!, kid); ws !== nothing)
+            @assert kid′ !== nothing
+            @assert kind(kid′) === kind(kid)
+            kids[i] = kid = kid′
+            insert!(kids, i, ws)
+            i += 1
+        end
+
+        # Extract any trailing whitespace and insert it after the node.
+        while ((kid′, ws) = pop_if_whitespace!(pop!, kid); ws !== nothing)
+            # Trailing whitespace have only been seen in the wild in these three cases
+            @assert kind(kid) in KSet"row nrow parameters"
+            @assert kid′ !== nothing
+            @assert kind(kid′) === kind(kid)
+            kids[i] = kid = kid′
+            insert!(kids, i + 1, ws)
+        end
     end
     # We only move around things inside this node so the span should be unchanged
     @assert span(node) == mapreduce(span, +, kids; init = 0)
@@ -378,21 +444,6 @@ function nth_leaf(node::Node, nth::Int, n_seen::Int)
     end
 end
 
-function second_leaf(node::Node)
-    return nth_leaf(node, 2)
-end
-
-# TODO: This should probably be merged with kmatch or something...
-function peek_leafs(node::Node, leaf_kinds::Tuple)
-    for (i, leaf_kind) in pairs(leaf_kinds)
-        ith = nth_leaf(node, i)
-        if ith === nothing || kind(ith) !== leaf_kind
-            return false
-        end
-    end
-    return true
-end
-
 # Return number of non-whitespace kids, basically the length the equivalent
 # (expr::Expr).args
 function meta_nargs(node::Node)
@@ -480,27 +531,6 @@ function second_last_leaf(node::Node, n_seen::Int)
         end
     end
     return nothing, n_seen
-end
-
-function has_newline_after_non_whitespace(node::Node)
-    if is_leaf(node)
-        @assert kind(node) !== K"NewlineWs"
-        return false
-    else
-        kids = verified_kids(node)
-        idx = findlast(!JuliaSyntax.is_whitespace, kids)
-        if idx === nothing
-            unreachable()
-            # Everything is whitespace...
-            return any(x -> kind(x) === K"NewlineWs", kids)
-        end
-        return any(x -> kind(x) === K"NewlineWs", kids[(idx + 1):end]) ||
-            has_newline_after_non_whitespace(kids[idx])
-        # if idx === nothing
-        #     # All is whitespace, check if any of the kids is a newline
-        #     return any(x -> kind(x) === K"NewlineWs", kids)
-        # end
-    end
 end
 
 function is_assignment(node::Node)
@@ -622,9 +652,10 @@ function first_non_whitespace_kid(node::Node)
     return kids[idx]
 end
 
-function is_begin_block(node::Node)
+function is_begin_block(node::Node, token = K"begin")
+    @assert token in KSet"begin quote"
     return kind(node) === K"block" && length(verified_kids(node)) > 0 &&
-        kind(verified_kids(node)[1]) === K"begin"
+        kind(verified_kids(node)[1]) === token
 end
 
 function is_paren_block(node::Node)
