@@ -70,6 +70,25 @@ function sprint_showerror_juliac(err::Exception)
     end
 end
 
+# juliac-compatible print(::IO, ::VersionNumber) with explicitly `@inline`d `join` calls...
+function print_vnum_juliac(io::IO, v::VersionNumber)
+    v == typemax(VersionNumber) && return print(io, "∞")
+    print(io, v.major)
+    print(io, '.')
+    print(io, v.minor)
+    print(io, '.')
+    print(io, v.patch)
+    if !isempty(v.prerelease)
+        print(io, '-')
+        @inline join(io, v.prerelease, '.')
+    end
+    if !isempty(v.build)
+        print(io, '+')
+        @inline join(io, v.build, '.')
+    end
+    return
+end
+
 # juliac-compatible `Base.tempdir` and `Base.mktempdir` without logging and deferred cleanup
 function tempdir_juliac()
     buf = Base.StringVector(Base.Filesystem.AVG_PATH - 1)
