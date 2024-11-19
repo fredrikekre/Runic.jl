@@ -16,6 +16,7 @@ const juliac = @load_preference("juliac", false)
     const printstyled = printstyled_juliac
     const mktempdir = mktempdir_juliac
     const sprint_showerror = sprint_showerror_juliac
+    const print_vnum = print_vnum_juliac
 else
     # const stdin = Base.stdin
     # const stdout = Base.stdout
@@ -24,6 +25,7 @@ else
     const printstyled = Base.printstyled
     const mktempdir = Base.mktempdir
     sprint_showerror(err::Exception) = sprint(showerror, err)
+    const print_vnum = Base.print
 end
 
 supports_color(io) = get(io, :color, false)
@@ -149,7 +151,11 @@ function print_help()
 end
 
 function print_version()
-    println(stdout, "runic version $(RUNIC_VERSION), julia version $(VERSION)")
+    print(stdout, "runic version ")
+    print_vnum(stdout, RUNIC_VERSION)
+    print(stdout, ", julia version ")
+    print_vnum(stdout, VERSION)
+    println(stdout)
     return
 end
 
