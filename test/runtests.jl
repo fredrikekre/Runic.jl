@@ -22,6 +22,24 @@ using JuliaSyntax:
     end
 end
 
+@testset "Runic.AssertionError" begin
+    issuemsg = "This is unexpected, please file an issue with a reproducible example at " *
+        "https://github.com/fredrikekre/Runic.jl/issues/new."
+    try
+        Runic.@assert 1 == 2
+    catch err
+        @test err isa Runic.AssertionError
+        @test sprint(showerror, err) == "Runic.AssertionError: 1 == 2. " * issuemsg
+    end
+    try
+        Runic.unreachable()
+    catch err
+        @test err isa Runic.AssertionError
+        @test sprint(showerror, err) ==
+            "Runic.AssertionError: unreachable code reached. " * issuemsg
+    end
+end
+
 @testset "Chisels" begin
     # Type stability of verified_kids
     node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))

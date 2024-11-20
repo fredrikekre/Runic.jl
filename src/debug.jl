@@ -4,9 +4,6 @@
 # Debug info #
 ##############
 
-# Code derived from ToggleableAsserts.jl kept in a separate file
-include("ToggleableAsserts.jl")
-
 abstract type RunicException <: Exception end
 
 struct AssertionError <: RunicException
@@ -23,7 +20,7 @@ function Base.showerror(io::IO, err::AssertionError)
     return
 end
 
-function macroexpand_assert(expr)
+macro assert(expr)
     msg = string(expr)
     return :($(esc(expr)) || throw(AssertionError($msg)))
 end
