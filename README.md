@@ -4,6 +4,7 @@
 
 [![Test](https://github.com/fredrikekre/Runic.jl/actions/workflows/Test.yml/badge.svg?branch=master&event=push)](https://github.com/fredrikekre/Runic.jl/actions/workflows/Test.yml)
 [![codecov](https://codecov.io/gh/fredrikekre/Runic.jl/graph/badge.svg?token=GWKJKBZ5FB)](https://codecov.io/gh/fredrikekre/Runic.jl)
+[![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
 
 Runic is a formatter for the [Julia programming language](https://julialang.org/) built on
 top of [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl).
@@ -23,10 +24,12 @@ that is appreciated by most Go programmers, see for example the following
  - [Usage](#usage)
     - [CLI](#cli)
     - [Editor integration](#editor-integration)
+    - [Adopting Runic formatting](#adopting-runic-formatting)
+       - [Ignore formatting commits in git blame](#ignore-formatting-commits-in-git-blame)
+       - [Badge](#badge)
  - [Checking formatting](#checking-formatting)
     - [Github Actions](#github-actions)
     - [Git hooks](#git-hooks)
-    - [Ignore formatting commits in git blame](#ignore-formatting-commits-in-git-blame)
  - [Formatting specification](#formatting-specification)
 
 ## Installation
@@ -34,14 +37,14 @@ that is appreciated by most Go programmers, see for example the following
 Runic can be installed with Julia's package manager:
 
 ```sh
-julia -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
+julia -e 'using Pkg; Pkg.add("Runic")'
 ```
 
 For CLI usage and editor integration (see [Usage](#usage)) it is recommended to install
 Runic in a separate project such as e.g. the shared project `@runic`:
 
 ```sh
-julia --project=@runic -e 'using Pkg; Pkg.add(url = "https://github.com/fredrikekre/Runic.jl")'
+julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
 ```
 
 ## Usage
@@ -73,7 +76,7 @@ alias runic="julia --project=@runic -m Runic"
 > ```
 
 ```
-$ julia -m Runic --help
+$ runic --help
 NAME
        Runic.main - format Julia source code
 
@@ -196,6 +199,55 @@ This assumes that Runic is installed in the `@runic` shared project as suggested
 (push '(julia-mode . runic) apheleia-mode-alist)
 ```
 
+### Adopting Runic formatting
+
+Here is a checklist for adopting Runic formatting in a project:
+
+ - Format all existing files with `runic -i <path>` and commit the changes in separate
+   commit. This commit can be ignored in `git blame` (see [Ignore formatting commits in git
+   blame](#ignore-formatting-commits-in-git-blame)).
+ - Configure automatic checks (see [Checking formatting](#checking-formatting)) to ensure
+   future changes adhere to the formatting rules.
+ - Optionally add a badge to the repository README, see [Badge](#badge).
+
+#### Ignore formatting commits in git blame
+
+When setting up Runic formatting for a repository for the first time (or when upgrading to a
+new version of Runic) the formatting commit will likely result in a large diff with mostly
+non functional changes such as e.g. whitespace. Since the diff is large it is likely that it
+will show up and interfere when using [`git-blame`](https://git-scm.com/docs/git-blame). To
+ignore commits during `git-blame` you can i) add them to a file `.git-blame-ignore-revs` and
+ii) tell git to use this file as ignore file by running
+
+```
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+See the [git-blame
+documentation](https://git-scm.com/docs/git-blame#Documentation/git-blame.txt---ignore-revs-fileltfilegt)
+for details.
+
+For example, such a file may look like this:
+```
+# Adding Runic formatting
+<commit hash of formatting commit>
+
+# Upgrading Runic from 1.0 to 2.0
+<commit hash of formatting commit>
+```
+
+#### Badge
+
+If you want to show that your project is formatted with Runic you can add the following
+badge in the repository README:
+
+```markdown
+[![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
+```
+
+The badge looks like this:
+[![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
+
 ## Checking formatting
 
 Runic has a check-mode that verifies whether files are correctly formatted or not. This mode
@@ -280,32 +332,6 @@ exec 1>&2
 git diff-index -z --name-only --diff-filter=AM master | \
     grep -z '\.jl$' | \
     xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
-```
-
-### Ignore formatting commits in git blame
-
-When setting up Runic formatting for a repository for the first time (or when upgrading to a
-new version of Runic) the formatting commit will likely result in a large diff with mostly
-non functional changes such as e.g. whitespace. Since the diff is large it is likely that it
-will show up and interfere when using [`git-blame`](https://git-scm.com/docs/git-blame). To
-ignore commits during `git-blame` you can i) add them to a file `.git-blame-ignore-revs` and
-ii) tell git to use this file as ignore file by running
-
-```
-git config blame.ignoreRevsFile .git-blame-ignore-revs
-```
-
-See the [git-blame
-documentation](https://git-scm.com/docs/git-blame#Documentation/git-blame.txt---ignore-revs-fileltfilegt)
-for details.
-
-For example, such a file may look like this:
-```
-# Adding Runic formatting
-<commit hash of formatting commit>
-
-# Upgrading Runic from 1.0 to 2.0
-<commit hash of formatting commit>
 ```
 
 ## Formatting specification
