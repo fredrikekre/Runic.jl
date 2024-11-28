@@ -581,39 +581,6 @@ function unwrap_to_call_or_tuple(x)
     return unwrap_to_call_or_tuple(xkids[xi])
 end
 
-# TODO: This should be reworked to be more specific, in particular K"parens" is maybe not
-# correct (found in e.g. `function(x * b)\n\nend`).
-function is_longform_anon_function(node::Node)
-    is_leaf(node) && return false
-    kind(node) === K"function" || return false
-    kids = verified_kids(node)
-    kw = findfirst(x -> kind(x) === K"function", kids)
-    @assert kw !== nothing
-    sig = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, kw + 1)::Int
-    sigkid = kids[sig]
-    maybe_tuple = unwrap_to_call_or_tuple(sigkid)
-    if maybe_tuple === nothing
-        return false
-    else
-        return kind(maybe_tuple) in KSet"tuple parens"
-    end
-end
-
-function is_longform_functor(node::Node)
-    is_leaf(node) && return false
-    kind(node) === K"function" || return false
-    kids = verified_kids(node)
-    kw = findfirst(x -> kind(x) === K"function", kids)
-    @assert kw !== nothing
-    calli = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, kw + 1)::Int
-    call = kids[calli]
-    if !is_leaf(call) && kind(call) == K"call" &&
-            kind(first(verified_kids(call))) === K"parens"
-        return true
-    end
-    return false
-end
-
 # Just like `JuliaSyntax.is_infix_op_call`, but also check that the node is K"call" or
 # K"dotcall"
 function is_infix_op_call(node::Node)

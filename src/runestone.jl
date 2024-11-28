@@ -1121,10 +1121,6 @@ function spaces_around_keywords(ctx::Context, node::Node)
     if !(kind(node) in keyword_set)
         return nothing
     end
-    if is_longform_anon_function(node)
-        # TODO: `function(` should have no space, handled elsewhere
-        return nothing
-    end
     kids = verified_kids(node)
     kids′ = kids
     any_changes = false
@@ -3187,7 +3183,7 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
     kids′ = kids
-    block_predicate = function(x)
+    block_predicate = function (x)
         return kind(x) === K"block" && !JuliaSyntax.has_flags(x, JuliaSyntax.PARENS_FLAG)
     end
     block_idx = findfirst(block_predicate, kids′)
@@ -3296,7 +3292,7 @@ function has_return(node::Node)
     elseif kind(node) in KSet"try if elseif"
         # Look for the initial try/if block and then for
         # catch/else/finally (for try) or elseif/else (for if).
-        pred = function(x)
+        pred = function (x)
             return !is_leaf(x) && kind(x) in KSet"catch else finally elseif block"
         end
         idx = findfirst(pred, kids)
