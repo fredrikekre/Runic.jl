@@ -29,3 +29,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
+          changelog: |
+            {% if custom %}
+            {{ custom }}
+            {% endif %}
+
+            See [`CHANGELOG.md`](https://github.com/fredrikekre/Runic.jl/blob/master/CHANGELOG.md) for notable changes.
+
+            {% if previous_release %}
+            [Diff since {{ previous_release }}]({{ compare_url }})
+            {% endif %}
