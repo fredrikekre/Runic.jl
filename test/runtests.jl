@@ -827,6 +827,10 @@ end
         # TODO: Spaces after function keyword isn't removed.
         @test format_string("function$(sp)(a * b)\nreturn\nend") ==
             "function$(sp)(a * b)\n    return\nend"
+        # https://github.com/fredrikekre/Runic.jl/issues/109
+        @test format_string("function$(sp)(::Type{T})(::Int) where {T}\n$(sp)return T\n$(sp)end") ==
+            "function (::Type{T})(::Int) where {T}\n    return T\nend"
+        @test format_string("function$(sp)()() end") == "function ()() end"
         # Multiline strings inside lists
         for trip in ("\"\"\"", "```")
             @test format_string("println(io, $(trip)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(trip))") ==

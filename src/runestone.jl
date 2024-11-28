@@ -1599,19 +1599,9 @@ function indent_function_or_macro(ctx::Context, node::Node)
         kids[func_idx] = add_tag(func_node, TAG_INDENT)
         any_kid_changed = true
     end
-    # Second node is the space between keyword and name
-    if !(is_longform_anon_function(node) || is_longform_functor(node))
-        space_idx = 2
-        space_node = kids[space_idx]
-        @assert is_leaf(space_node) && kind(space_node) === K"Whitespace"
-    end
-    # Third node is the signature (call/where/::) for standard method definitions but just
-    # an Identifier for cases like `function f end`.
+    # The signature is the next non-whitespace node. It is a (call/where/::) for standard
+    # method definitions but just an Identifier for cases like `function f end`.
     sig_idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, func_idx + 1)::Int
-    if sig_idx == 2
-        # Only case where no space is needed after the keyword
-        @assert is_longform_anon_function(node) || is_longform_functor(node)
-    end
     sig_node = kids[sig_idx]
     # Identifier for regular names but "not function call" for empty functions with Unicode
     # symbols??
