@@ -30,6 +30,7 @@ that is appreciated by most Go programmers, see for example the following
  - [Checking formatting](#checking-formatting)
     - [Github Actions](#github-actions)
     - [Git hooks](#git-hooks)
+ - [Version policy](#version-policy)
  - [Formatting specification](#formatting-specification)
 
 ## Installation
@@ -297,9 +298,15 @@ jobs:
 See [`fredrikekre/runic-action`](https://github.com/fredrikekre/runic-action) for details.
 
 > [!IMPORTANT]
-> It is *highly recommended* to pin the Runic version to a full version number (e.g.
-> `major.minor.patch`) to avoid CI failures due to changes in Runic.jl because even
-> formatting bug fixes may result in formatting changes that would then fail the workflow.
+> Please be aware of Runic's [version policy](#version-policy) when configuring the version.
+> Pinning to a major release (as above with `version: '1'`) may cause occasional CI failures
+> whenever there is a new minor release of Runic that happens to impact your code base. When
+> this happens you simply have to i) re-run Runic on the new version, ii) commit the result,
+> and iii) add the commit to
+> [the ignore list](#ignore-formatting-commits-in-git-blame). This is still recommended
+> since minor releases should be relatively rare, and if you use Runic you presumably want
+> these minor bugfixes to be applied to your code base.
+> The alternative is to pin to a minor version and manually upgrade to new minor versions.
 
 ### Git hooks
 
@@ -333,6 +340,24 @@ git diff-index -z --name-only --diff-filter=AM master | \
     grep -z '\.jl$' | \
     xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
 ```
+
+## Version policy
+
+Runic adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Semantic
+versioning is easy to apply and understand when it comes to the API (e.g. the [CLI](#cli)
+and public methods of the Runic library) but it is less clear how to apply it to changes in
+the formatted output. Runic makes the following policy:
+
+ - **Patch releases** are fully backwards compatible, i.e. there should be *no* changes in
+   formatted output between e.g. `1.0.x` and `1.0.(x + 1)`. Patch releases are therefore
+   limited to fixing bugs that caused the formatter to error.
+ - **Minor releases** may contain changes to the formatting that come as a result of fixing
+   *specification bugs*. A specification bug is a bug that causes output that is not in line
+   with the [formatting specification](#formatting-specification). For example, the spec
+   says that Runic formats spaces around operators. Fixing a bug that causes some operator
+   to be formatted without spaces is therefore allowed in a minor release.
+ - **Major releases** will contain formatting changes resulting from non backwards
+   compatible changes to the specification. No such changes are planned at the moment.
 
 ## Formatting specification
 
