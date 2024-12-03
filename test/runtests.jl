@@ -552,6 +552,8 @@ end
         @test format_string("function f()\n    return$(sp)\nend") == "function f()\n    return\nend"
         @test format_string("module$(sp)A\nend") == "module A\nend"
         @test format_string("module$(sp)(A)\nend") == "module (A)\nend"
+        @test format_string("let$(sp)x = 1\nend") == "let x = 1\nend"
+        @test format_string("let$(sp)\nend") == "let\nend"
         for word in ("local", "global"), rhs in ("a", "a, b", "a = 1", "a, b = 1, 2")
             word == "const" && rhs in ("a", "a, b") && continue
             @test format_string("$(word)$(sp)$(rhs)") == "$(word) $(rhs)"

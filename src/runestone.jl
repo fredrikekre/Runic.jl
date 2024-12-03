@@ -1107,6 +1107,42 @@ function no_spaces_around_colon_etc(ctx::Context, node::Node)
     return no_spaces_around_x(ctx, node, is_x)
 end
 
+function space_after_let(ctx, node)
+    @assert kind(node) === K"let" && !is_leaf(node)
+    p = position(ctx.fmt_io)
+    kids = verified_kids(node)
+    let_node = kids[1]
+    @assert kind(let_node) === K"let"
+    accept_node!(ctx, let_node)
+    vars_idx = 2
+    vars_node = kids[vars_idx]
+    @assert kind(vars_node) === K"block"
+    vars_kids = verified_kids(vars_node)
+    if length(vars_kids) == 0
+        @assert span(vars_node) == 0
+        seek(ctx.fmt_io, p)
+        # Empty block, but where are spaces and comments?
+        return nothing
+    end
+    # First node *must* be a space (?)
+    vars_kid = vars_kids[1]
+    @assert kind(vars_kid) === K"Whitespace"
+    if span(vars_kid) == 1
+        seek(ctx.fmt_io, p)
+        return nothing
+    else
+        replace_bytes!(ctx, " ", span(vars_kid))
+        ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+        vars_kids′ = copy(vars_kids)
+        vars_kids′[1] = ws
+        vars_node′ = make_node(vars_node, vars_kids′)
+        kids′ = copy(kids)
+        kids′[vars_idx] = vars_node′
+        seek(ctx.fmt_io, p)
+        return make_node(node, kids′)
+    end
+end
+
 # Single space around keywords:
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
@@ -1114,6 +1150,9 @@ end
 # global, const
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
+    if kind(node) === K"let"
+        return space_after_let(ctx, node)
+    end
     keyword_set = KSet"""
     where do mutable struct abstract primitive type function if elseif catch while return
     local global const module baremodule
