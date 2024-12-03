@@ -8,10 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased changes
 ### Changed
  - Fix a bug that caused "single space after keyword" to not apply after the `function`
-   keyword in non-standard function definitions. ([#113])
+   keyword in non-standard function definitions ([#113]). This bug is classified as a
+   [spec-bug] and the fix will result in diffs like the following:
+   ```diff
+   -function()
+   +function ()
+        # ...
+    end
+   ```
+ - Fix a bug that caused "single space after keyword" to not apply after `let` ([#117]).
+   This bug is classified as a [spec-bug] and the fix will result in diffs like the
+   following when `let` is followed by multiple spaces in the source:
+   ```diff
+   -let  a = 1
+   +let a = 1
+        a
+    end
+   ```
  - Fix a bug that caused multiline variable blocks in `let` to not indent correctly ([#97],
    [#116]). This bug is classified as a [spec-bug] and the fix will result in diffs like the
-   following:
+   following whenever multiline variable blocks exist in the source:
    ```diff
     let a = 1,
    -    b = 2
