@@ -912,6 +912,12 @@ end
         # K"cartesian_iterator"
         @test format_string("for i in I,\n$(sp)j in J\n# body\nend") ==
             "for i in I,\n        j in J\n    # body\nend"
+        # K"let"
+        for a in ("x = 1", "x", "@inline foo() = 1", "\$x"),
+                b in ("y = 1", "y", "@inline bar() = 1", "\$y")
+            @test format_string("let $(a),\n$(sp)$(b)\n    nothing\nend") ==
+                "let $(a),\n        $(b)\n    nothing\nend"
+        end
     end
 end
 

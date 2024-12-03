@@ -1640,6 +1640,33 @@ function indent_function_or_macro(ctx::Context, node::Node)
     return any_kid_changed ? make_node(node, kids) : nothing
 end
 
+# Soft-indentation between the variables
+function indent_let_varblock(ctx::Context, node::Node)
+    @assert kind(node) === K"block" && !is_leaf(node)
+    kids = verified_kids(node)
+    changed = false
+    if length(kids) == 0
+        @assert span(node) == 0
+        # Empty block, but where are spaces and comments?
+        return nothing
+    end
+    # First node *must* be a space (?)
+    i = 1
+    kid = kids[i]
+    @assert kind(kid) === K"Whitespace"
+    i = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, i + 1)
+    i === nothing && return nothing
+    @assert kind(kids[i]) in KSet"Identifier = $ macrocall" # This is a bit unnecessary
+    while (i = findnext(x -> kind(x) === K"NewlineWs", kids, i + 1); i !== nothing)
+        @assert kind(kids[i]) === K"NewlineWs"
+        if !has_tag(kids[i], TAG_LINE_CONT)
+            kids[i] = add_tag(kids[i], TAG_LINE_CONT)
+            changed = true
+        end
+    end
+    return changed ? make_node(node, kids) : nothing
+end
+
 function indent_let(ctx::Context, node::Node)
     kids = verified_kids(node)
     any_kid_changed = false
@@ -1651,12 +1678,23 @@ function indent_let(ctx::Context, node::Node)
         kids[let_idx] = add_tag(let_node, TAG_INDENT)
         any_kid_changed = true
     end
-    # Second node is the variables block (will be soft-indented by the assignments pass)
+    # Second node is the variables block
     vars_idx = 2
     vars_node = kids[vars_idx]
     @assert !is_leaf(vars_node) && kind(vars_node) === K"block"
     if span(vars_node) > 0 && length(verified_kids(vars_node)) > 0
         @assert kind(last_leaf(vars_node)) !== "NewlineWs"
+    end
+    let p = position(ctx.fmt_io)
+        for i in 1:(vars_idx - 1)
+            accept_node!(ctx, kids[i])
+        end
+        vars_node′ = indent_let_varblock(ctx, vars_node)
+        if vars_node′ !== nothing
+            kids[vars_idx] = vars_node′
+            any_kid_changed = true
+        end
+        seek(ctx.fmt_io, p)
     end
     # # Third node is the NewlineWs before the block
     # ln_idx = 3
