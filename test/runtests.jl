@@ -824,9 +824,8 @@ end
         # Functors
         @test format_string("function$(sp)(a::A)(b)\nx\nend") ==
             "function (a::A)(b)\n    return x\nend"
-        # TODO: Spaces after function keyword isn't removed.
         @test format_string("function$(sp)(a * b)\nreturn\nend") ==
-            "function$(sp)(a * b)\n    return\nend"
+            "function (a * b)\n    return\nend"
         # https://github.com/fredrikekre/Runic.jl/issues/109
         @test format_string("function$(sp)(::Type{T})(::Int) where {T}\n$(sp)return T\n$(sp)end") ==
             "function (::Type{T})(::Int) where {T}\n    return T\nend"
@@ -865,7 +864,7 @@ end
             # Blocklike RHS
             for thing in (
                     "if c\n    x\nend", "try\n    x\ncatch\n    y\nend",
-                    "let c = 1\n    c\nend", "function()\n    return x\nend",
+                    "let c = 1\n    c\nend", "function ()\n    return x\nend",
                     "\"\"\"\nfoo\n\"\"\"", "r\"\"\"\nfoo\n\"\"\"",
                     "```\nfoo\n```", "r```\nfoo\n```", "```\nfoo\n```x",
                 )
@@ -1179,7 +1178,7 @@ end
         @test format_string("let a = 1 # a\nx$(d)end") == "let a = 1 # a\n    x\nend"
         # function-end
         @test format_string("function f()$(d)x$(d)end") == "function f()\n    return x\nend"
-        @test format_string("function()$(d)x$(d)end") == "function()\n    return x\nend"
+        @test format_string("function()$(d)x$(d)end") == "function ()\n    return x\nend"
         @test format_string("function ()$(d)x$(d)end") == "function ()\n    return x\nend"
         @test format_string("function f end") == "function f end"
         # macro-end
