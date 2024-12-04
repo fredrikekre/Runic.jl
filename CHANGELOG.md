@@ -18,11 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    ```
  - Fix a bug that caused "single space after keyword" to not apply after `let` ([#117]).
    This bug is classified as a [spec-bug] and the fix will result in diffs like the
-   following when `let` is followed by multiple spaces in the source:
+   following when `let` is followed by multiple spaces (which should be rare) in the source:
    ```diff
    -let  a = 1
    +let a = 1
         a
+    end
+   ```
+ - Fix formatting of whitespace in between `let`-variables ([#118]). This bug is classified
+   as a [spec-bug] and the fix will result in diffs like the following in rare cases where
+   e.g. multiple spaces, or spaces *before* comma, is used in the variable list:
+   ```diff
+   -let  a = 1,  b = 2
+   +let  a = 1, b = 2
+        a + b
     end
    ```
  - Fix a bug that caused multiline variable blocks in `let` to not indent correctly ([#97],

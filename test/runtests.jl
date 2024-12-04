@@ -444,6 +444,22 @@ end
     @test format_string("[ # a\n]") == "[ # a\n]"
 end
 
+@testset "whitespace in let" begin
+    for sp in ("", " ", "  ")
+        msp = sp == "" ? " " : sp
+        @test format_string("let$(sp)\nend") == "let\nend"
+        @test format_string("let @inline a() = 1\nend") == "let @inline a() = 1\nend"
+        for a in ("a", "a = 1", "a() = 1", "\$a"), b in ("b", "b = 2")
+            @test format_string("let $(sp)$(a)$(sp),$(sp)$(b)\nend") == "let $(a), $(b)\nend"
+            @test format_string("let $(sp)$(a),$(sp)$(b)\nend") == "let $(a), $(b)\nend"
+            @test format_string("let $(sp)$(a)$(sp),\n$(sp)$(b)\nend") == "let $(a),\n        $(b)\nend"
+            # Comments
+            @test format_string("let $(sp)$(a)$(sp)#=c=#$(sp),$(sp)$(b)\nend") == "let $(a)$(msp)#=c=#, $(b)\nend"
+            @test format_string("let $(sp)$(a)$(sp),$(sp)#=c=#$(sp)$(b)\nend") == "let $(a),$(msp)#=c=# $(b)\nend"
+        end
+    end
+end
+
 @testset "whitespace around ->" begin
     for sp in ("", " ", "  ")
         @test format_string("a$(sp)->$(sp)b") == "a -> b"
