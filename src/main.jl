@@ -196,6 +196,29 @@ function writeo(output::Output, iob)
     return
 end
 
+function insert_line_range(line_ranges, line_start, line_end)
+    if line_start > line_end || line_start < 1 || line_end < 1
+        error("invalid range")
+    end
+    for (i, r) in pairs(line_ranges)
+        if line_start in r && line_end in r
+            return
+        elseif line_start in r
+            @assert line_end > r[end]
+            line_ranges[i] = r[1]:line_end
+            return
+        elseif line_end in r
+            @assert line_start < r[1]
+            line_ranges[i] = line_start:r[end]
+            return
+        end
+    end
+    r = line_start:line_end
+    j = searchsortedfirst(line_ranges, r)
+    insert!(line_ranges, j, r)
+    return
+end
+
 function main(argv)
     # Reset errno
     global errno = 0
@@ -210,6 +233,7 @@ function main(argv)
     diff = false
     check = false
     fail_fast = false
+    line_ranges = typeof(1:2)[]
 
     # Parse the arguments
     while length(argv) > 0
@@ -234,6 +258,11 @@ function main(argv)
             check = true
         elseif x == "-vv" || x == "--debug"
             debug = verbose = true
+        elseif (m = match(r"^--lines=(\d+):(\d+)$", x); m !== nothing)
+            # TODO: Error handling
+            line_start = parse(Int, m.captures[1])
+            line_end = parse(Int, m.captures[2])
+            insert_line_range(line_ranges, line_start, line_end)
         elseif x == "-o"
             if length(argv) < 1
                 return panic("expected output file argument after `-o`")
@@ -363,7 +392,7 @@ function main(argv)
 
         # Call the library to format the text
         ctx = try
-            ctx′ = Context(sourcetext; quiet, verbose, debug, diff, check)
+            ctx′ = Context(sourcetext; quiet, verbose, debug, diff, check, line_ranges)
             format_tree!(ctx′)
             ctx′
         catch err
