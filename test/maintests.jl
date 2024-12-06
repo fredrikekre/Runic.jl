@@ -343,7 +343,7 @@ function maintests(f::R) where {R}
     end
 
     # runic -o readonly.jl in.jl
-    return cdtmp() do
+    cdtmp() do
         f_in = "in.jl"
         write(f_in, bad)
         f_out = "readonly.jl"
@@ -356,6 +356,49 @@ function maintests(f::R) where {R}
         @test isempty(fd1)
         @test occursin("could not write to output file", fd2)
     end
+
+    # runic --lines
+    cdtmp() do
+        src = """
+        function f(a,b)
+            return a+b
+         end
+        """
+        rc, fd1, fd2 = runic(["--lines=1:1"], src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "function f(a, b)\n    return a+b\n end\n"
+        rc, fd1, fd2 = runic(["--lines=2:2"], src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "function f(a,b)\n    return a + b\n end\n"
+        rc, fd1, fd2 = runic(["--lines=3:3"], src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "function f(a,b)\n    return a+b\nend\n"
+        rc, fd1, fd2 = runic(["--lines=1:1", "--lines=3:3"], src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "function f(a, b)\n    return a+b\nend\n"
+        rc, fd1, fd2 = runic(["--lines=1:1", "--lines=2:2", "--lines=3:3"], src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "function f(a, b)\n    return a + b\nend\n"
+        rc, fd1, fd2 = runic(["--lines=1:2"], src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "function f(a, b)\n    return a + b\n end\n"
+        # Errors
+        rc, fd1, fd2 = runic(["--lines=1:2", "--lines=2:3"], src)
+        @test rc == 1
+        @test isempty(fd1)
+        @test occursin("`--lines` ranges cannot overlap", fd2)
+        rc, fd1, fd2 = runic(["--lines=0:1"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("`--lines` range out of bounds", fd2)
+        rc, fd1, fd2 = runic(["--lines=3:4"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("`--lines` range out of bounds", fd2)
+        rc, fd1, fd2 = runic(["--lines=3:4", "foo.jl", "bar.jl"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("option `--lines` can not be used together with multiple input files", fd2)
+    end
+
+    return
 end
 
 # rc = let argv = pushfirst!(copy(argv), "runic"), argc = length(argv) % Cint

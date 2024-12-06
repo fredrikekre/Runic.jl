@@ -196,6 +196,24 @@ function writeo(output::Output, iob)
     return
 end
 
+function insert_line_range(line_ranges, lines)
+    m = match(r"^(\d+):(\d+)$", lines)
+    if m === nothing
+        return panic("can not parse `--lines` argument as an integer range")
+    end
+    range_start = parse(Int, m.captures[1]::SubString)
+    range_end = parse(Int, m.captures[2]::SubString)
+    if range_start > range_end
+        return panic("empty `--lines` range")
+    end
+    range = range_start:range_end
+    if !all(x -> isdisjoint(x, range), line_ranges)
+        return panic("`--lines` ranges cannot overlap")
+    end
+    push!(line_ranges, range)
+    return 0
+end
+
 function main(argv)
     # Reset errno
     global errno = 0
@@ -210,6 +228,7 @@ function main(argv)
     diff = false
     check = false
     fail_fast = false
+    line_ranges = typeof(1:2)[]
 
     # Parse the arguments
     while length(argv) > 0
@@ -234,6 +253,10 @@ function main(argv)
             check = true
         elseif x == "-vv" || x == "--debug"
             debug = verbose = true
+        elseif (m = match(r"^--lines=(.*)$", x); m !== nothing)
+            if insert_line_range(line_ranges, m.captures[1]::SubString) != 0
+                return errno
+            end
         elseif x == "-o"
             if length(argv) < 1
                 return panic("expected output file argument after `-o`")
@@ -271,6 +294,9 @@ function main(argv)
     end
     if outputfile != "" && length(inputfiles) > 1
         return panic("option `--output` can not be used together with multiple input files")
+    end
+    if !isempty(line_ranges) && length(inputfiles) > 1
+        return panic("option `--lines` can not be used together with multiple input files")
     end
     if length(inputfiles) > 1 && !(inplace || check)
         return panic("option `--inplace` or `--check` required with multiple input files")
@@ -363,13 +389,16 @@ function main(argv)
 
         # Call the library to format the text
         ctx = try
-            ctx′ = Context(sourcetext; quiet, verbose, debug, diff, check)
+            ctx′ = Context(sourcetext; quiet, verbose, debug, diff, check, line_ranges)
             format_tree!(ctx′)
             ctx′
         catch err
             print_progress && errln()
             if err isa JuliaSyntax.ParseError
                 panic("failed to parse input: ", err)
+                continue
+            elseif err isa MainError
+                panic(err.msg)
                 continue
             end
             msg = "failed to format input: "
