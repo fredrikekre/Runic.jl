@@ -382,6 +382,20 @@ function maintests(f::R) where {R}
         rc, fd1, fd2 = runic(["--lines=1:2"], src)
         @test rc == 0 && isempty(fd2)
         @test fd1 == "function f(a, b)\n    return a + b\n end\n"
+        # Errors
+        rc, fd1, fd2 = runic(["--lines=1:2", "--lines=2:3"], src)
+        @test rc == 1
+        @test isempty(fd1)
+        @test occursin("`--lines` ranges cannot overlap", fd2)
+        rc, fd1, fd2 = runic(["--lines=0:1"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("`--lines` range out of bounds", fd2)
+        rc, fd1, fd2 = runic(["--lines=3:4"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("`--lines` range out of bounds", fd2)
+        rc, fd1, fd2 = runic(["--lines=3:4", "foo.jl", "bar.jl"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("option `--lines` can not be used together with multiple input files", fd2)
     end
 
     return
