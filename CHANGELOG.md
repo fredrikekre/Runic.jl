@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+### Added
+ - New command line option `--lines=a:b` for limiting formatting to lines `a` to `b`.
+   `--lines` can be repeated to specify multiple ranges ([#114], [#120]).
+
 ## [v1.1.0] - 2024-12-04
 ### Changed
  - Fix a bug that caused "single space after keyword" to not apply after the `function`

@@ -1541,6 +1541,52 @@ end
     end
 end
 
+# TODO: Support lines in format_string and format_file
+function format_lines(str, lines)
+    line_ranges = lines isa UnitRange ? [lines] : lines
+    ctx = Runic.Context(str; filemode = false, line_ranges = line_ranges)
+    Runic.format_tree!(ctx)
+    return String(take!(ctx.fmt_io))
+end
+
+@testset "--lines" begin
+    str = """
+    function f(a,b)
+        return a+b
+     end
+    """
+    @test format_lines(str, 1:1) == """
+        function f(a, b)
+            return a+b
+         end
+        """
+    @test format_lines(str, 2:2) == """
+        function f(a,b)
+            return a + b
+         end
+        """
+    @test format_lines(str, 3:3) == """
+        function f(a,b)
+            return a+b
+        end
+        """
+    @test format_lines(str, [1:1, 3:3]) == """
+        function f(a, b)
+            return a+b
+        end
+        """
+    @test format_lines(str, [1:1, 2:2, 3:3]) == """
+        function f(a, b)
+            return a + b
+        end
+        """
+    @test format_lines(str, [1:2]) == """
+        function f(a, b)
+            return a + b
+         end
+        """
+end
+
 module RunicMain1
     using Test: @testset
     using Runic: main

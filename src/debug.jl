@@ -10,6 +10,13 @@ struct AssertionError <: RunicException
     msg::String
 end
 
+# Thrown from internal code when invalid CLI arguments can not be validated directly in
+# `Runic.main`: `throw(MainError("message"))` from internal code is like calling
+# `panic("message")` in `Runic.main`.
+struct MainError <: RunicException
+    msg::String
+end
+
 function Base.showerror(io::IO, err::AssertionError)
     print(
         io,

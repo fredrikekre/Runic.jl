@@ -131,6 +131,7 @@ mutable struct Context
     check::Bool
     diff::Bool
     filemode::Bool
+    line_ranges::Vector{UnitRange{Int}}
     # Global state
     indent_level::Int # track (hard) indentation level
     call_depth::Int # track call-depth level for debug printing
@@ -144,11 +145,104 @@ mutable struct Context
     lineage_macros::Vector{String}
 end
 
+const RANGE_FORMATTING_BEGIN = "#= RUNIC RANGE FORMATTING " * "BEGIN =#"
+const RANGE_FORMATTING_END = "#= RUNIC RANGE FORMATTING " * "END =#"
+
+function add_line_range_markers(str, line_ranges)
+    lines = collect(eachline(IOBuffer(str); keep = true))
+    sort!(line_ranges, rev = true)
+    for r in line_ranges
+        a, b = extrema(r)
+        if a < 1 || b > length(lines)
+            throw(MainError("`--lines` range out of bounds"))
+        end
+        if b == length(lines) && !endswith(lines[end], "\n")
+            lines[end] *= "\n"
+        end
+        insert!(lines, b + 1, RANGE_FORMATTING_END * "\n")
+        insert!(lines, a, RANGE_FORMATTING_BEGIN * "\n")
+    end
+    io = IOBuffer(; maxsize = sum(sizeof, lines; init = 0))
+    join(io, lines)
+    src_str = String(take!(io))
+    return src_str
+end
+
+function remove_line_range_markers(src_io, fmt_io)
+    src_lines = eachline(seekstart(src_io); keep = true)
+    fmt_lines = eachline(seekstart(fmt_io); keep = true)
+    io = IOBuffer()
+    # These can't fail because we will at the minimum have the begin/end comments
+    src_itr = iterate(src_lines)
+    @assert src_itr !== nothing
+    src_ln, src_token = src_itr
+    itr_fmt = iterate(fmt_lines)
+    @assert itr_fmt !== nothing
+    fmt_ln, fmt_token = itr_fmt
+    eof = false
+    while true
+        # Take source lines until range start or eof
+        while !occursin(RANGE_FORMATTING_BEGIN, src_ln)
+            if !occursin(RANGE_FORMATTING_END, src_ln)
+                write(io, src_ln)
+            end
+            src_itr = iterate(src_lines, src_token)
+            if src_itr === nothing
+                eof = true
+                break
+            end
+            src_ln, src_token = src_itr
+        end
+        eof && break
+        @assert occursin(RANGE_FORMATTING_BEGIN, src_ln) &&
+            strip(src_ln) == RANGE_FORMATTING_BEGIN
+        # Skip ahead in the source lines until the range end
+        while !occursin(RANGE_FORMATTING_END, src_ln)
+            src_itr = iterate(src_lines, src_token)
+            @assert src_itr !== nothing
+            src_ln, src_token = src_itr
+        end
+        @assert occursin(RANGE_FORMATTING_END, src_ln) &&
+            strip(src_ln) == RANGE_FORMATTING_END
+        # Skip ahead in the formatted lines until range start
+        while !occursin(RANGE_FORMATTING_BEGIN, fmt_ln)
+            fmt_itr = iterate(fmt_lines, fmt_token)
+            @assert fmt_itr !== nothing
+            fmt_ln, fmt_token = fmt_itr
+        end
+        @assert occursin(RANGE_FORMATTING_BEGIN, fmt_ln) &&
+            strip(fmt_ln) == RANGE_FORMATTING_BEGIN
+        # Take formatted lines until range end
+        while !occursin(RANGE_FORMATTING_END, fmt_ln)
+            if !occursin(RANGE_FORMATTING_BEGIN, fmt_ln)
+                write(io, fmt_ln)
+            end
+            fmt_itr = iterate(fmt_lines, fmt_token)
+            @assert fmt_itr !== nothing
+            fmt_ln, fmt_token = fmt_itr
+        end
+        @assert occursin(RANGE_FORMATTING_END, fmt_ln) &&
+            strip(fmt_ln) == RANGE_FORMATTING_END
+        eof && break
+    end
+    write(seekstart(fmt_io), take!(io))
+    truncate(fmt_io, position(fmt_io))
+    return
+end
+
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
-        diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true
+        diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
+        line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[]
     )
+    if !isempty(line_ranges)
+        # If formatting is limited to certain line ranges we modify the source string to
+        # include begin and end marker comments.
+        src_str = add_line_range_markers(src_str, line_ranges)
+    end
     src_io = IOBuffer(src_str)
+    # TODO: If parsing here fails, and we have line ranges, perhaps try to parse without the
+    # markers to check whether the markers are the cause of the failure.
     src_tree = Node(
         JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true, version = v"2-")
     )
@@ -176,7 +270,7 @@ function Context(
     format_on = true
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, filemode, indent_level, call_depth, format_on, prev_sibling, next_sibling,
+        diff, filemode, line_ranges, indent_level, call_depth, format_on, prev_sibling, next_sibling,
         lineage_kinds, lineage_macros
     )
 end
@@ -501,14 +595,20 @@ function format_tree!(ctx::Context)
     end
     # Truncate the output at the root span
     truncate(ctx.fmt_io, span(root′))
+    # Remove line range markers if any
+    if !isempty(ctx.line_ranges)
+        remove_line_range_markers(ctx.src_io, ctx.fmt_io)
+    end
     # Check that the output is parseable
     try
         fmt_str = String(read(seekstart(ctx.fmt_io)))
+        # TODO: parsing may fail here because of the removal of the range comments
         JuliaSyntax.parseall(JuliaSyntax.GreenNode, fmt_str; ignore_warnings = true, version = v"2-")
     catch
         throw(AssertionError("re-parsing the formatted output failed"))
     end
     # Set the final tree
+    # TODO: When range formatting this doesn't match the content of ctx.fmt_io
     ctx.fmt_tree = root′
     return nothing
 end
