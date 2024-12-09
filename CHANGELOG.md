@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v1.2.0] - 2024-12-09
 ### Added
  - New command line option `--lines=a:b` for limiting formatting to lines `a` to `b`.
    `--lines` can be repeated to specify multiple ranges ([#114], [#120]).
@@ -65,10 +65,13 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.0.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.0.0
 [v1.0.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.0.1
 [v1.1.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.1.0
+[v1.2.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.2.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
 [#110]: https://github.com/fredrikekre/Runic.jl/issues/110
 [#113]: https://github.com/fredrikekre/Runic.jl/issues/113
+[#114]: https://github.com/fredrikekre/Runic.jl/issues/114
 [#116]: https://github.com/fredrikekre/Runic.jl/issues/116
 [#117]: https://github.com/fredrikekre/Runic.jl/issues/117
 [#118]: https://github.com/fredrikekre/Runic.jl/issues/118
+[#120]: https://github.com/fredrikekre/Runic.jl/issues/120
