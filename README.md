@@ -111,6 +111,12 @@ OPTIONS
        -o <file>, --output=<file>
            File to write formatted output to. If no output is given, or if the file
            is `-`, output is written to stdout.
+
+       -v, --verbose
+           Enable verbose output.
+
+       --version
+           Print Runic and julia version information.
 ```
 
 In addition to the CLI there is also the two function `Runic.format_file` and

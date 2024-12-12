@@ -94,6 +94,15 @@ function maintests(f::R) where {R}
             rm(f_out, force = true)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
+            @test isempty(fd1) && isempty(fd2)
+            @test read(f_out, String) == good
+            @test read(f_in, String) == bad
+        end
+        # --verbose
+        let argv = ["--verbose", "--output=$f_out", f_in]
+            rm(f_out, force = true)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 0
             @test isempty(fd1)
             @test occursin("Formatting `in.jl` -> `out.jl` ...", fd2)
             @test occursin("✔", fd2)
@@ -107,6 +116,14 @@ function maintests(f::R) where {R}
     cdtmp() do
         f_in = "in.jl"
         for argv in [["--inplace", f_in], ["-i", f_in]]
+            write(f_in, bad)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 0
+            @test isempty(fd1) && isempty(fd2)
+            @test read(f_in, String) == good
+        end
+        # --verbose
+        let argv = ["-v", "--inplace", f_in]
             write(f_in, bad)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
@@ -125,7 +142,14 @@ function maintests(f::R) where {R}
             write(f_in, good)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
-            @test isempty(fd1)
+            @test isempty(fd1) && isempty(fd2)
+            @test read(f_in, String) == good
+        end
+        # --verbose
+        let argv = ["--verbose", "--inplace", f_in]
+            write(f_in, good)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 0
             @test occursin("Formatting `in.jl` ...", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
@@ -148,6 +172,15 @@ function maintests(f::R) where {R}
             write(fbad, bad)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
+            @test isempty(fd1) && isempty(fd2)
+            @test read(fgood, String) == read(fbad, String) == good
+        end
+        # --verbose
+        let argv = ["-v", "--inplace", "."]
+            write(fgood, good)
+            write(fbad, bad)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 0
             @test isempty(fd1)
             @test occursin("Formatting `good.jl` ...", fd2)
             @test occursin("Formatting `src/bad.jl` ...", fd2)
@@ -166,6 +199,14 @@ function maintests(f::R) where {R}
             write(f_in, bad)
             rc, fd1, fd2 = runic(argv)
             @test rc == 1
+            @test isempty(fd1) && isempty(fd2)
+            @test read(f_in, String) == bad
+        end
+        # --verbose
+        let argv = ["--verbose", "--check", f_in]
+            write(f_in, bad)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 1
             @test isempty(fd1)
             @test occursin("Checking `in.jl` ...", fd2)
             @test !occursin("✔", fd2)
@@ -178,6 +219,13 @@ function maintests(f::R) where {R}
     cdtmp() do
         f_in = "in.jl"
         for argv in [["--check", f_in], ["-c", f_in]]
+            write(f_in, good)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 0
+            @test isempty(fd1) && isempty(fd2)
+            @test read(f_in, String) == good
+        end
+        let argv = ["-v", "--check", f_in]
             write(f_in, good)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
@@ -204,6 +252,16 @@ function maintests(f::R) where {R}
             write(fbad, bad)
             rc, fd1, fd2 = runic(argv)
             @test rc == 1
+            @test isempty(fd1) && isempty(fd2)
+            @test read(fgood, String) == good
+            @test read(fbad, String) == bad
+        end
+        # --verbose
+        let argv = ["--verbose", "--check", "."]
+            write(fgood, good)
+            write(fbad, bad)
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 1
             @test isempty(fd1)
             @test occursin("Checking `good.jl` ...", fd2)
             @test occursin("Checking `src/bad.jl` ...", fd2)
@@ -221,6 +279,19 @@ function maintests(f::R) where {R}
         cdtmp() do
             f_in = "in.jl"
             for argv in [["--check", "--diff", f_in], ["-c", "-d", f_in]]
+                write(f_in, bad)
+                rc, fd1, fd2 = runic(argv)
+                @test rc == 1
+                @test isempty(fd1)
+                @test !occursin("Checking `in.jl` ...", fd2)
+                @test !occursin("✔", fd2)
+                @test !occursin("✖", fd2)
+                @test occursin("diff --git", fd2)
+                @test occursin("-1+1", fd2)
+                @test occursin("+1 + 1", fd2)
+                @test read(f_in, String) == bad
+            end
+            let argv = ["-v", "--check", "--diff", f_in]
                 write(f_in, bad)
                 rc, fd1, fd2 = runic(argv)
                 @test rc == 1

@@ -143,6 +143,9 @@ function print_help()
                    File to write formatted output to. If no output is given, or if the file
                    is `-`, output is written to stdout.
 
+               -v, --verbose
+                   Enable verbose output.
+
                --version
                    Print Runic and julia version information.
         """
@@ -355,8 +358,8 @@ function main(argv)
             end
         end
 
-        # Print file info unless quiet and unless stdin and/or stdout is involved
-        print_progress = !(quiet || input_is_stdin || !(output.output_is_file || check))
+        # Print file info if `verbose` unless piping from/to stdin/stdout
+        print_progress = verbose && !(input_is_stdin || !(output.output_is_file || check))
 
         # Print file info unless quiet and unless input/output is stdin/stdout
         if print_progress
