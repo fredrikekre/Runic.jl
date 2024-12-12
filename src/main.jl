@@ -85,12 +85,15 @@ function panic(
     return errno
 end
 
-function okln()
+blue(str) = printstyled(stderr, str; color = :blue)
+function okln(str)
+    blue(str)
     printstyled(stderr, "✔"; color = :green, bold = true)
     println(stderr)
     return
 end
-function errln()
+function errln(str)
+    blue(str)
     printstyled(stderr, "✖"; color = :red, bold = true)
     println(stderr)
     return
@@ -316,7 +319,8 @@ function main(argv)
     end
 
     # Loop over the input files
-    for inputfile in inputfiles
+    nfiles_str = string(length(inputfiles))
+    for (file_counter, inputfile) in enumerate(inputfiles)
         # Read the input
         if input_is_stdin
             @assert length(inputfiles) == 1
@@ -365,14 +369,18 @@ function main(argv)
         if print_progress
             @assert inputfile != "-"
             input_pretty = relpath(inputfile)
+            prefix = string(
+                "[", lpad(string(file_counter), textwidth(nfiles_str), " "), "/",
+                nfiles_str, "] "
+            )
             if Sys.iswindows()
                 input_pretty = replace(input_pretty, "\\" => "/")
             end
             if check
-                str = "Checking `$(input_pretty)` "
+                str = string(prefix, "Checking `", input_pretty, "` ")
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
-                printstyled(stderr, str * dots * " "; color = :blue)
+                str = string(str, dots, " ")
             else
                 if output.output_is_samefile
                     output_pretty = " "
@@ -383,10 +391,10 @@ function main(argv)
                     end
                     output_pretty = " -> `$(output_pretty)` "
                 end
-                str = "Formatting `$(input_pretty)`$(output_pretty)"
+                str = string(prefix, "Formatting `", input_pretty, "`", output_pretty)
                 ndots = 80 - textwidth(str) - 1 - 1
                 dots = ndots > 0 ? "."^ndots : ""
-                printstyled(stderr, str * dots * " "; color = :blue)
+                str = string(str, dots, " ")
             end
         end
 
@@ -396,7 +404,7 @@ function main(argv)
             format_tree!(ctx′)
             ctx′
         catch err
-            print_progress && errln()
+            print_progress && errln(str)
             if err isa JuliaSyntax.ParseError
                 panic("failed to parse input: ", err)
                 continue
@@ -424,24 +432,25 @@ function main(argv)
         changed = !nodes_equal(ctx.fmt_tree, ctx.src_tree)
         if check
             if changed
-                print_progress && errln()
+                print_progress && errln(str)
                 global errno = 1
             else
-                print_progress && okln()
+                print_progress && okln(str)
             end
         elseif changed || !inplace
             @assert output.which !== :devnull
             try
                 writeo(output, seekstart(ctx.fmt_io))
             catch err
-                print_progress && errln()
+                print_progress && errln(str)
                 panic("could not write to output file `$(output.file)`: ", err)
+                continue
             end
-            print_progress && okln()
+            print_progress && okln(str)
         else
-            print_progress && okln()
+            print_progress && okln(str)
         end
-        if diff
+        if changed && diff
             mktempdir() do dir
                 a = mkdir(joinpath(dir, "a"))
                 b = mkdir(joinpath(dir, "b"))

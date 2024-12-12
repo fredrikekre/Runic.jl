@@ -104,7 +104,7 @@ function maintests(f::R) where {R}
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
             @test isempty(fd1)
-            @test occursin("Formatting `in.jl` -> `out.jl` ...", fd2)
+            @test occursin("[1/1] Formatting `in.jl` -> `out.jl` ...", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
             @test read(f_out, String) == good
@@ -128,7 +128,7 @@ function maintests(f::R) where {R}
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
             @test isempty(fd1)
-            @test occursin("Formatting `in.jl` ...", fd2)
+            @test occursin("[1/1] Formatting `in.jl` ...", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
             @test read(f_in, String) == good
@@ -150,7 +150,7 @@ function maintests(f::R) where {R}
             write(f_in, good)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
-            @test occursin("Formatting `in.jl` ...", fd2)
+            @test occursin("[1/1] Formatting `in.jl` ...", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
             @test read(f_in, String) == good
@@ -184,6 +184,7 @@ function maintests(f::R) where {R}
             @test isempty(fd1)
             @test occursin("Formatting `good.jl` ...", fd2)
             @test occursin("Formatting `src/bad.jl` ...", fd2)
+            @test occursin("[1/2]", fd2) && occursin("[2/2]", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
             @test !occursin("git.jl", fd2)
@@ -208,7 +209,7 @@ function maintests(f::R) where {R}
             rc, fd1, fd2 = runic(argv)
             @test rc == 1
             @test isempty(fd1)
-            @test occursin("Checking `in.jl` ...", fd2)
+            @test occursin("[1/1] Checking `in.jl` ...", fd2)
             @test !occursin("✔", fd2)
             @test occursin("✖", fd2)
             @test read(f_in, String) == bad
@@ -230,7 +231,7 @@ function maintests(f::R) where {R}
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
             @test isempty(fd1)
-            @test occursin("Checking `in.jl` ...", fd2)
+            @test occursin("[1/1] Checking `in.jl` ...", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
             @test read(f_in, String) == good
@@ -265,6 +266,7 @@ function maintests(f::R) where {R}
             @test isempty(fd1)
             @test occursin("Checking `good.jl` ...", fd2)
             @test occursin("Checking `src/bad.jl` ...", fd2)
+            @test occursin("[1/2]", fd2) && occursin("[2/2]", fd2)
             @test occursin("✔", fd2)
             @test occursin("✖", fd2)
             @test !occursin("git.jl", fd2)
@@ -296,7 +298,7 @@ function maintests(f::R) where {R}
                 rc, fd1, fd2 = runic(argv)
                 @test rc == 1
                 @test isempty(fd1)
-                @test occursin("Checking `in.jl` ...", fd2)
+                @test occursin("[1/1] Checking `in.jl` ...", fd2)
                 @test !occursin("✔", fd2)
                 @test occursin("✖", fd2)
                 @test occursin("diff --git", fd2)
@@ -304,6 +306,21 @@ function maintests(f::R) where {R}
                 @test occursin("+1 + 1", fd2)
                 @test read(f_in, String) == bad
             end
+        end
+    end
+
+    # runic --verbose
+    cdtmp() do
+        f_in = "in.jl"
+        write(f_in, good)
+        let argv = ["--verbose"; "--check"; fill(f_in, 10)]
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 0
+            @test isempty(fd1)
+            for i in 1:9
+                @test occursin("[ $(i)/10] Checking `in.jl` ...", fd2)
+            end
+            @test occursin("[10/10] Checking `in.jl` ...", fd2)
         end
     end
 
