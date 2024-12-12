@@ -324,6 +324,20 @@ function maintests(f::R) where {R}
         end
     end
 
+    # runic emptydir/
+    cdtmp() do
+        for argv in [["-i", "."], ["-c", "."], ["-c", "-v", "."], ["-c", "-d", "."]]
+            rc, fd1, fd2 = runic(["-i", "."])
+            @test rc == 0
+            @test isempty(fd1) && isempty(fd2)
+        end
+        let (rc, fd1, fd2) = runic(["."])
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("option `--inplace` or `--check` required with multiple", fd2)
+        end
+    end
+
     # Error paths
     # runic -o
     let (rc, fd1, fd2) = runic(["-o"])
@@ -332,11 +346,14 @@ function maintests(f::R) where {R}
         @test occursin("expected output file argument after `-o`", fd2)
     end
 
-    # runic in.jl -
-    let (rc, fd1, fd2) = runic(["in.jl", "-"])
-        @test rc == 1
-        @test isempty(fd1)
-        @test occursin("input `-` can not be used with multiple files", fd2)
+    # - only allowed once and only in first position
+    cdtmp() do
+        for argv in [[".", "-"], ["-", "."], ["in.jl", "-"], ["-", "in.jl"]]
+            rc, fd1, fd2 = runic(argv)
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("input `-` can not be combined with other input", fd2)
+        end
     end
 
     # runic --inplace --check (TODO: perhaps this should be allowed?)
@@ -404,10 +421,11 @@ function maintests(f::R) where {R}
 
     # runic doesntexist.jl
     cdtmp() do
-        rc, fd1, fd2 = runic(["doesntexist.jl"])
+        doesntexist = "doesntexist.jl"
+        rc, fd1, fd2 = runic([doesntexist])
         @test rc == 1
         @test isempty(fd1)
-        @test occursin("input file does not exist", fd2)
+        @test occursin("input path is not a file or directory: `$doesntexist`", fd2)
     end
 
     # runic -o in.jl in.jl
@@ -481,7 +499,7 @@ function maintests(f::R) where {R}
         rc, fd1, fd2 = runic(["--lines=3:4"], src)
         @test rc == 1 && isempty(fd1)
         @test occursin("`--lines` range out of bounds", fd2)
-        rc, fd1, fd2 = runic(["--lines=3:4", "foo.jl", "bar.jl"], src)
+        rc, fd1, fd2 = runic(["--lines=3:4", "."])
         @test rc == 1 && isempty(fd1)
         @test occursin("option `--lines` can not be used together with multiple input files", fd2)
     end

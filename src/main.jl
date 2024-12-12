@@ -165,16 +165,6 @@ function print_version()
     return
 end
 
-function maybe_expand_directory!(outfiles, dir)
-    if !isdir(dir)
-        # Assumed to be a file, checked when using it
-        push!(outfiles, dir)
-    else
-        scandir!(outfiles, dir)
-    end
-    return
-end
-
 # juliac: type-stable output struct (required for juliac but useful in general too)
 struct Output{IO}
     which::Symbol
@@ -235,6 +225,8 @@ function main(argv)
     check = false
     fail_fast = false
     line_ranges = typeof(1:2)[]
+    input_is_stdin = true
+    multiple_inputs = false
 
     # Parse the arguments
     while length(argv) > 0
@@ -271,19 +263,41 @@ function main(argv)
         elseif (m = match(r"^--output=(.+)$", x); m !== nothing)
             outputfile = String(m.captures[1]::SubString)
         else
-            # Remaining arguments must be inputfile(s)
-            maybe_expand_directory!(inputfiles, x)
-            for x in argv
+            # Remaining arguments must be `-`, files, or directories
+            first = true
+            while true
                 if x == "-"
-                    return panic("input `-` can not be used with multiple files")
+                    # `-` is only allowed once and only in first position
+                    if length(argv) > 0 || !first
+                        return panic("input `-` can not be combined with other input")
+                    end
+                    push!(inputfiles, x)
+                    input_is_stdin = true
+                else
+                    input_is_stdin = false
+                    if isdir(x)
+                        scandir!(inputfiles, x)
+                        # Directories are considered to be multiple (potential) inputs even
+                        # if they end up being empty
+                        multiple_inputs = true
+                    else # isfile(x)
+                        push!(inputfiles, x) # Assume it is a file for now
+                    end
                 end
-                maybe_expand_directory!(inputfiles, x)
+                length(argv) == 0 && break
+                x = popfirst!(argv)
+                first = false
+                multiple_inputs = true
             end
             break
         end
     end
 
-    input_is_stdin = length(inputfiles) == 0 || inputfiles[1] == "-"
+    # Insert `-` as the input if there were no input files/directories on the command line
+    if input_is_stdin && length(inputfiles) == 0
+        @assert !multiple_inputs
+        push!(inputfiles, "-")
+    end
 
     # Check the arguments
     if inplace && check
@@ -298,18 +312,14 @@ function main(argv)
     if inplace && input_is_stdin
         return panic("option `--inplace` can not be used together with stdin input")
     end
-    if outputfile != "" && length(inputfiles) > 1
+    if outputfile != "" && multiple_inputs
         return panic("option `--output` can not be used together with multiple input files")
     end
-    if !isempty(line_ranges) && length(inputfiles) > 1
+    if !isempty(line_ranges) && multiple_inputs
         return panic("option `--lines` can not be used together with multiple input files")
     end
-    if length(inputfiles) > 1 && !(inplace || check)
+    if multiple_inputs && !(inplace || check)
         return panic("option `--inplace` or `--check` required with multiple input files")
-    end
-
-    if length(inputfiles) == 0
-        push!(inputfiles, "-")
     end
 
     if diff
@@ -322,8 +332,10 @@ function main(argv)
     nfiles_str = string(length(inputfiles))
     for (file_counter, inputfile) in enumerate(inputfiles)
         # Read the input
-        if input_is_stdin
+        if inputfile == "-"
+            @assert input_is_stdin
             @assert length(inputfiles) == 1
+            @assert !multiple_inputs
             sourcetext = try
                 read(stdin, String)
             catch err
@@ -338,7 +350,7 @@ function main(argv)
                 continue
             end
         else
-            panic("input file does not exist: `$(inputfile)`")
+            panic("input path is not a file or directory: `$(inputfile)`")
             continue
         end
 
@@ -353,6 +365,7 @@ function main(argv)
             output = Output(:devnull, "", stdout, false, false)
         else
             @assert length(inputfiles) == 1
+            @assert !multiple_inputs
             if outputfile == "" || outputfile == "-"
                 output = Output(:stdout, "", stdout, false, false)
             elseif isfile(outputfile) && !input_is_stdin && samefile(outputfile, inputfile)
