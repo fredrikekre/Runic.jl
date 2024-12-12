@@ -20,6 +20,7 @@ that is appreciated by most Go programmers, see for example the following
 
 ### Table of contents
 
+ - [Quick start](#quick-start)
  - [Installation](#installation)
  - [Usage](#usage)
     - [CLI](#cli)
@@ -32,6 +33,31 @@ that is appreciated by most Go programmers, see for example the following
     - [Git hooks](#git-hooks)
  - [Version policy](#version-policy)
  - [Formatting specification](#formatting-specification)
+
+## Quick start
+
+Copy-pasteable setup commands for the impatient:
+
+```sh
+# Install Runic
+julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
+# Install the runic shell script
+curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
+chmod +x ~/.local/bin/runic
+```
+
+Assuming `~/.local/bin` is in your `PATH` you can now invoke `runic`, e.g.:
+
+```sh
+runic --version # Show version info
+runic --help    # Show documentation
+```
+
+```sh
+# Format all files in-place in the current directory (recursively)
+# !! DON'T DO THIS FROM YOUR HOME DIRECTORY !!
+runic --inplace .
+```
 
 ## Installation
 
@@ -48,33 +74,68 @@ Runic in a separate project such as e.g. the shared project `@runic`:
 julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
 ```
 
+The main interface to Runic is the command line interface (CLI) through the `main` function:
+
+```sh
+julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
+```
+
+To simplify the invocation of the CLI it is recommended to install the
+[`runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/runic) shell script into a
+directory in your `PATH`. This can be done with the following commands (replace the two
+occurences of `~/.local/bin` if needed):
+
+```sh
+# Download the script into ~/.local/bin
+curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
+# Make the script executable
+chmod +x ~/.local/bin/runic
+# Verify the installation
+runic --version
+```
+
+> [!NOTE]
+> Alternatively you can can add a shell alias to your shell startup file. The drawback of
+> this approach is that runic can only be invoked from the shell and not by other programs.
+> ```sh
+> alias runic="julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' --"
+> # alias runic="julia --project=@runic -m Runic"
+> ```
+
+> [!NOTE]
+> In Julia 1.12 and later the `main` function can be invoked with the `-m` flag, i.e.:
+> ```sh
+> julia --project=@runic -m Runic <args>
+> ```
+
 ## Usage
 
 ### CLI
 
-The main interface to Runic is the command line interface (CLI) through the `main` function
-invoked with the `-m` flag. See the output of `julia -m Runic --help` below for usage
-details.
+The CLI is the main interface to Runic. `runic --help` will show all available options
+(output included below). Some example invokations are listed here.
 
-The following snippet can be added to your shell startup file so that the CLI can be invoked
-a bit more ergonomically. This assumes Runic is installed in the `@runic` shared project as
-suggested in the [Installation](#installation) section above. Adjust the `--project` flag if
-you installed Runic elsewhere.
-
+Format a single file in place:
 ```sh
-alias runic="julia --project=@runic -m Runic"
+runic --inplace file.jl
 ```
 
-> [!NOTE]
-> The `-m` command line flag is only available in Julia 1.12 and later. In earlier versions
-> you have to invoke the `main` function explicitly, for example:
-> ```sh
-> julia -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
-> ```
-> For this incantation the following shell alias can be used:
-> ```sh
-> alias runic="julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' --"
-> ```
+Format all files in a directory (recursively) in place:
+```sh
+runic --inplace src/
+```
+
+Verify formatting of all files in a directory with verbose and diff output:
+```sh
+runic --check --diff --verbose src/
+```
+
+Format the content of standard in and print the result to standard out:
+```sh
+echo "1+1" | runic
+```
+
+Output of `runic --help` for a complete list of options:
 
 ```
 $ runic --help
