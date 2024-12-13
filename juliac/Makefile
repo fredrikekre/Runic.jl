@@ -4,7 +4,7 @@ JULIAC ?= $(shell $(JULIA) -e 'print(normpath(joinpath(Sys.BINDIR, Base.DATAROOT
 RUNIC_FILES := $(wildcard ../src/*.jl) ../Project.toml
 
 runicc: runicc.jl Project.toml Manifest.toml $(RUNIC_FILES) check-julia
-	$(JULIA) --project=. $(JULIAC) --output-exe $@ --trim=unsafe $<
+	$(JULIA) --project=. $(JULIAC) --verbose --output-exe $@ --experimental --trim=unsafe $<
 
 Manifest.toml: Project.toml ../Project.toml
 	$(JULIA) --project=. -e 'using Pkg; Pkg.instantiate()'
