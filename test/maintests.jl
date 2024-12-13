@@ -104,7 +104,7 @@ function maintests(f::R) where {R}
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
             @test isempty(fd1)
-            @test occursin("[1/1] Formatting `in.jl` -> `out.jl` ...", fd2)
+            @test occursin("[1/1] Formatting `in.jl` ...", fd2)
             @test occursin("✔", fd2)
             @test !occursin("✖", fd2)
             @test read(f_out, String) == good
@@ -411,31 +411,60 @@ function maintests(f::R) where {R}
         write(f_in, bad)
         omode = filemode(f_in)
         chmod(f_in, omode & (typemax(omode) ⊻ 0o444))
-        rc, fd1, fd2 = runic([f_in])
+        let (rc, fd1, fd2) = runic([f_in])
+            @test rc == 1
+            @test isempty(fd1)
+            @test !occursin("Formatting", fd2)
+            @test occursin("could not read input from file", fd2)
+            @test occursin("SystemError: opening file", fd2)
+        end
+        let (rc, fd1, fd2) = runic(["-v", "-i", f_in])
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("[1/1] Formatting `in.jl` ...", fd2)
+            @test occursin("could not read input from file", fd2)
+            @test occursin("SystemError: opening file", fd2)
+        end
         chmod(f_in, omode)
-        @test rc == 1
-        @test isempty(fd1)
-        @test occursin("could not read input from file", fd2)
-        @test occursin("SystemError: opening file", fd2)
     end
 
-    # runic doesntexist.jl
+    # runic doesntexist.jl doesntexist/
     cdtmp() do
-        doesntexist = "doesntexist.jl"
-        rc, fd1, fd2 = runic([doesntexist])
-        @test rc == 1
-        @test isempty(fd1)
-        @test occursin("input path is not a file or directory: `$doesntexist`", fd2)
+        nofile = "doesntexist.jl"
+        nodir = "doesntexist.jl"
+        let (rc, fd1, fd2) = runic(["-c", nofile, nodir])
+            @test rc == 1
+            @test isempty(fd1)
+            @test !occursin("Formatting", fd2)
+            @test occursin("input path is not a file or directory: `$nofile`", fd2)
+            @test occursin("input path is not a file or directory: `$nodir`", fd2)
+        end
+        let (rc, fd1, fd2) = runic(["-v", "-c", nofile, nodir])
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("[1/2] Checking `$nofile` ...", fd2)
+            @test occursin("input path is not a file or directory: `$nofile`", fd2)
+            @test occursin("[2/2] Checking `$nodir` ...", fd2)
+            @test occursin("input path is not a file or directory: `$nodir`", fd2)
+        end
     end
 
     # runic -o in.jl in.jl
     cdtmp() do
         f_in = "in.jl"
         write(f_in, bad)
-        rc, fd1, fd2 = runic(["-o", f_in, f_in])
-        @test rc == 1
-        @test isempty(fd1)
-        @test occursin("can not use same file for input and output", fd2)
+        let (rc, fd1, fd2) = runic(["-o", f_in, f_in])
+            @test rc == 1
+            @test isempty(fd1)
+            @test !occursin("Formatting", fd2)
+            @test occursin("can not use same file for input and output", fd2)
+        end
+        let (rc, fd1, fd2) = runic(["-o", f_in, "-v", f_in])
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("[1/1] Formatting `in.jl` ...", fd2)
+            @test occursin("can not use same file for input and output", fd2)
+        end
     end
 
     # runic --check unparseable.jl
