@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - Improved the command line argument parsing to handle more edge cases related to input
    files and directories such as e.g. empty directories ([#123]).
+ - Fix some error paths where the error would be printed before the file info
+   output in `--verbose` mode ([#124]).
 
 ## [v1.2.0] - 2024-12-09
 ### Added

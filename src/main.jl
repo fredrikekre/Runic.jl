@@ -85,15 +85,12 @@ function panic(
     return errno
 end
 
-blue(str) = printstyled(stderr, str; color = :blue)
-function okln(str)
-    blue(str)
+function okln()
     printstyled(stderr, "✔"; color = :green, bold = true)
     println(stderr)
     return
 end
-function errln(str)
-    blue(str)
+function errln()
     printstyled(stderr, "✖"; color = :red, bold = true)
     println(stderr)
     return
@@ -313,6 +310,7 @@ function main(argv)
         return panic("option `--inplace` can not be used together with stdin input")
     end
     if outputfile != "" && multiple_inputs
+        # TODO: Why not?
         return panic("option `--output` can not be used together with multiple input files")
     end
     if !isempty(line_ranges) && multiple_inputs
@@ -328,9 +326,31 @@ function main(argv)
         end
     end
 
+    # Disable verbose if piping from/to stdin/stdout
+    output_is_stdout = !inplace && !check && (outputfile == "" || outputfile == "-")
+    print_progress = verbose && !(input_is_stdin || output_is_stdout)
+
     # Loop over the input files
     nfiles_str = string(length(inputfiles))
     for (file_counter, inputfile) in enumerate(inputfiles)
+
+        if print_progress
+            @assert inputfile != "-"
+            input_pretty = relpath(inputfile)
+            if Sys.iswindows()
+                input_pretty = replace(input_pretty, "\\" => "/")
+            end
+            prefix = string(
+                "[", lpad(string(file_counter), textwidth(nfiles_str), " "), "/",
+                nfiles_str, "] "
+            )
+            verb = check ? "Checking" : "Formatting"
+            str = string(prefix, verb, " `", input_pretty, "` ")
+            ndots = 80 - textwidth(str) - 1 - 1
+            dots = ndots > 0 ? "."^ndots : ""
+            printstyled(stderr, string(str, dots, " "); color = :blue)
+        end
+
         # Read the input
         if inputfile == "-"
             @assert input_is_stdin
@@ -339,17 +359,21 @@ function main(argv)
             sourcetext = try
                 read(stdin, String)
             catch err
-                return panic("could not read input from stdin: ", err)
+                print_progress && errln()
+                panic("could not read input from stdin: ", err)
+                continue
             end
         elseif isfile(inputfile)
             @assert !input_is_stdin
             sourcetext = try
                 read(inputfile, String)
             catch err
+                print_progress && errln()
                 panic("could not read input from file `$(inputfile)`: ", err)
                 continue
             end
         else
+            print_progress && errln()
             panic("input path is not a file or directory: `$(inputfile)`")
             continue
         end
@@ -369,45 +393,11 @@ function main(argv)
             if outputfile == "" || outputfile == "-"
                 output = Output(:stdout, "", stdout, false, false)
             elseif isfile(outputfile) && !input_is_stdin && samefile(outputfile, inputfile)
-                return panic("can not use same file for input and output, use `-i` to modify a file in place")
+                print_progress && errln()
+                panic("can not use same file for input and output, use `-i` to modify a file in place")
+                continue
             else
                 output = Output(:file, outputfile, stdout, true, false)
-            end
-        end
-
-        # Print file info if `verbose` unless piping from/to stdin/stdout
-        print_progress = verbose && !(input_is_stdin || !(output.output_is_file || check))
-
-        # Print file info unless quiet and unless input/output is stdin/stdout
-        if print_progress
-            @assert inputfile != "-"
-            input_pretty = relpath(inputfile)
-            prefix = string(
-                "[", lpad(string(file_counter), textwidth(nfiles_str), " "), "/",
-                nfiles_str, "] "
-            )
-            if Sys.iswindows()
-                input_pretty = replace(input_pretty, "\\" => "/")
-            end
-            if check
-                str = string(prefix, "Checking `", input_pretty, "` ")
-                ndots = 80 - textwidth(str) - 1 - 1
-                dots = ndots > 0 ? "."^ndots : ""
-                str = string(str, dots, " ")
-            else
-                if output.output_is_samefile
-                    output_pretty = " "
-                else
-                    output_pretty = relpath(output.file)
-                    if Sys.iswindows()
-                        output_pretty = replace(output_pretty, "\\" => "/")
-                    end
-                    output_pretty = " -> `$(output_pretty)` "
-                end
-                str = string(prefix, "Formatting `", input_pretty, "`", output_pretty)
-                ndots = 80 - textwidth(str) - 1 - 1
-                dots = ndots > 0 ? "."^ndots : ""
-                str = string(str, dots, " ")
             end
         end
 
@@ -417,7 +407,7 @@ function main(argv)
             format_tree!(ctx′)
             ctx′
         catch err
-            print_progress && errln(str)
+            print_progress && errln()
             if err isa JuliaSyntax.ParseError
                 panic("failed to parse input: ", err)
                 continue
@@ -445,23 +435,23 @@ function main(argv)
         changed = !nodes_equal(ctx.fmt_tree, ctx.src_tree)
         if check
             if changed
-                print_progress && errln(str)
+                print_progress && errln()
                 global errno = 1
             else
-                print_progress && okln(str)
+                print_progress && okln()
             end
         elseif changed || !inplace
             @assert output.which !== :devnull
             try
                 writeo(output, seekstart(ctx.fmt_io))
             catch err
-                print_progress && errln(str)
+                print_progress && errln()
                 panic("could not write to output file `$(output.file)`: ", err)
                 continue
             end
-            print_progress && okln(str)
+            print_progress && okln()
         else
-            print_progress && okln(str)
+            print_progress && okln()
         end
         if changed && diff
             mktempdir() do dir
