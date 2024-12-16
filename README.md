@@ -25,6 +25,7 @@ that is appreciated by most Go programmers, see for example the following
  - [Usage](#usage)
     - [CLI](#cli)
     - [Editor integration](#editor-integration)
+    - [Git integration](#git-integration)
     - [Adopting Runic formatting](#adopting-runic-formatting)
        - [Ignore formatting commits in git blame](#ignore-formatting-commits-in-git-blame)
        - [Badge](#badge)
@@ -44,6 +45,9 @@ julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
 # Install the runic shell script
 curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
 chmod +x ~/.local/bin/runic
+# Install the git-runic shell script
+curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
+chmod +x ~/.local/bin/git-runic
 ```
 
 Assuming `~/.local/bin` is in your `PATH` you can now invoke `runic`, e.g.:
@@ -267,9 +271,28 @@ This assumes that Runic is installed in the `@runic` shared project as suggested
 (push '(julia-mode . runic) apheleia-mode-alist)
 ```
 
+### Git integration
+
+The [`git-runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/git-runic)
+script (a modified version of
+[`git-clang-format`](https://github.com/llvm/llvm-project/blob/main/clang/tools/clang-format/git-clang-format))
+provides a convenient way to apply Runic formatting incrementally to a code
+base by limiting formatting to lines that are added or modified in each commit.
+The script can be installed with the following commands (replace the two
+occurences of `~/.local/bin` if needed):
+
+```sh
+# Download the script into ~/.local/bin
+curl -fsSL -o ~/.local/bin/git-runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
+# Make the script executable
+chmod +x ~/.local/bin/git-runic
+# Verify the installation
+git runic -h
+```
+
 ### Adopting Runic formatting
 
-Here is a checklist for adopting Runic formatting in a project:
+Here is a checklist for adopting Runic formatting wholesale in a project:
 
  - Format all existing files with `runic -i <path>` and commit the changes in separate
    commit. This commit can be ignored in `git blame` (see [Ignore formatting commits in git
@@ -277,6 +300,9 @@ Here is a checklist for adopting Runic formatting in a project:
  - Configure automatic checks (see [Checking formatting](#checking-formatting)) to ensure
    future changes adhere to the formatting rules.
  - Optionally add a badge to the repository README, see [Badge](#badge).
+
+Alternatively Runic formatting can be adopted incrementally by using the
+`git-runic` integration, see [Git integration](#git-integration) for details.
 
 #### Ignore formatting commits in git blame
 
