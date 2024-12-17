@@ -46,7 +46,7 @@ julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
 curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
 chmod +x ~/.local/bin/runic
 # Install the git-runic shell script
-curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
+curl -fsSL -o ~/.local/bin/git-runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
 chmod +x ~/.local/bin/git-runic
 ```
 
