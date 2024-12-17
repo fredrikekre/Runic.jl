@@ -2,6 +2,12 @@
 
 module Runic
 
+if VERSION >= v"1.11.0-DEV.469"
+    let str = "public format_file, format_string"
+        eval(Meta.parse(str))
+    end
+end
+
 using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
