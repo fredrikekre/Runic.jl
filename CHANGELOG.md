@@ -5,8 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v1.3.0] - 2024-12-17
 ### Added
+ - New executable wrapper script
+   [`runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/runic) that can be put
+   in `PATH` to simplify Runic invocation. This method should be preferred over a shell
+   alias since it allows processes other than the shell to invoke Runic. Refer to the
+   [Installation](https://github.com/fredrikekre/Runic.jl?tab=readme-ov-file#installation)
+   section of the README for details.
+ - New Git integration provided by the executable
+   [`git-runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/git-runic) script
+   ([#122]). This can be used to incrementally format a codebase by limiting formatting to
+   changed and modified lines in each commit. Refer to the [Git
+   integration](https://github.com/fredrikekre/Runic.jl?tab=readme-ov-file#git-integration)
+   section of the README for installation and usage instructions.
  - New command line argument `--verbose` which enables verbose output ([#121]).
  - The library functions `Runic.format_file` and `Runic.format_string` are now considered
    part of the Runic public API and are marked with `public` in supported Julia versions.
@@ -26,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `--lines` can be repeated to specify multiple ranges ([#114], [#120]).
 
 ## [v1.1.0] - 2024-12-04
+### Added
+ - Added a suggested README badge to add to your project's README to show that you are using
+   Runic ([#108], [#112]). See the
+   [Badge](https://github.com/fredrikekre/Runic.jl?tab=readme-ov-file#badge) section of the
+   README for details.
+ - Added a version policy to clarify what formatting changes are allowed in
+   patch/minor/major releases. See the [Version
+   policy](https://github.com/fredrikekre/Runic.jl?tab=readme-ov-file#version-policy)
+   section of the README for details.
 ### Changed
  - Fix a bug that caused "single space after keyword" to not apply after the `function`
    keyword in non-standard function definitions ([#113]). This bug is classified as a
@@ -81,12 +102,20 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.0.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.0.1
 [v1.1.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.1.0
 [v1.2.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.2.0
+[v1.3.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.3.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
+[#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
 [#110]: https://github.com/fredrikekre/Runic.jl/issues/110
+[#112]: https://github.com/fredrikekre/Runic.jl/issues/112
 [#113]: https://github.com/fredrikekre/Runic.jl/issues/113
 [#114]: https://github.com/fredrikekre/Runic.jl/issues/114
 [#116]: https://github.com/fredrikekre/Runic.jl/issues/116
 [#117]: https://github.com/fredrikekre/Runic.jl/issues/117
 [#118]: https://github.com/fredrikekre/Runic.jl/issues/118
 [#120]: https://github.com/fredrikekre/Runic.jl/issues/120
+[#121]: https://github.com/fredrikekre/Runic.jl/issues/121
+[#122]: https://github.com/fredrikekre/Runic.jl/issues/122
+[#123]: https://github.com/fredrikekre/Runic.jl/issues/123
+[#124]: https://github.com/fredrikekre/Runic.jl/issues/124
+[#127]: https://github.com/fredrikekre/Runic.jl/issues/127
