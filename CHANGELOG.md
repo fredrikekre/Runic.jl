@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
  - New command line argument `--verbose` which enables verbose output ([#121]).
+ - The library functions `Runic.format_file` and `Runic.format_string` are now considered
+   part of the Runic public API and are marked with `public` in supported Julia versions.
+   ([#127]).
 ### Changed
  - Runic is now silent by default. Use `--verbose` to enable the verbose file progress
    printing from previous releases ([#121]).
