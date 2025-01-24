@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - The `runic` binary can now be installed directly with the package manager as a Pkg "App"
    (requires Julia 1.12). To install:
    ```
-   pkg> app install Runic
+   pkg> app add Runic
    ```
    ([#129])
 
