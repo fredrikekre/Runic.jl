@@ -57,6 +57,7 @@ end
 supports_color(io::RawIO) = isatty(io)
 
 # juliac-compatible `Base.showerror`
+# TODO: Special case for JuliaSyntax.ParseError
 function sprint_showerror_juliac(err::Exception)
     if err isa SystemError
         return "SystemError: " * err.prefix * ": " * Libc.strerror(err.errnum)

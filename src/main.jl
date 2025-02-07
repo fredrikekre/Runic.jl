@@ -402,20 +402,24 @@ function main(argv)
         end
 
         # Call the library to format the text
+        inputfile_pretty = inputfile == "-" ? "stdin" : inputfile
         ctx = try
-            ctx′ = Context(sourcetext; quiet, verbose, debug, diff, check, line_ranges)
+            ctx′ = Context(
+                sourcetext; quiet, verbose, debug, diff, check, line_ranges,
+                filename = inputfile_pretty,
+            )
             format_tree!(ctx′)
             ctx′
         catch err
             print_progress && errln()
             if err isa JuliaSyntax.ParseError
-                panic("failed to parse input: ", err)
+                panic(string("failed to parse input from ", inputfile_pretty, ": "), err)
                 continue
             elseif err isa MainError
                 panic(err.msg)
                 continue
             end
-            msg = "failed to format input: "
+            msg = string("failed to format input from ", inputfile_pretty, ": ")
             @static if juliac
                 rc = panic(msg, err)
             else
