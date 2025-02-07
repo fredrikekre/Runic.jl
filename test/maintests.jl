@@ -474,7 +474,19 @@ function maintests(f::R) where {R}
         rc, fd1, fd2 = runic(["--check", f_in])
         @test rc == 1
         @test isempty(fd1)
-        @test occursin("failed to parse input", fd2)
+        @test occursin("failed to parse input from in.jl: ", fd2)
+        # TODO: Not juliac-compatible
+        # @test occursin("Error @ in.jl:1:7", fd2) # Relies on JuliaSyntax output
+    end
+
+    # runic --check < unparseable.jl
+    cdtmp() do
+        rc, fd1, fd2 = runic(["--check"], "syntax error")
+        @test rc == 1
+        @test isempty(fd1)
+        @test occursin("failed to parse input from stdin: ", fd2)
+        # TODO: Not juliac-compatible
+        # @test occursin("Error @ stdin:1:7", fd2) # Relies on JuliaSyntax output
     end
 
     # runic -o readonly.jl in.jl

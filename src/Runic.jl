@@ -137,6 +137,7 @@ mutable struct Context
     check::Bool
     diff::Bool
     filemode::Bool
+    filename::String
     line_ranges::Vector{UnitRange{Int}}
     # Global state
     indent_level::Int # track (hard) indentation level
@@ -239,7 +240,7 @@ end
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
         diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
-        line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[]
+        line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[], filename::String = "-",
     )
     if !isempty(line_ranges)
         # If formatting is limited to certain line ranges we modify the source string to
@@ -250,7 +251,10 @@ function Context(
     # TODO: If parsing here fails, and we have line ranges, perhaps try to parse without the
     # markers to check whether the markers are the cause of the failure.
     src_tree = Node(
-        JuliaSyntax.parseall(JuliaSyntax.GreenNode, src_str; ignore_warnings = true, version = v"2-")
+        JuliaSyntax.parseall(
+            JuliaSyntax.GreenNode, src_str;
+            filename = filename, ignore_warnings = true, version = v"2-"
+        )
     )
     normalize_tree!(src_tree)
     fmt_io = IOBuffer()
@@ -276,8 +280,8 @@ function Context(
     format_on = true
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, filemode, line_ranges, indent_level, call_depth, format_on, prev_sibling, next_sibling,
-        lineage_kinds, lineage_macros
+        diff, filemode, filename, line_ranges, indent_level, call_depth, format_on,
+        prev_sibling, next_sibling, lineage_kinds, lineage_macros
     )
 end
 
@@ -625,7 +629,7 @@ end
 Format string `str` and return the formatted string.
 """
 function format_string(str::AbstractString; filemode::Bool = false)
-    ctx = Context(str; filemode = filemode)
+    ctx = Context(str; filemode = filemode, filename = "string")
     format_tree!(ctx)
     return String(take!(ctx.fmt_io))
 end
@@ -651,7 +655,7 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
         error("input and output must not be the same when `inplace = false`")
     end
     # Format it
-    ctx = Context(str)
+    ctx = Context(str; filename = inputfile)
     format_tree!(ctx)
     # Write the output but skip if it text didn't change
     changed = ctx.fmt_tree !== nothing
