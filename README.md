@@ -206,29 +206,34 @@ Runic can be used as a formatter in [Neovim](https://neovim.io/) using
 [conform.nvim](https://github.com/stevearc/conform.nvim). Refer to the conform.nvim
 repository for installation and setup instructions.
 
-Runic is not (yet) available directly in conform so the following configuration needs
-to be passed to the setup function. This assumes Runic is installed in the `@runic` shared
-project as suggested in the [Installation](#installation) section above. Adjust the
-`--project` flag if you installed Runic elsewhere.
+Runic is supported directly in conform (version X and later) so the only necessary
+configuration is to tell conform to use runic for files with the `julia` filetype:
 
 ```lua
 require("conform").setup({
-    formatters = {
-        runic = {
-            command = "julia",
-            args = {"--project=@runic", "-e", "using Runic; exit(Runic.main(ARGS))"},
-        },
-    },
     formatters_by_ft = {
         julia = {"runic"},
     },
-    default_format_opts = {
-        -- Increase the timeout in case Runic needs to precompile
-        -- (e.g. after upgrading Julia and/or Runic).
-        timeout_ms = 10000,
-    },
 })
 ```
+
+> [!NOTE]
+> Note that the builtin conform configuration assumes that the `runic` command is available
+> in `PATH`. If this is not how you have installed Runic you can customize the command and
+> arguments used by conform. For example:
+> ```lua
+> require("conform").setup({
+>     formatters = {
+>         runic = {
+>             command = "julia",
+>             args = {"--project=@runic", "-e", "using Runic; exit(Runic.main(ARGS))"},
+>         },
+>     },
+>     formatters_by_ft = {
+>         julia = {"runic"},
+>     },
+> })
+> ```
 
 Note that conform (and thus Runic) can be used as `formatexpr` for the `gq` command. This is
 enabled by adding the following to your configuration:
