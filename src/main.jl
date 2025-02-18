@@ -139,6 +139,10 @@ function print_help()
                -i, --inplace
                    Format files in place.
 
+               --lines=<start line>:<end line>
+                   Limit formatting to the line range <start line> to <end line>. Multiple
+                   ranges can be formatted by specifying multiple --lines arguments.
+
                -o <file>, --output=<file>
                    File to write formatted output to. If no output is given, or if the file
                    is `-`, output is written to stdout.
