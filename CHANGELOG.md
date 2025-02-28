@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v1.4.3] - 2025-02-28
 ### Fixed
  - Fix formatting of floating point literals that use `−` (Unicode U+2212) instead of the
    typically used `-` (ASCII/Unicode U+002D). The parser treats them as synonyms but the
@@ -130,6 +130,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.4.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.0
 [v1.4.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.1
 [v1.4.2]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.2
+[v1.4.3]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.3
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
