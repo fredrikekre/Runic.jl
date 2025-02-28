@@ -194,6 +194,11 @@ end
             end
         end
     end
+    # Issue #137: '−' (Unicode U+2212) is a synonym in the parser to the normally used
+    # '-' (ASCII/Unicode U+002D)
+    @test format_string("\u22121.0") == "-1.0"
+    @test format_string("1.0e\u22121") == "1.0e-1"
+    @test format_string("\u22121.0e\u22121") == "-1.0e-1"
 end
 
 @testset "whitespace between operators" begin

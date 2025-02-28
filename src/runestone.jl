@@ -97,12 +97,15 @@ function format_float_literals(ctx::Context, node::Node)
         return nothing
     end
     # Split up the pieces
-    r = r"^(?<sgn>[+-])?(?<int>\d*)(?:\.?(?<frac>\d*))?(?:(?<epm>[eEf][+-]?)(?<exp>\d+))?$"
+    # Note that Julia considers '−' (Unicode U+2212) to be a synonym to the normally used
+    # '-' (ASCII/Unicode U+002D) so we need to check for the former in this regex, and
+    # normalize it to '-' when writing it out.
+    r = r"^(?<sgn>[+\-−])?(?<int>\d*)(?:\.?(?<frac>\d*))?(?:(?<epm>[eEf][+\-−]?)(?<exp>\d+))?$"
     m = match(r, str)::RegexMatch
     io = IOBuffer() # TODO: Could be reused?
     # Write the sign part
     if (sgn = m[:sgn]; sgn !== nothing)
-        write(io, sgn)
+        write(io, replace(sgn, "−" => "-")) # \u2212 => \u002D
     end
     # Strip leading zeros from integral part
     int_part = isempty(m[:int]) ? "0" : m[:int]
@@ -116,7 +119,7 @@ function format_float_literals(ctx::Context, node::Node)
     write(io, frac_part)
     # Write the exponent part
     if m[:epm] !== nothing
-        write(io, replace(m[:epm], "E" => "e"))
+        write(io, replace(m[:epm], "E" => "e", "−" => "-")) # \u2212 => \u002D
         @assert m[:exp] !== nothing
         # Strip leading zeros from integral part
         exp_part = isempty(m[:exp]) ? "0" : m[:exp]
