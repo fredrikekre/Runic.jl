@@ -261,10 +261,12 @@ Using the "Format Document" VS Code command will now format the file using Runic
 the first time you execute the command you will be prompted to select a formatter since the
 Julia language extension also comes with a formatter.
 
-If you've installed Julia via [juliaup](https://github.com/JuliaLang/juliaup), the `julia` executable
-might not be on the `PATH` of the shell spawned by VS Code, causing formatting to fail.
-In that case, you can find the full path of the `julia` executable using `which julia`, and then
-replace "julia" in the command in `settings.json` with the full path.
+> [!NOTE]
+> If you've installed Julia with [juliaup](https://github.com/JuliaLang/juliaup), the
+> `julia` executable might not be available in `PATH` within VS Code, causing formatting to
+> fail. In that case, you can find the full path of the `julia` executable using `which
+> julia` (typically something like `${HOME}/.juliaup/bin/julia` with default juliaup
+> settings), and then replace `julia` in the command in `settings.json` with the full path.
 
 #### Emacs
 
