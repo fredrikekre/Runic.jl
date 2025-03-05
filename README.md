@@ -87,7 +87,7 @@ julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
 To simplify the invocation of the CLI it is recommended to install the
 [`runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/runic) shell script into a
 directory in your `PATH`. This can be done with the following commands (replace the two
-occurences of `~/.local/bin` if needed):
+occurrences of `~/.local/bin` if needed):
 
 ```sh
 # Download the script into ~/.local/bin
@@ -117,7 +117,7 @@ runic --version
 ### CLI
 
 The CLI is the main interface to Runic. `runic --help` will show all available options
-(output included below). Some example invokations are listed here.
+(output included below). Some example invocations are listed here.
 
 Format a single file in place:
 ```sh
@@ -261,6 +261,13 @@ Using the "Format Document" VS Code command will now format the file using Runic
 the first time you execute the command you will be prompted to select a formatter since the
 Julia language extension also comes with a formatter.
 
+> [!NOTE]
+> If you've installed Julia with [juliaup](https://github.com/JuliaLang/juliaup), the
+> `julia` executable might not be available in `PATH` within VS Code, causing formatting to
+> fail. In that case, you can find the full path of the `julia` executable using `which
+> julia` (typically something like `${HOME}/.juliaup/bin/julia` with default juliaup
+> settings), and then replace `julia` in the command in `settings.json` with the full path.
+
 #### Emacs
 
 Runic can be used as a formatter in [Emacs](https://www.gnu.org/software/emacs/) using [apheleia](https://github.com/radian-software/apheleia).
@@ -283,7 +290,7 @@ script (a modified version of
 provides a convenient way to apply Runic formatting incrementally to a code
 base by limiting formatting to lines that are added or modified in each commit.
 The script can be installed with the following commands (replace the two
-occurences of `~/.local/bin` if needed):
+occurrences of `~/.local/bin` if needed):
 
 ```sh
 # Download the script into ~/.local/bin
@@ -841,7 +848,7 @@ Trailing semicolons are removed in the body of blocklike expressions. Examples
 ```
 
 Trailing semicolons at top level and module level are kept since they are sometimes used
-there for output supression (e.g. Documenter examples or scripts that are
+there for output suppression (e.g. Documenter examples or scripts that are
 copy-pasted/included in the REPL).
 
 ### Literal floating point numbers
