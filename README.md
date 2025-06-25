@@ -213,7 +213,7 @@ repository for installation and setup instructions.
 Runic is not (yet) available directly in conform so the following configuration needs
 to be passed to the setup function. This assumes Runic is installed in the `@runic` shared
 project as suggested in the [Installation](#installation) section above. Adjust the
-`--project` flag if you installed Runic elsewhere.
+`--project` flag if you installed Runic somewhere else.
 
 ```lua
 require("conform").setup({
@@ -246,7 +246,9 @@ Runic can be used as a formatter in [VS Code](https://code.visualstudio.com/) us
 extension [Custom Local Formatters](https://marketplace.visualstudio.com/items?itemName=jkillian.custom-local-formatters&ssr=false#overview).
 
 After installing the extension you can configure Runic as a local formatter by adding the
-following entry to your `settings.json`:
+following entry to your `settings.json`. This assumes Runic is installed in the `@runic`
+shared project as suggested in the [Installation](#installation) section above. Adjust the
+`--project` flag if you installed Runic somewhere else.
 
 ```json
 "customLocalFormatters.formatters": [
@@ -275,11 +277,28 @@ Refer to the apheleia repository for installation and setup instruction.
 
 Runic is not (yet) available directly in apheleia so the
 following configuration needs to be added to your `.emacs`.
-This assumes that Runic is installed in the `@runic` shared project as suggested in the [Installation](#installation) section above.
+This assumes Runic is installed in the `@runic` shared project as suggested in the
+[Installation](#installation) section above. Adjust the `--project` flag if you installed
+Runic somewhere else.
 
 ```
 (push `(runic . ("julia" "--project=@runic" "--startup-file=no" "-e" "using Runic; exit(Runic.main(ARGS))" "--")) apheleia-formatters)
 (push '(julia-mode . runic) apheleia-mode-alist)
+```
+
+#### Helix
+
+Runic can be used as a formatter in [Helix](https://helix-editor.com/). Configure Helix's
+`:format` command to use Runic for julia code by adding the following to the
+`languages.toml` configuration file. This assumes Runic is installed in the `@runic` shared
+project as suggested in the [Installation](#installation) section above. Adjust the
+`--project` flag if you installed Runic somewhere else.
+
+```
+[[language]]
+name = "julia"
+auto-format = false
+formatter = { command = "julia" , args = ["--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"] }
 ```
 
 ### Git integration
