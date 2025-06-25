@@ -199,6 +199,7 @@ Example configuration for some editors are given in the following sections.
  - [Neovim](#neovim)
  - [VS Code](#vs-code)
  - [Emacs](#emacs)
+ - [Helix](#helix)
 
 > [!IMPORTANT]
 > Note that these configurations depend on third party plugins. They works as advertised but
