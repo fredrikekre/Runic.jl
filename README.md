@@ -220,7 +220,7 @@ require("conform").setup({
     formatters = {
         runic = {
             command = "julia",
-            args = {"--project=@runic", "-e", "using Runic; exit(Runic.main(ARGS))"},
+            args = {"--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"},
         },
     },
     formatters_by_ft = {
@@ -251,7 +251,7 @@ following entry to your `settings.json`:
 ```json
 "customLocalFormatters.formatters": [
     {
-      "command": "julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))'",
+      "command": "julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))'",
       "languages": ["julia"]
     }
 ]
@@ -278,7 +278,7 @@ following configuration needs to be added to your `.emacs`.
 This assumes that Runic is installed in the `@runic` shared project as suggested in the [Installation](#installation) section above.
 
 ```
-(push `(runic . ("julia" "--project=@runic" "-e" "using Runic; exit(Runic.main(ARGS))" "--")) apheleia-formatters)
+(push `(runic . ("julia" "--project=@runic" "--startup-file=no" "-e" "using Runic; exit(Runic.main(ARGS))" "--")) apheleia-formatters)
 (push '(julia-mode . runic) apheleia-mode-alist)
 ```
 
