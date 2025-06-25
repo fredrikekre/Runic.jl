@@ -282,6 +282,21 @@ This assumes that Runic is installed in the `@runic` shared project as suggested
 (push '(julia-mode . runic) apheleia-mode-alist)
 ```
 
+#### Helix
+
+Runic can be used as a formatter in [Helix](https://helix-editor.com/). Configure Helix's
+`:format` command to use Runic for julia code by adding the following to the
+`languages.toml` configuration file. This assumes Runic is installed in the `@runic` shared
+project as suggested in the [Installation](#installation) section above. Adjust the
+`--project` flag if you installed Runic elsewhere.
+
+```
+[[language]]
+name = "julia"
+auto-format = false
+formatter = { command = "julia" , args = ["--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"] }
+```
+
 ### Git integration
 
 The [`git-runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/git-runic)
