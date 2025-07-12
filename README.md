@@ -41,7 +41,7 @@ Copy-pasteable setup commands for the impatient:
 
 ```sh
 # Install Runic
-julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
+julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
 # Install the runic shell script
 curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
 chmod +x ~/.local/bin/runic
@@ -68,20 +68,20 @@ runic --inplace .
 Runic can be installed with Julia's package manager:
 
 ```sh
-julia -e 'using Pkg; Pkg.add("Runic")'
+julia --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
 ```
 
 For CLI usage and editor integration (see [Usage](#usage)) it is recommended to install
 Runic in a separate project such as e.g. the shared project `@runic`:
 
 ```sh
-julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'
+julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
 ```
 
 The main interface to Runic is the command line interface (CLI) through the `main` function:
 
 ```sh
-julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
+julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
 ```
 
 To simplify the invocation of the CLI it is recommended to install the
@@ -102,14 +102,14 @@ runic --version
 > Alternatively you can can add a shell alias to your shell startup file. The drawback of
 > this approach is that runic can only be invoked from the shell and not by other programs.
 > ```sh
-> alias runic="julia --project=@runic -e 'using Runic; exit(Runic.main(ARGS))' --"
-> # alias runic="julia --project=@runic -m Runic"
+> alias runic="julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))' --"
+> # alias runic="julia --project=@runic --startup-file=no -m Runic"
 > ```
 
 > [!NOTE]
 > In Julia 1.12 and later the `main` function can be invoked with the `-m` flag, i.e.:
 > ```sh
-> julia --project=@runic -m Runic <args>
+> julia --project=@runic --startup-file=no -m Runic <args>
 > ```
 
 ## Usage
@@ -381,7 +381,7 @@ any of the input files are incorrectly formatted. As an example, the following i
 can be used:
 
 ```sh
-git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
+git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia --project=@runic --startup-file=no -m Runic --check --diff
 ```
 
 This will run Runic's check mode (`--check`) on all `.jl` files in the repository and print
@@ -512,7 +512,7 @@ exec 1>&2
 # Run Runic on added and modified files
 git diff-index -z --name-only --diff-filter=AM master | \
     grep -z '\.jl$' | \
-    xargs -0 --no-run-if-empty julia --project=@runic -m Runic --check --diff
+    xargs -0 --no-run-if-empty julia --project=@runic --startup-file=no -m Runic --check --diff
 ```
 
 ## Version policy
