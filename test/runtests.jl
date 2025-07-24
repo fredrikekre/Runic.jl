@@ -447,6 +447,8 @@ end
     # Edge case with comment and no items
     @test format_string("[# a\n]") == "[# a\n]"
     @test format_string("[ # a\n]") == "[ # a\n]"
+    # https://github.com/fredrikekre/Runic.jl/issues/151
+    @test format_string("(\n    a, b for b in B\n)") == "(\n    a, b for b in B\n)"
 end
 
 @testset "whitespace in let" begin
