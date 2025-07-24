@@ -468,15 +468,32 @@ function main(argv)
                 file = basename(inputfile)
                 A = joinpath(a, file)
                 B = joinpath(b, file)
+                src_str = ctx.src_str
+                # If we have ranges we need to remove the comment markers
+                # TODO: It isn't great that the source string has been modified to begin
+                #       with, and to support --lines in the API functions this filtering
+                #       needs to be moved to the `format_tree` function.
+                if !isempty(line_ranges)
+                    io = IOBuffer(; sizehint = sizeof(src_str))
+                    for line in eachline(IOBuffer(src_str); keep = true)
+                        if !(
+                                occursin(RANGE_FORMATTING_BEGIN, line) ||
+                                    occursin(RANGE_FORMATTING_END, line)
+                            )
+                            write(io, line)
+                        end
+                    end
+                    src_str = String(take!(io))
+                end
                 # juliac: `open(...) do` uses dynamic dispatch otherwise the following
                 # blocks could be written as
                 # ```
-                # write(A, ctx.src_str)
+                # write(A, src_str)
                 # write(B, seekstart(ctx.fmt_io))
                 # ```
                 let io = open(A, "w")
                     try
-                        write(io, ctx.src_str)
+                        write(io, src_str)
                     finally
                         close(io)
                     end
