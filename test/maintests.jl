@@ -543,6 +543,16 @@ function maintests(f::R) where {R}
         rc, fd1, fd2 = runic(["--lines=3:4", "."])
         @test rc == 1 && isempty(fd1)
         @test occursin("option `--lines` can not be used together with multiple input files", fd2)
+        # --diff and --lines: no comment markers in diff output
+        if Sys.which("git") !== nothing
+            rc, fd1, fd2 = runic(["--lines=1:1", "--diff"], src)
+            @test rc == 0
+            @test fd1 == "function f(a, b)\n    return a+b\n end\n"
+            @test occursin("-function f(a,b)", fd2)
+            @test occursin("+function f(a, b)", fd2)
+            @test !occursin(Runic.RANGE_FORMATTING_BEGIN, fd2)
+            @test !occursin(Runic.RANGE_FORMATTING_END, fd2)
+        end
     end
 
     return
