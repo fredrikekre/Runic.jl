@@ -340,6 +340,9 @@ function spaces_in_listlike(ctx::Context, node::Node)
     allow_trailing_comma = multiline
     if kind(node) in KSet"call dotcall macrocall"
         require_trailing_comma = false
+    elseif n_items > 0 && kind(kids[last_item_idx::Int]) === K"generator"
+        # https://github.com/fredrikekre/Runic.jl/issues/151
+        require_trailing_comma = false
     elseif implicit_tuple
         # Trailing commas in implicit tuples in the LHS of an assignment, e.g. `x, = 1, 2`,
         # is required for single item tuples and allowed for multiple items (to allow e.g.
