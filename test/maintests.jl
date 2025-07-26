@@ -56,6 +56,18 @@ function maintests(f::R) where {R}
         @test isempty(fd2)
     end
 
+    # runic --stdin-filename <stdin >stdout
+    let (rc, fd1, fd2) = runic(["--stdin-filename=/foo/bar/baz.jl"], "a+")
+        @test rc == 1
+        @test isempty(fd1)
+        @test occursin("failed to parse input from /foo/bar/baz.jl", fd2)
+    end
+    let (rc, fd1, fd2) = runic(String[], "a+")
+        @test rc == 1
+        @test isempty(fd1)
+        @test occursin("failed to parse input from stdin", fd2)
+    end
+
     # runic --output=out.jl <stdin
     cdtmp() do
         f_out = "out.jl"

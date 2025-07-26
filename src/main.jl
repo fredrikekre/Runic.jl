@@ -147,6 +147,9 @@ function print_help()
                    File to write formatted output to. If no output is given, or if the file
                    is `-`, output is written to stdout.
 
+               --stdin-filename=<filename>
+                   Assumed filename when formatting from stdin. Used for error messages.
+
                -v, --verbose
                    Enable verbose output.
 
@@ -218,6 +221,7 @@ function main(argv)
     # Default values
     inputfiles = String[]
     outputfile = ""
+    stdin_filename = "stdin"
     quiet = false
     verbose = false
     debug = false
@@ -256,6 +260,8 @@ function main(argv)
             if insert_line_range(line_ranges, m.captures[1]::SubString) != 0
                 return errno
             end
+        elseif (m = match(r"^--stdin-filename=(.+)$", x); m !== nothing)
+            stdin_filename = String(m.captures[1]::SubString)
         elseif x == "-o"
             if length(argv) < 1
                 return panic("expected output file argument after `-o`")
@@ -406,7 +412,7 @@ function main(argv)
         end
 
         # Call the library to format the text
-        inputfile_pretty = inputfile == "-" ? "stdin" : inputfile
+        inputfile_pretty = inputfile == "-" ? stdin_filename : inputfile
         ctx = try
             ctx′ = Context(
                 sourcetext; quiet, verbose, debug, diff, check, line_ranges,

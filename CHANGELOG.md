@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.5.0] - 2025-07-26
+### Added
+ - New command line argument `--stdin-filename=<filename>` which allows attaching a filename
+   to stdin input. This is used for error messages ([#157]).
+
 ## [v1.4.6] - 2025-07-26
 ### Fixed
  - Relax `--lines` input checking to allow using `length(lines) + 1` for the end or the
@@ -147,6 +152,10 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.4.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.1
 [v1.4.2]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.2
 [v1.4.3]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.3
+[v1.4.4]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.4
+[v1.4.5]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.5
+[v1.4.6]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.6
+[v1.5.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.5.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -169,3 +178,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#136]: https://github.com/fredrikekre/Runic.jl/issues/136
 [#137]: https://github.com/fredrikekre/Runic.jl/issues/137
 [#138]: https://github.com/fredrikekre/Runic.jl/issues/138
+[#151]: https://github.com/fredrikekre/Runic.jl/issues/151
+[#152]: https://github.com/fredrikekre/Runic.jl/issues/152
+[#154]: https://github.com/fredrikekre/Runic.jl/issues/154
+[#157]: https://github.com/fredrikekre/Runic.jl/issues/157
