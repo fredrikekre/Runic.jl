@@ -1592,6 +1592,13 @@ end
             return a + b
          end
         """
+    @test format_lines(str, [2:4]) == """
+        function f(a,b)
+            return a + b
+        end
+        """
+    @test format_lines(str, [4:4]) == str
+    @test_throws Runic.MainError format_lines("1+1", [1:2])
 end
 
 module RunicMain1

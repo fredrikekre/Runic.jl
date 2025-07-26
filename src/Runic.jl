@@ -160,6 +160,14 @@ function add_line_range_markers(str, line_ranges)
     sort!(line_ranges, rev = true)
     for r in line_ranges
         a, b = extrema(r)
+        # Some tooling considers a trailing \n to start a new line (as opposed to just
+        # ending the previous line) so let's allow that by clamping b.
+        if endswith(lines[end], "\n") && b == length(lines) + 1
+            if a == length(lines) + 1
+                continue
+            end
+            b = length(lines)
+        end
         if a < 1 || b > length(lines)
             throw(MainError("`--lines` range out of bounds"))
         end
