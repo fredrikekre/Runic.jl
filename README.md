@@ -432,6 +432,56 @@ See [`fredrikekre/runic-action`](https://github.com/fredrikekre/runic-action) fo
 > these minor bugfixes to be applied to your code base.
 > The alternative is to pin to a minor version and manually upgrade to new minor versions.
 
+#### Posting format diff as Github review suggestions
+
+The following setup can be used to post any formatting changes as review comments on Github
+pull requests. This passses `format_files: true` to tell Runic to format the files and leave
+the diff behind, and then uses
+[reviewdog/action-suggester](https://github.com/reviewdog/action-suggester) to post the diff
+as comments. You need to configure `continue-on-error` for `runic-action` and then configure
+`reviewdog/action-suggester` (or whatever other follow up action you are using) to fail
+instead. For `reviewdog/action-suggester` this is done by setting `fail_level` as in the
+example below.
+
+```yaml
+name: Runic formatting
+on:
+  push:
+    branches:
+      - 'master'
+      - 'release-'
+    tags:
+      - '*'
+  pull_request:
+jobs:
+  runic:
+    name: Runic
+    runs-on: ubuntu-latest
+    # Permissions needed for reviewdog/action-suggester to post comments
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      # - uses: julia-actions/setup-julia@v2
+      #   with:
+      #     version: '1'
+      # - uses: julia-actions/cache@v2
+      - uses: fredrikekre/runic-action@v1
+        with:
+          version: '1'
+          format_files: true
+        # Fail on next step instead
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+      - uses: reviewdog/action-suggester@v1
+        if: github.event_name == 'pull_request'
+        with:
+          tool_name: Runic
+          fail_level: warning
+```
+
 ### Git hooks
 
 Runic can be used together with [`pre-commit`](https://pre-commit.com/) using
