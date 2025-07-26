@@ -537,7 +537,7 @@ function maintests(f::R) where {R}
         rc, fd1, fd2 = runic(["--lines=0:1"], src)
         @test rc == 1 && isempty(fd1)
         @test occursin("`--lines` range out of bounds", fd2)
-        rc, fd1, fd2 = runic(["--lines=3:4"], src)
+        rc, fd1, fd2 = runic(["--lines=3:5"], src)
         @test rc == 1 && isempty(fd1)
         @test occursin("`--lines` range out of bounds", fd2)
         rc, fd1, fd2 = runic(["--lines=3:4", "."])
