@@ -1,5 +1,5 @@
 JULIA ?= $(shell which julia)
-JULIAC ?= $(shell $(JULIA) -e 'print(normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "juliac.jl")))')
+JULIAC ?= $(shell $(JULIA) -e 'print(normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "juliac", "juliac.jl")))')
 
 RUNIC_FILES := $(wildcard ../src/*.jl) ../Project.toml
 
