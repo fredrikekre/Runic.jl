@@ -200,6 +200,7 @@ Example configuration for some editors are given in the following sections.
  - [VS Code](#vs-code)
  - [Emacs](#emacs)
  - [Helix](#helix)
+ - [Zed](#zed)
 
 > [!IMPORTANT]
 > Note that these configurations depend on third party plugins. They works as advertised but
