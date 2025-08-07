@@ -200,6 +200,7 @@ Example configuration for some editors are given in the following sections.
  - [VS Code](#vs-code)
  - [Emacs](#emacs)
  - [Helix](#helix)
+ - [Zed](#zed)
 
 > [!IMPORTANT]
 > Note that these configurations depend on third party plugins. They works as advertised but
@@ -300,6 +301,26 @@ project as suggested in the [Installation](#installation) section above. Adjust 
 name = "julia"
 auto-format = false
 formatter = { command = "julia" , args = ["--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"] }
+```
+
+#### Zed
+
+Runic can be used as a formatter in [Zed](https://zed.dev/). You can configure Runic as a 
+local formatter by adding the following entry to your `settings.json`. This assumes Runic 
+is installed in the `@runic` shared project as suggested in the [Installation](#installation) 
+section above. Adjust the `--project` flag if you installed Runic somewhere else.
+
+```json
+"languages": {
+  "Julia": {
+    "formatter": {
+      "external": {
+        "command": "julia",
+        "arguments": ["--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"]
+      }
+    }
+  }
+}
 ```
 
 ### Git integration
