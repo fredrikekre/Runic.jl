@@ -182,23 +182,13 @@ Runic can be used as a formatter in [Neovim](https://neovim.io/) using
 [conform.nvim](https://github.com/stevearc/conform.nvim). Refer to the conform.nvim
 repository for installation and setup instructions.
 
-Runic is not (yet) available directly in conform so the following configuration needs
-to be passed to the setup function.
+Runic is available directly in conform so the only thing that needs to be done is to
+configure conform to use runic for Julia files:
 
 ```lua
 require("conform").setup({
-    formatters = {
-        runic = {
-            command = "runic",
-        },
-    },
     formatters_by_ft = {
         julia = {"runic"},
-    },
-    default_format_opts = {
-        -- Increase the timeout in case Runic needs to precompile
-        -- (e.g. after upgrading Julia and/or Runic).
-        timeout_ms = 10000,
     },
 })
 ```
