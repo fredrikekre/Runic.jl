@@ -212,7 +212,7 @@ Runic can be used as a formatter in [Neovim](https://neovim.io/) using
 [conform.nvim](https://github.com/stevearc/conform.nvim). Refer to the conform.nvim
 repository for installation and setup instructions.
 
-Runic is available directly in conform and can be configured as follows. This assumes Runic is installed in the `@runic` shared project as suggested in the [Installation](#installation) section above.
+Runic is available directly in conform and can be configured as follows. This assumes Runic is installed in the `@runic` shared project and the `runic` CLI script is installed as suggested in the [Installation](#installation) section above.
 
 ```lua
 require("conform").setup({
