@@ -164,6 +164,9 @@ end
         @test typeof(c) == typeof(d)
         @test format_string(a) == b
     end
+    # Ignore literals with underscores (https://github.com/fredrikekre/Runic.jl/issues/169)
+    @test format_string("0xaa_aa_aa_aa") == "0xaa_aa_aa_aa"
+    @test format_string("0xaa_aa") == ("0xaa_aa")
 end
 
 @testset "Floating point literals" begin
