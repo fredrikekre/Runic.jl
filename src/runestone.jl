@@ -64,6 +64,10 @@ function format_hex_literals(ctx::Context, node::Node)
     # Insert leading zeros
     i = findfirst(x -> x > spn, target_spans)::Int
     bytes = read_bytes(ctx, node)
+    # Ignore literals with underscores for now (same as for floats)
+    if findfirst(==('_' % UInt8), bytes) !== nothing
+        return nothing
+    end
     while length(bytes) < target_spans[i]
         insert!(bytes, 3, '0')
     end

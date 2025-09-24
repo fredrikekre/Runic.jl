@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.5.1] - 2025-09-24
+### Fixed
+ - Ignore formatting of hex literals with underscores (same as for floats and integers)
+   ([#169], [#170]).
+
 ## [v1.5.0] - 2025-07-26
 ### Added
  - New command line argument `--stdin-filename=<filename>` which allows attaching a filename
@@ -156,6 +161,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.4.5]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.5
 [v1.4.6]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.6
 [v1.5.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.5.0
+[v1.5.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.5.1
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -182,3 +188,5 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#152]: https://github.com/fredrikekre/Runic.jl/issues/152
 [#154]: https://github.com/fredrikekre/Runic.jl/issues/154
 [#157]: https://github.com/fredrikekre/Runic.jl/issues/157
+[#169]: https://github.com/fredrikekre/Runic.jl/issues/169
+[#170]: https://github.com/fredrikekre/Runic.jl/issues/170
