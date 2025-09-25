@@ -2,6 +2,10 @@
 
 module Runic
 
+function (@main)(argv)
+    return main(argv)
+end
+
 if VERSION >= v"1.11.0-DEV.469"
     let str = "public format_file, format_string"
         eval(Meta.parse(str))
