@@ -513,13 +513,13 @@ Runic before each commit:
 ```yaml
 repos:
   - repo: https://github.com/fredrikekre/runic-pre-commit
-    rev: v1.0.0
+    rev: v2.0.1
     hooks:
       - id: runic
 ```
 
 See [`fredrikekre/runic-pre-commit`](https://github.com/fredrikekre/runic-pre-commit) for
-details.
+the latest version and more details.
 
 If you don't want to use `pre-commit` you can also use a plain git hook. Here is an example
 hook (`.git/hooks/pre-commit`):
