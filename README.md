@@ -21,7 +21,7 @@ that is appreciated by most Go programmers, see for example the following
 ### Table of contents
 
  - [Quick start](#quick-start)
- - [Installation](#installation)
+    - [Legacy installation](#legacy-installation)
  - [Usage](#usage)
     - [CLI](#cli)
     - [Editor integration](#editor-integration)
@@ -37,20 +37,13 @@ that is appreciated by most Go programmers, see for example the following
 
 ## Quick start
 
-Copy-pasteable setup commands for the impatient:
+In Julia v1.12 and later, Runic should be installed as a [Pkg app](https://pkgdocs.julialang.org/dev/apps/):
 
 ```sh
-# Install Runic
-julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
-# Install the runic shell script
-curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
-chmod +x ~/.local/bin/runic
-# Install the git-runic shell script
-curl -fsSL -o ~/.local/bin/git-runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
-chmod +x ~/.local/bin/git-runic
+julia -e 'using Pkg; Pkg.Apps.add("Runic")'
 ```
 
-Assuming `~/.local/bin` is in your `PATH` you can now invoke `runic`, e.g.:
+Assuming `~/.julia/bin` is in your `PATH` you can now invoke `runic`, e.g.:
 
 ```sh
 runic --version # Show version info
@@ -63,9 +56,22 @@ runic --help    # Show documentation
 runic --inplace .
 ```
 
-## Installation
+### Legacy installation
 
-Runic can be installed with Julia's package manager:
+> [!TIP]
+> Copy-pasteable setup commands for the impatient:
+> ```sh
+> # Install Runic
+> julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
+> # Install the runic shell script
+> curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
+> chmod +x ~/.local/bin/runic
+> # Install the git-runic shell script
+> curl -fsSL -o ~/.local/bin/git-runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
+> chmod +x ~/.local/bin/git-runic
+> ```
+
+In Julia v1.11 and earlier (or if you don't want to use a Pkg app), Runic can also be installed manually with Julia's package manager.
 
 ```sh
 julia --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
