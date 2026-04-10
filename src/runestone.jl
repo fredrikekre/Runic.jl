@@ -141,7 +141,7 @@ end
 # Insert space around `x`, where `x` can be operators, assignments, etc. with the pattern:
 # `<something><space><x><space><something>`, for example the spaces around `+` and `=` in
 # `a = x + y`.
-function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int = 1) where {F}
+function spaces_around_x(ctx::Context, node::Node, n_leaves_per_x::Int = 1)
     # TODO: So much boilerplate here...
     @assert !is_leaf(node)
 
@@ -203,7 +203,6 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
                 if kind(kid) === K"Comment"
                     # Keep the state
                 elseif looking_for_x
-                    @assert is_x(kid)::Bool
                     n_x_leaves_visited += 1
                     if n_x_leaves_visited == n_leaves_per_x
                         looking_for_x = false
@@ -225,7 +224,6 @@ function spaces_around_x(ctx::Context, node::Node, is_x::F, n_leaves_per_x::Int 
                 # Just skip through and keep the state?
             elseif looking_for_x
                 # We are looking for x, check we have them all otherwise keep looking
-                @assert is_x(kid)::Bool
                 n_x_leaves_visited += 1
                 if n_x_leaves_visited == n_leaves_per_x
                     looking_for_x = false
@@ -258,8 +256,7 @@ end
 function spaces_in_listlike(ctx::Context, node::Node)
     if !(
             kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens" ||
-                (kind(node) === K"call" && flags(node) == 0) || # Flag check rules out op-calls
-                (kind(node) === K"dotcall" && flags(node) == 0) ||
+                (kind(node) in KSet"call dotcall" && !is_any_op_call(node)) ||
                 (kind(node) === K"macrocall" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)) ||
                 is_paren_block(node)
         )
@@ -342,7 +339,10 @@ function spaces_in_listlike(ctx::Context, node::Node)
     require_trailing_comma = false
     allow_trailing_semi = false
     allow_trailing_comma = multiline
-    if kind(node) in KSet"call dotcall macrocall"
+    if kind(node) in KSet"call dotcall macrocall" ||
+            (kind(node) === K"tuple" && ctx.lineage_kinds[end] === K"->" && ctx.next_sibling !== nothing)
+        # For calls and anonymous function argument tuples, trailing commas are never required
+        # (and only allowed if multiline, same as regular function definitions).
         require_trailing_comma = false
     elseif n_items > 0 && kind(kids[last_item_idx::Int]) === K"generator"
         # https://github.com/fredrikekre/Runic.jl/issues/151
@@ -355,9 +355,19 @@ function spaces_in_listlike(ctx::Context, node::Node)
         # no need to make sure this is the LHS node.
         require_trailing_comma = n_items == 1 && ctx.lineage_kinds[end] === K"="
         allow_trailing_comma = ctx.lineage_kinds[end] === K"="
-    elseif kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] !== K"function" &&
+    elseif kind(node) === K"tuple" && n_items == 1 && ctx.lineage_kinds[end] === K"function" &&
+            kind(kids[first_item_idx::Int]) === K"macrocall" &&
+            JuliaSyntax.has_flags(kids[first_item_idx], JuliaSyntax.PARENS_FLAG)
+        # `function (@a(b),) body end` style: require trailing comma to preserve 1-tuple argument.
+        require_trailing_comma = true
+    elseif kind(node) === K"tuple" && n_items == 1 &&
+            !(ctx.lineage_kinds[end] === K"function" && ctx.next_sibling !== nothing) &&
             kind(kids[first_item_idx::Int]) !== K"parameters"
         # TODO: May also have to check for K"where" and K"::" in the lineage above
+        # The K"function" + next_sibling guard excludes argument tuples of anonymous
+        # functions (`function (args) body end`) which are not the last child, while
+        # still requiring trailing commas for body tuples of short-form definitions
+        # (`f() = (a,)`) which are the last child.
         require_trailing_comma = true
     elseif kind(node) in KSet"bracescat parens"
         require_trailing_comma = false # Leads to parser error
@@ -695,46 +705,51 @@ end
 # <: and >: operators.
 function spaces_around_operators(ctx::Context, node::Node)
     if !(
-            (is_infix_op_call(node) && !(kind(infix_op_call_op(node)) in KSet": ^")) ||
+            (is_infix_op_call(node) && !(infix_op_call_op(ctx, node) in KSet": ^")) ||
                 (kind(node) in KSet"<: >:" && meta_nargs(node) == 3) ||
-                (kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node))
+                (kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node)) ||
+                kind(node) === K"in" && !is_leaf(node)
         )
         return nothing
     end
-    @assert kind(node) in KSet"call dotcall comparison <: >:"
-    is_x = x -> is_operator_leaf(x) || is_comparison_leaf(x)
+    @assert kind(node) in KSet"call dotcall comparison <: >: in"
     n_leaves_per_x = kind(node) === K"dotcall" ? 2 : 1
-    return spaces_around_x(ctx, node, is_x, n_leaves_per_x)
+    return spaces_around_x(ctx, node, n_leaves_per_x)
 end
 
 function spaces_around_assignments(ctx::Context, node::Node)
-    if !(is_assignment(node) && !is_leaf(node))
+    if !(
+            (is_assignment(node) && !is_leaf(node)) ||
+                is_short_form_function_definition(node)
+        )
         return nothing
     end
-    # for-loop nodes are of kind K"=" even when `in` or `∈` is used so we need to
-    # include these kinds in the predicate too.
-    is_x = x -> is_assignment(x) || kind(x) in KSet"in ∈"
-    return spaces_around_x(ctx, node, is_x)
+    n_leaves_per_x = 1
+    if kind(node) in KSet"op="
+        n_leaves_per_x += 1
+        if JuliaSyntax.is_dotted(node)
+            n_leaves_per_x += 1
+        end
+    end
+    return spaces_around_x(ctx, node, n_leaves_per_x)
 end
 
 function spaces_around_anonymous_function(ctx::Context, node::Node)
     if !(kind(node) === K"->" && !is_leaf(node))
         return nothing
     end
-    is_x = x -> kind(x) === K"->"
-    return spaces_around_x(ctx, node, is_x)
+    return spaces_around_x(ctx, node)
 end
 
 function spaces_around_ternary(ctx::Context, node::Node)
     if !(kind(node) === K"?" && !is_leaf(node))
         return nothing
     end
-    is_x = x -> is_leaf(x) && kind(x) in KSet"? :"
-    return spaces_around_x(ctx, node, is_x)
+    return spaces_around_x(ctx, node)
 end
 
 # Opposite of `spaces_around_x`: remove spaces around `x`
-function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
+function no_spaces_around_x(ctx::Context, node::Node)
     @assert !is_leaf(node)
     # TODO: Can't handle NewlineWs and comments here right now
     if any(kind(c) in KSet"NewlineWs Comment" for c in verified_kids(node))
@@ -747,13 +762,13 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
     pos = position(ctx.fmt_io)
 
     looking_for_x = false
-    first_x_idx = findfirst(is_x, kids)::Int
-    last_x_idx = findlast(is_x, kids)::Int
 
     # K"::", K"<:", and K">:" are special cases here since they can be used without an LHS
-    # in e.g. `f(::Int) = ...` and `Vector{<:Real}`.
+    # in e.g. `f(::Int) = ...` and `Vector{<:Real}`. Detect prefix form by checking whether
+    # the first non-whitespace child is the operator leaf itself (not an LHS operand).
     if kind(node) in KSet":: <: >:"
-        looking_for_x = is_x(first_non_whitespace_kid(node))::Bool
+        first_kid = first_non_whitespace_kid(node)
+        looking_for_x = is_leaf(first_kid) && kind(first_kid) in KSet":: <: >:"
     end
 
     for (i, kid) in pairs(kids)
@@ -769,9 +784,6 @@ function no_spaces_around_x(ctx::Context, node::Node, is_x::F) where {F}
             replace_bytes!(ctx, "", span(kid))
         else
             @assert !JuliaSyntax.is_whitespace(kid) # Filtered out above
-            if looking_for_x
-                @assert is_x(kid)::Bool
-            end
             if any_changes
                 if kids === kids′
                     kids′ = kids[1:(i - 1)]
@@ -1220,15 +1232,53 @@ end
 # no spaces around `:`, `^`, and `::`
 function no_spaces_around_colon_etc(ctx::Context, node::Node)
     if !(
-            (is_infix_op_call(node) && kind(infix_op_call_op(node)) in KSet": ^") ||
+            (is_infix_op_call(node) && infix_op_call_op(ctx, node) in KSet": ^") ||
                 (kind(node) === K"::" && !is_leaf(node)) ||
                 (kind(node) in KSet"<: >:" && meta_nargs(node) == 2)
         )
         return nothing
     end
     @assert kind(node) in KSet"call :: <: >:"
-    is_x = x -> is_leaf(x) && kind(x) in KSet": ^ :: <: >:"
-    return no_spaces_around_x(ctx, node, is_x)
+    return no_spaces_around_x(ctx, node)
+end
+
+function space_before_do(ctx::Context, node::Node)
+    @assert kind(node) in KSet"call dotcall" && !is_leaf(node)
+    kids = verified_kids(node)
+    last_idx = length(kids)
+    if last_idx >= 2 && kind(kids[last_idx]) === K"do"
+        ws_idx = last_idx - 1
+        pos = position(ctx.fmt_io)
+        ws1 = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+        if kind(kids[ws_idx]) === K"Whitespace" && span(kids[ws_idx]) != 1
+            for j in 1:(ws_idx - 1)
+                accept_node!(ctx, kids[j])
+            end
+            replace_bytes!(ctx, " ", span(kids[ws_idx]))
+            accept_node!(ctx, ws1)
+            accept_node!(ctx, kids[last_idx])
+            seek(ctx.fmt_io, pos)
+            kids′ = copy(kids)
+            kids′[ws_idx] = ws1
+            return make_node(node, kids′)
+        elseif kind(kids[ws_idx]) !== K"Whitespace"
+            for j in 1:ws_idx
+                accept_node!(ctx, kids[j])
+            end
+            replace_bytes!(ctx, " ", 0)
+            accept_node!(ctx, ws1)
+            accept_node!(ctx, kids[last_idx])
+            seek(ctx.fmt_io, pos)
+            kids′ = Vector{Node}(undef, last_idx + 1)
+            for j in 1:ws_idx
+                kids′[j] = kids[j]
+            end
+            kids′[last_idx] = ws1
+            kids′[last_idx + 1] = kids[last_idx]
+            return make_node(node, kids′)
+        end
+    end
+    return nothing
 end
 
 function space_after_let(ctx, node)
@@ -1277,6 +1327,9 @@ function spaces_around_keywords(ctx::Context, node::Node)
     if kind(node) === K"let"
         return space_after_let(ctx, node)
     end
+    if kind(node) in KSet"call dotcall"
+        return space_before_do(ctx, node)
+    end
     keyword_set = KSet"""
     where do mutable struct abstract primitive type function if elseif catch while return
     local global const module baremodule
@@ -1290,7 +1343,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
     pos = position(ctx.fmt_io)
     ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
 
-    peek_kinds = KSet"where do"
+    peek_kinds = KSet"where"
     state = kind(node) in peek_kinds ? (:peeking_for_keyword) : (:looking_for_keyword)
     keep_looking_for_keywords = false
     space_after = true
@@ -1329,7 +1382,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                 # `catch` should only be followed by space if the error is caught in a var
                 if kind(node) === K"catch"
                     nkid = kids[i + 1]
-                    if kind(nkid) === K"false" && span(nkid) == 0
+                    if kind(nkid) === K"Placeholder" && span(nkid) == 0
                         state = :closing
                     end
                 end
@@ -1399,9 +1452,11 @@ function spaces_around_keywords(ctx::Context, node::Node)
     end
 end
 
-# Replace the K"=" operator with `in`
-function replace_with_in(ctx::Context, node::Node)
-    @assert kind(node) === K"=" && !is_leaf(node) && meta_nargs(node) == 3
+# Replace `=` and `∈` with `in` in for-loops and generators
+function for_loop_use_in(ctx::Context, node::Node)
+    if !(kind(node) === K"in" && !is_leaf(node))
+        return nothing
+    end
     kids = verified_kids(node)
     pos = position(ctx.fmt_io)
     vars_index = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
@@ -1434,128 +1489,6 @@ function replace_with_in(ctx::Context, node::Node)
     kids′[in_index] = in_node′
     seek(ctx.fmt_io, pos)
     return make_node(node, kids′)
-end
-
-function replace_with_in_filter(ctx::Context, node::Node)
-    @assert kind(node) === K"filter" && !is_leaf(node)
-    pos = position(ctx.fmt_io)
-    kids = verified_kids(node)
-    kid = kids[1]
-    @assert kind(kid) in KSet"= cartesian_iterator" && !is_leaf(kid)
-    if kind(kid) === K"="
-        kid′ = replace_with_in(ctx, kid)
-    else
-        kid′ = replace_with_in_cartesian(ctx, kid)
-    end
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    if kid′ === nothing
-        return nothing
-    else
-        kids = copy(kids)
-        kids[1] = kid′
-        return make_node(node, kids)
-    end
-end
-
-function replace_with_in_cartesian(ctx::Context, node::Node)
-    @assert kind(node) === K"cartesian_iterator" && !is_leaf(node)
-    kids = verified_kids(node)
-    kids′ = kids
-    pos = position(ctx.fmt_io)
-    for (i, kid) in pairs(kids)
-        if kind(kid) === K"="
-            kid′ = replace_with_in(ctx, kid)
-            if kid′ !== nothing
-                if kids′ === kids
-                    kids′ = copy(kids)
-                end
-                kids′[i] = kid′
-                accept_node!(ctx, kid′)
-            else
-                kids′[i] = kid
-                accept_node!(ctx, kid)
-            end
-        else
-            kids′[i] = kid
-            accept_node!(ctx, kid)
-        end
-    end
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    if kids === kids′
-        return nothing
-    end
-    return make_node(node, kids′)
-end
-
-# replace `=` and `∈` with `in` in for-loops
-function for_loop_use_in(ctx::Context, node::Node)
-    if !(
-            (kind(node) === K"for" && !is_leaf(node) && meta_nargs(node) == 4) ||
-                kind(node) === K"generator"
-        )
-        return nothing
-    end
-    pos = position(ctx.fmt_io)
-    kids = verified_kids(node)
-    kids′ = kids
-    for_index = findfirst(c -> kind(c) === K"for" && is_leaf(c), kids)::Int
-    next_index = 1
-    any_for_changed = false
-    # generator can have multiple for nodes
-    while for_index !== nothing
-        for_node = kids[for_index]
-        @assert kind(for_node) === K"for" && span(for_node) == 3 &&
-            is_leaf(for_node) && JuliaSyntax.is_trivia(for_node)
-        for i in next_index:for_index
-            accept_node!(ctx, kids[i])
-        end
-        # The for loop specification node can be one of K"=", K"cartesian_iterator", or
-        # K"filter"
-        for_spec_index = findnext(x -> kind(x) in KSet"= cartesian_iterator filter", kids, for_index + 1)::Int
-        for_spec_node = kids[for_spec_index]
-        for i in (for_index + 1):(for_spec_index - 1)
-            accept_node!(ctx, kids[i])
-        end
-        if kind(for_spec_node) === K"="
-            for_spec_node′ = replace_with_in(ctx, for_spec_node)
-        elseif kind(for_spec_node) === K"filter"
-            for_spec_node′ = replace_with_in_filter(ctx, for_spec_node)
-        else
-            @assert kind(for_spec_node) === K"cartesian_iterator"
-            for_spec_node′ = replace_with_in_cartesian(ctx, for_spec_node)
-        end
-        if for_spec_node′ !== nothing
-            any_for_changed = true
-            # Insert the new for spec node
-            if kids′ === kids
-                kids′ = copy(kids)
-            end
-            kids′[for_spec_index] = for_spec_node′
-            accept_node!(ctx, for_spec_node′)
-        else
-            accept_node!(ctx, for_spec_node)
-        end
-        for_index = findnext(c -> kind(c) === K"for" && is_leaf(c), kids, for_spec_index + 1)
-        if for_index !== nothing
-            @assert kind(node) === K"generator"
-        end
-        next_index = for_spec_index + 1
-    end
-    if !any_for_changed
-        seek(ctx.fmt_io, pos)
-        return nothing
-    end
-    # At this point the eq nodes are done, just accept any remaining nodes
-    # TODO: Don't need to do this...
-    for i in next_index:length(kids′)
-        accept_node!(ctx, kids′[i])
-    end
-    # Construct the full node and return
-    node′ = make_node(node, kids′)
-    seek(ctx.fmt_io, pos) # reset
-    return node′
 end
 
 function braces_around_where_rhs(ctx::Context, node::Node)
@@ -1597,7 +1530,7 @@ function braces_around_where_rhs(ctx::Context, node::Node)
 end
 
 function parens_around_op_calls_in_colon(ctx::Context, node::Node)
-    if !(is_infix_op_call(node) && kind(infix_op_call_op(node)) === K":")
+    if !(is_infix_op_call(node) && infix_op_call_op(ctx, node) === K":")
         return nothing
     end
 
@@ -1741,7 +1674,7 @@ function four_space_indent(ctx::Context, node::Node)
     resize!(bytes, spn′)
     fill!(@view(bytes[2:end]), UInt8(' '))
     replace_bytes!(ctx, bytes, spn)
-    node′ = Node(head(node), spn′, (), node.tags)
+    node′ = Node(head(node), spn′, nothing, node.tags)
     return node′
 end
 
@@ -1819,7 +1752,7 @@ function indent_let_varblock(ctx::Context, node::Node)
     @assert kind(kid) === K"Whitespace"
     i = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, i + 1)
     i === nothing && return nothing
-    @assert kind(kids[i]) in KSet"Identifier = $ macrocall" # This is a bit unnecessary
+    @assert kind(kids[i]) in KSet"Identifier = $ macrocall function" # This is a bit unnecessary
     while (i = findnext(x -> kind(x) === K"NewlineWs", kids, i + 1); i !== nothing)
         @assert kind(kids[i]) === K"NewlineWs"
         if !has_tag(kids[i], TAG_LINE_CONT)
@@ -2793,17 +2726,28 @@ function indent_ternary(ctx::Context, node::Node)
 end
 
 function indent_iterator(ctx::Context, node::Node)
-    @assert kind(node) in KSet"cartesian_iterator generator"
+    @assert kind(node) in KSet"iteration generator"
+    if kind(node) === K"iteration" && ctx.lineage_kinds[end] === K"for" &&
+            count(x -> kind(x) == K"in", verified_kids(node)) == 1
+        # Single-iterator for loop: the K"in" child handles its own continuation
+        # indentation via indent_op_call, so nothing to do here.
+        return nothing
+    end
     return continue_all_newlines(ctx, node)
 end
 
 function indent_assignment(ctx::Context, node::Node)
     @assert !is_leaf(node)
-    @assert is_variable_assignment(ctx, node)
+    @assert is_variable_assignment(ctx, node) || is_short_form_function_definition(node)
     kids = verified_kids(node)
     lhsidx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     eqidx = findnext(!JuliaSyntax.is_whitespace, kids, lhsidx + 1)::Int
-    @assert kind(node) === kind(kids[eqidx])
+    if kind(node) in KSet"op="
+        eqidx += 1
+        if JuliaSyntax.is_dotted(node)
+            eqidx += 1
+        end
+    end
     @assert length(kids) > eqidx
     rhsidx = findnext(!JuliaSyntax.is_whitespace, kids, eqidx + 1)::Int
     @assert rhsidx == lastindex(kids)
@@ -3075,6 +3019,8 @@ end
 function insert_delete_mark_newlines(ctx::Context, node::Node)
     if is_leaf(node)
         return nothing
+    elseif is_short_form_function_definition(node)
+        return indent_assignment(ctx, node)
     elseif kind(node) in KSet"function macro"
         return indent_function_or_macro(ctx, node)
     elseif kind(node) === K"if"
@@ -3083,8 +3029,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_let(ctx, node)
     elseif is_begin_block(node)
         return indent_begin(ctx, node)
-    elseif kind(node) in KSet"call dotcall" &&
-            flags(node) == 0 # Flag check rules out op-calls
+    elseif kind(node) in KSet"call dotcall" && !is_any_op_call(node)
         return indent_call(ctx, node)
     elseif kind(node) === K"macrocall" &&
             JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
@@ -3113,7 +3058,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_parameters(ctx, node)
     elseif kind(node) === K"?"
         return indent_ternary(ctx, node)
-    elseif kind(node) in KSet"cartesian_iterator generator"
+    elseif kind(node) in KSet"generator iteration"
         return indent_iterator(ctx, node)
     elseif kind(node) === K"try"
         return indent_try(ctx, node)
@@ -3536,7 +3481,7 @@ function explicit_return_block(ctx, node)
     if is_leaf(rexpr) ||
             kind(rexpr) in KSet"call dotcall tuple vect ref hcat typed_hcat vcat typed_vcat \
                 ? && || :: juxtapose <: >: comparison string . -> comprehension do macro \
-                typed_comprehension where parens curly function quote global local =" ||
+                typed_comprehension where parens curly function quote global local = cmdstring" ||
             is_string_macro(rexpr) || is_assignment(rexpr) ||
             (kind(rexpr) in KSet"let if try" && !has_return(rexpr)) ||
             (kind(rexpr) === K"macrocall" && !has_return(rexpr)) ||
@@ -3626,7 +3571,7 @@ function explicit_return_block(ctx, node)
 end
 
 function explicit_return(ctx::Context, node::Node)
-    if !(!is_leaf(node) && kind(node) in KSet"function macro")
+    if !(!is_leaf(node) && kind(node) in KSet"function macro" && !is_short_form_function_definition(node))
         return nothing
     end
     if !safe_to_insert_return(ctx, node)

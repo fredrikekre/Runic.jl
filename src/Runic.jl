@@ -35,13 +35,13 @@ struct Node
     # and not `Vector{GreenNode}`.
     head::JuliaSyntax.SyntaxHead
     span::UInt32
-    kids::Union{Tuple{}, Vector{Node}}
+    kids::Union{Vector{Node}, Nothing}
     # Metadata for the formatter
     tags::TagType
 end
 
 function Node(head::JuliaSyntax.SyntaxHead, span::Integer, tags::Integer = 0)
-    return Node(head, span % UInt32, (), tags % TagType)
+    return Node(head, span % UInt32, nothing, tags % TagType)
 end
 
 function Node(head::JuliaSyntax.SyntaxHead, kids::Vector{Node})
@@ -55,15 +55,15 @@ function Node(node::JuliaSyntax.GreenNode)
     # juliac: this is `kids = map(Node, JuliaSyntax.children(node))` but written out like
     # this in order to help inference.
     children = JuliaSyntax.children(node)
-    if children isa Tuple{}
-        kids = ()
+    if children === nothing
+        return Node(JuliaSyntax.head(node), JuliaSyntax.span(node), nothing, tags)
     else
         kids = Vector{Node}(undef, length(children))
         for (i, child) in pairs(children)
             kids[i] = Node(child)
         end
+        return Node(JuliaSyntax.head(node), JuliaSyntax.span(node), kids, tags)
     end
-    return Node(JuliaSyntax.head(node), JuliaSyntax.span(node), kids, tags)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", node::Node)
@@ -94,11 +94,11 @@ kind(node::Node) = JuliaSyntax.kind(node)
 
 # Inverse of JuliaSyntax.haschildren
 function is_leaf(node::Node)
-    return node.kids === ()
+    return node.kids === nothing
 end
 
 # This function must only be be called after verifying that the node is not a leaf. We can
-# then type-assert the return value to narrow it down from `Union{Tuple{}, Vector{Node}}` to
+# then type-assert the return value to narrow it down from `Union{Vector{Node}, Nothing}` to
 # `Vector{Node}`.
 function verified_kids(node::Node)
     @assert !is_leaf(node)

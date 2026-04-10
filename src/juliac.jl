@@ -52,7 +52,11 @@ function printstyled_juliac(io::RawIO, str::String; bold = false, color::Symbol 
 end
 
 function isatty(io::RawIO)
-    return (@ccall isatty(io.fd::Cint)::Cint) == 1
+    @static if Sys.iswindows()
+        return (@ccall _isatty(io.fd::Cint)::Cint) == 1
+    else
+        return (@ccall isatty(io.fd::Cint)::Cint) == 1
+    end
 end
 supports_color(io::RawIO) = isatty(io)
 
