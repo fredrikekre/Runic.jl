@@ -340,9 +340,14 @@ function spaces_in_listlike(ctx::Context, node::Node)
     allow_trailing_semi = false
     allow_trailing_comma = multiline
     if kind(node) in KSet"call dotcall macrocall" ||
-            (kind(node) === K"tuple" && ctx.lineage_kinds[end] === K"->" && ctx.next_sibling !== nothing)
+            (
+            kind(node) === K"tuple" && ctx.lineage_kinds[end] === K"->" && ctx.next_sibling !== nothing &&
+                !(n_items == 1 && kind(kids[first_item_idx::Int]) === K"tuple")
+        )
         # For calls and anonymous function argument tuples, trailing commas are never required
         # (and only allowed if multiline, same as regular function definitions).
+        # Exception: `((a, b),) -> body` — when the single item is itself a tuple the outer
+        # trailing comma must be kept, otherwise `((a, b))` is parsed as `(a, b)` (2 args).
         require_trailing_comma = false
     elseif n_items > 0 && kind(kids[last_item_idx::Int]) === K"generator"
         # https://github.com/fredrikekre/Runic.jl/issues/151
