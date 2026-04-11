@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.6.0] - 2026-04-14
+### Changed
+ - Upgrade JuliaSyntax dependency from version 0.4 to version 1. ([#186])
+ - Fix a bug that caused the trailing comma in single-line anonymous function argument tuples
+   to not be removed (e.g. `(a,) -> body` to `(a) -> body`), consistent with how regular
+   function definitions are formatted (`f(a,) = body` to `f(a) = body`). This bug is
+   classified as a [spec-bug]. ([#186])
+ - Fix a bug that caused extra whitespace after the `for` keyword to not be normalized to a
+   single space. This bug is classified as a [spec-bug] and the fix will result in diffs like
+   the following:
+   ```diff
+   -for  i in 1:10
+   +for i in 1:10
+    end
+   ```
+   ([#187])
+
 ## [v1.5.1] - 2025-09-24
 ### Fixed
  - Ignore formatting of hex literals with underscores (same as for floats and integers)
@@ -162,6 +179,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.4.6]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.4.6
 [v1.5.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.5.0
 [v1.5.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.5.1
+[v1.6.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.6.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -190,3 +208,5 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#157]: https://github.com/fredrikekre/Runic.jl/issues/157
 [#169]: https://github.com/fredrikekre/Runic.jl/issues/169
 [#170]: https://github.com/fredrikekre/Runic.jl/issues/170
+[#186]: https://github.com/fredrikekre/Runic.jl/issues/186
+[#187]: https://github.com/fredrikekre/Runic.jl/issues/187
