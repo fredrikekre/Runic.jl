@@ -2514,8 +2514,17 @@ function indent_listlike(
     end
     any_kid_changed && push!(kids′, kid)
     accept_node!(ctx, kid)
-    # Keep any remaining kids
-    @assert close_idx == lastindex(kids)
+    # Keep remaining kids. In JuliaSyntax v1, do-block calls are represented as K"call"
+    # nodes with a trailing K"do" child after the closing paren, so close_idx may not be the
+    # last index.
+    if close_idx < lastindex(kids)
+        @assert kind(node) in KSet"call dotcall" && kind(kids[end]) === K"do"
+        if any_kid_changed
+            for i in (close_idx + 1):lastindex(kids)
+                push!(kids′, kids[i])
+            end
+        end
+    end
     # Reset stream
     seek(ctx.fmt_io, pos)
     # Make a new node and return

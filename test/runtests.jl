@@ -771,6 +771,9 @@ end
         # do-end
         @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
         @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
+        # do-end with multiline argument list
+        @test format_string("f(\n$(sp)a,\n$(sp)b,\n) do x\n$(sp)y\n$(sp)end") ==
+            "f(\n    a,\n    b,\n) do x\n    y\nend"
         # module-end, baremodule-end
         for b in ("", "bare")
             # Just a module
