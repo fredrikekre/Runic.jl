@@ -63,3 +63,6 @@ jobs:
           runic --version | grep -q "runic version"
           runic_help=$(runic --help) && printf '%s' "$runic_help" | grep -q "julia -m Runic"
           printf '1+1' | runic | grep -qx "1 + 1"
+          git_runic_help=$(git-runic --help) && printf '%s' "$git_runic_help" | grep -q "git runic \[OPTIONS\]"
+          git-runic --diffstat | grep -q "no modified files to format"
+          git runic --diffstat | grep -q "no modified files to format"

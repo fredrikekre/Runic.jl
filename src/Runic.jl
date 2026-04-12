@@ -695,6 +695,7 @@ end
 
 include("runestone.jl")
 include("main.jl")
+include("GitRunic.jl")
 
 # Precompile the entry points
 @assert precompile(main, (Vector{String},))

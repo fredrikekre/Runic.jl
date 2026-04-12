@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `--extensions=jl,md` to walk both). `--lines` is supported with block-granular
    semantics: any code block whose line range overlaps a `--lines` range is formatted
    in full. ([#197])
+ - The `git-runic` Git integration have been translated to Julia and is now available as a
+   Pkg app. Install it with:
+   ```
+   pkg> app add Runic
+   ```
+   This adds `git-runic` (and `runic`) to `~/.julia/bin`. With that directory in `PATH`,
+   `git runic` can be used directly from any git repository. ([#191])
 
 ## [v1.6.1] - 2026-04-16
 ### Fixed
@@ -203,6 +210,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.5.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.5.1
 [v1.6.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.6.0
 [v1.6.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.6.1
+[v1.7.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.7.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -236,7 +244,8 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#175]: https://github.com/fredrikekre/Runic.jl/issues/175
 [#186]: https://github.com/fredrikekre/Runic.jl/issues/186
 [#187]: https://github.com/fredrikekre/Runic.jl/issues/187
-[#193]: https://github.com/fredrikekre/Runic.jl/pull/193
-[#194]: https://github.com/fredrikekre/Runic.jl/pull/194
-[#196]: https://github.com/fredrikekre/Runic.jl/pull/196
-[#197]: https://github.com/fredrikekre/Runic.jl/pull/197
+[#191]: https://github.com/fredrikekre/Runic.jl/issues/191
+[#193]: https://github.com/fredrikekre/Runic.jl/issues/193
+[#194]: https://github.com/fredrikekre/Runic.jl/issues/194
+[#196]: https://github.com/fredrikekre/Runic.jl/issues/196
+[#197]: https://github.com/fredrikekre/Runic.jl/issues/197
