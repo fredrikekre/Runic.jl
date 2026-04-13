@@ -617,7 +617,9 @@ end
 function is_begin_block(node::Node, token = K"begin")
     @assert token in KSet"begin quote"
     return kind(node) === K"block" && length(verified_kids(node)) > 0 &&
-        kind(verified_kids(node)[1]) === token
+        let first = verified_kids(node)[1]
+        is_leaf(first) && kind(first) === token
+    end
 end
 
 function is_paren_block(node::Node)
