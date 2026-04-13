@@ -25,7 +25,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Install dependencies
         run: |
           julia --color=yes --project --code-coverage=@ -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
