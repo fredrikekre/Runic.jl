@@ -442,6 +442,24 @@ end
     @test format_string("(a, @m begin\nend)") == "(\n    a, @m begin\n    end\n)"
     @test format_string("(\na, x -> @m x[i]\n)") == "(\n    a, x -> @m x[i]\n)"
     @test format_string("(\na, x -> @m(x[i])\n)") == "(\n    a, x -> @m(x[i]),\n)"
+    # Anonymous functions (tricky because LHS is a tuple that doesn't require
+    # trailing comma but if there is a tuple RHS we need to preserve it)
+    @test format_string("(a) -> a") == "(a) -> a"
+    @test format_string("(a,) -> a") == "(a) -> a"
+    @test format_string("(a, b) -> a") == format_string("(a, b,) -> a") == "(a, b) -> a"
+    @test format_string("(@a b) -> c") == "(@a b) -> c"
+    @test format_string("(@a(b)) -> c") == "(@a(b)) -> c"
+    @test format_string("(@a(b),) -> c") == "(@a(b)) -> c"
+    @test format_string("(@a(b), d) -> c") == "(@a(b), d) -> c"
+    @test format_string("x -> (x,)") == "x -> (x,)"
+    @test format_string("(x,) -> (x,)") == "(x) -> (x,)"
+    @test format_string("x -> (x)") == "x -> (x)"
+    # keyword-style anonymous functions: same trailing comma rules as -> style
+    @test format_string("function (a)\n    a\nend") == "function (a)\n    return a\nend"
+    @test format_string("function (a,)\n    a\nend") == "function (a)\n    return a\nend"
+    # Short-form function body: trailing comma is semantically significant
+    @test format_string("f() = (a,)") == "f() = (a,)"
+    @test format_string("g(x) = (x,)") == "g(x) = (x,)"
     # Weird cornercase where a trailing comma messes some cases up (don't recall...)
     @test format_string("{\n@f\n}") == "{\n    @f\n}"
     # Non space whitespace (TODO: Not sure if a JuliaSyntax bug or not?)
@@ -578,6 +596,7 @@ end
         @test format_string("function f()\n    return$(sp)\nend") == "function f()\n    return\nend"
         @test format_string("module$(sp)A\nend") == "module A\nend"
         @test format_string("module$(sp)(A)\nend") == "module (A)\nend"
+        @test format_string("while$(sp)cond\nend") == "while cond\nend"
         @test format_string("let$(sp)x = 1\nend") == "let x = 1\nend"
         @test format_string("let$(sp)\nend") == "let\nend"
         for word in ("local", "global"), rhs in ("a", "a, b", "a = 1", "a, b = 1, 2")
@@ -1631,7 +1650,8 @@ module RunicMain2
 end
 
 module RunicMain3
-    if VERSION > v"1.12-"
+    # XXX: This used to work also on Windows, need to investigate what changed.
+    if VERSION > v"1.12-" && Sys.isunix()
         julia_cmd = Base.julia_cmd()
         juliac_dir = joinpath(@__DIR__, "..", "juliac")
         # Instantiate

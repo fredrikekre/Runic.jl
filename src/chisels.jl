@@ -419,7 +419,7 @@ end
 
 function make_node(node::Node, span′::Integer, tags = node.tags)
     @assert is_leaf(node)
-    return Node(head(node), span′, (), tags)
+    return Node(head(node), span′, nothing, tags)
 end
 
 # TODO: Remove?
@@ -540,7 +540,7 @@ end
 # Assignment node but exclude loop variable assignment
 function is_variable_assignment(ctx, node::Node)
     return !is_leaf(node) && is_assignment(node) &&
-        !(ctx.lineage_kinds[end] in KSet"for generator cartesian_iterator filter")
+        !(ctx.lineage_kinds[end] in KSet"for generator filter")
 end
 
 # K"global" and K"local" nodes can be either `global a, b, c` or `global a = 1`. This method
@@ -587,29 +587,24 @@ function is_infix_op_call(node::Node)
     return kind(node) in KSet"call dotcall" && JuliaSyntax.is_infix_op_call(node)
 end
 
-# Extract the operator of an infix op call node
-function infix_op_call_op(node::Node)
-    @assert is_infix_op_call(node) || kind(node) === K"||"
+# Extract the specific operator kind by reading the source bytes. In JuliaSyntax version 1
+# operators are just K"Identifier" so we can't look at the kind directly.
+# Note: ctx.fmt_io must be positioned at the start of node when this is called.
+function infix_op_call_op(ctx, node::Node)
     kids = verified_kids(node)
     first_operand_index = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
-    op_index = findnext(JuliaSyntax.is_operator, kids, first_operand_index + 1)::Int
-    return kids[op_index]
-end
-
-# Comparison leaf or a dotted comparison leaf (.<)
-function is_comparison_leaf(node::Node)
-    if is_leaf(node) && JuliaSyntax.is_prec_comparison(node)
-        return true
-    elseif !is_leaf(node) && kind(node) === K"." &&
-            meta_nargs(node) == 2 && is_comparison_leaf(verified_kids(node)[2])
-        return true
-    else
-        return false
+    op_index = findnext(!JuliaSyntax.is_whitespace, kids, first_operand_index + 1)::Int
+    off = position(ctx.fmt_io)
+    for i in 1:(op_index - 1)
+        off += span(kids[i])
     end
-end
-
-function is_operator_leaf(node::Node)
-    return is_leaf(node) && JuliaSyntax.is_operator(node)
+    pos = position(ctx.fmt_io)
+    seek(ctx.fmt_io, off)
+    bytes = read(ctx.fmt_io, span(kids[op_index]))
+    seek(ctx.fmt_io, pos)
+    str = String(bytes)
+    i = get(JuliaSyntax._kind_str_to_int, str, nothing)
+    return i === nothing ? K"Identifier" : JuliaSyntax.Kind(i)
 end
 
 function first_non_whitespace_kid(node::Node)
@@ -783,7 +778,7 @@ function is_string_macro(node)
     @assert !is_leaf(node)
     kids = verified_kids(node)
     return length(kids) >= 2 &&
-        kind(kids[1]) in KSet"StringMacroName CmdMacroName core_@cmd" &&
+        kind(kids[1]) in KSet"StringMacroName CmdMacroName" &&
         kind(kids[2]) in KSet"string cmdstring"
 end
 
@@ -796,7 +791,7 @@ function is_triple_string_macro(node)
     if kind(node) === K"macrocall"
         kids = verified_kids(node)
         if length(kids) >= 2 &&
-                kind(kids[1]) in KSet"StringMacroName CmdMacroName core_@cmd" &&
+                kind(kids[1]) in KSet"StringMacroName CmdMacroName" &&
                 is_triple_string(kids[2])
             return true
         end
@@ -806,7 +801,17 @@ end
 
 function is_triple_thing(node)
     return is_triple_string(node) || is_triple_string_macro(node) ||
-        (kind(node) === K"juxtapose" && is_triple_string_macro(verified_kids(node)[1]))
+        (kind(node) === K"juxtapose" && is_triple_string(verified_kids(node)[1]))
+end
+
+function is_any_op_call(node)
+    return JuliaSyntax.is_infix_op_call(node) || JuliaSyntax.is_prefix_op_call(node) ||
+        JuliaSyntax.is_postfix_op_call(node)
+end
+
+function is_short_form_function_definition(node)
+    return kind(node) === K"function" &&
+        JuliaSyntax.has_flags(node, JuliaSyntax.SHORT_FORM_FUNCTION_FLAG)
 end
 
 # Check whether the sequence of kinds in `kinds` exist in `kids` starting at index `i`.
@@ -826,7 +831,7 @@ end
 function macrocall_name(ctx, node)
     @assert kind(node) === K"macrocall"
     kids = verified_kids(node)
-    pred = x -> kind(x) in KSet"MacroName StringMacroName CmdMacroName core_@cmd"
+    pred = x -> kind(x) in KSet"MacroName StringMacroName CmdMacroName"
     mkind = kind(first_leaf_predicate(node, pred)::Node)
     if kmatch(kids, KSet"@ MacroName")
         p = position(ctx.fmt_io)
@@ -842,10 +847,6 @@ function macrocall_name(ctx, node)
             append!(bytes, "_str")
         end
         return String(bytes)
-    elseif kmatch(kids, KSet"core_@cmd")
-        bytes = read_bytes(ctx, kids[1])
-        @assert length(bytes) == 0
-        return "core_@cmd"
     else
         # Don't bother looking in more complex expressions, just return unknown
         return "<unknown macro>"
