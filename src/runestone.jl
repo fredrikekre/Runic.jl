@@ -1286,6 +1286,57 @@ function space_before_do(ctx::Context, node::Node)
     return nothing
 end
 
+function space_after_for(ctx::Context, node::Node)
+    @assert kind(node) === K"for" && !is_leaf(node)
+    p = position(ctx.fmt_io)
+    kids = verified_kids(node)
+    for_leaf = kids[1]
+    @assert kind(for_leaf) === K"for" && is_leaf(for_leaf)
+    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    if kind(kids[2]) in KSet"Whitespace NewlineWs"
+        # In some tree configurations the whitespace after `for` is already a
+        # direct child of the K"for" node (e.g. after another pass has
+        # restructured it). For a plain K"Whitespace" normalise the span if
+        # needed; for K"NewlineWs" leave it alone.
+        ws_kid = kids[2]
+        if kind(ws_kid) === K"NewlineWs" || span(ws_kid) == 1
+            seek(ctx.fmt_io, p)
+            return nothing
+        end
+        accept_node!(ctx, for_leaf)
+        replace_bytes!(ctx, " ", span(ws_kid))
+        kids′ = copy(kids)
+        kids′[2] = ws
+        seek(ctx.fmt_io, p)
+        return make_node(node, kids′)
+    end
+    # In JuliaSyntax v1 the space after `for` is the first child of the first
+    # in/∈ subnode inside the iteration node (kids[2]).
+    iter_idx = 2
+    iter_node = kids[iter_idx]
+    @assert kind(iter_node) === K"iteration"
+    iter_kids = verified_kids(iter_node)
+    first_in = iter_kids[1]
+    in_kids = verified_kids(first_in)
+    ws_kid = in_kids[1]
+    if kind(ws_kid) !== K"Whitespace" || span(ws_kid) == 1
+        seek(ctx.fmt_io, p)
+        return nothing
+    end
+    accept_node!(ctx, for_leaf)
+    replace_bytes!(ctx, " ", span(ws_kid))
+    in_kids′ = copy(in_kids)
+    in_kids′[1] = ws
+    first_in′ = make_node(first_in, in_kids′)
+    iter_kids′ = copy(iter_kids)
+    iter_kids′[1] = first_in′
+    iter_node′ = make_node(iter_node, iter_kids′)
+    kids′ = copy(kids)
+    kids′[iter_idx] = iter_node′
+    seek(ctx.fmt_io, p)
+    return make_node(node, kids′)
+end
+
 function space_after_let(ctx, node)
     @assert kind(node) === K"let" && !is_leaf(node)
     p = position(ctx.fmt_io)
@@ -1329,6 +1380,9 @@ end
 # global, const
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
+    if kind(node) === K"for"
+        return space_after_for(ctx, node)
+    end
     if kind(node) === K"let"
         return space_after_let(ctx, node)
     end

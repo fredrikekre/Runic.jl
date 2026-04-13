@@ -601,6 +601,8 @@ end
         @test format_string("module$(sp)A\nend") == "module A\nend"
         @test format_string("module$(sp)(A)\nend") == "module (A)\nend"
         @test format_string("while$(sp)cond\nend") == "while cond\nend"
+        @test format_string("for$(sp)i in I\nend") == "for i in I\nend"
+        @test format_string("for$(sp)i in I, j in J\nend") == "for i in I, j in J\nend"
         @test format_string("let$(sp)x = 1\nend") == "let x = 1\nend"
         @test format_string("let$(sp)\nend") == "let\nend"
         for word in ("local", "global"), rhs in ("a", "a, b", "a = 1", "a, b = 1, 2")
