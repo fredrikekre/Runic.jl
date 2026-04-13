@@ -453,6 +453,10 @@ end
     @test format_string("(@a(b), d) -> c") == "(@a(b), d) -> c"
     @test format_string("x -> (x,)") == "x -> (x,)"
     @test format_string("(x,) -> (x,)") == "(x) -> (x,)"
+    # Trailing comma is semantically significant when the single item is a tuple pattern:
+    # `((a, b),) -> a` is a 1-arg destructuring lambda; removing the comma gives a 2-arg lambda.
+    @test format_string("((a, b),) -> a") == "((a, b),) -> a"
+    @test format_string("((a, b, c),) -> a") == "((a, b, c),) -> a"
     @test format_string("x -> (x)") == "x -> (x)"
     # keyword-style anonymous functions: same trailing comma rules as -> style
     @test format_string("function (a)\n    a\nend") == "function (a)\n    return a\nend"
@@ -771,6 +775,9 @@ end
         # do-end
         @test format_string("open() do\n$(sp)a\n$(sp)end") == "open() do\n    a\nend"
         @test format_string("open() do io\n$(sp)a\n$(sp)end") == "open() do io\n    a\nend"
+        # do-end with multiline argument list
+        @test format_string("f(\n$(sp)a,\n$(sp)b,\n) do x\n$(sp)y\n$(sp)end") ==
+            "f(\n    a,\n    b,\n) do x\n    y\nend"
         # module-end, baremodule-end
         for b in ("", "bare")
             # Just a module

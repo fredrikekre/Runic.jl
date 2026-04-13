@@ -340,9 +340,14 @@ function spaces_in_listlike(ctx::Context, node::Node)
     allow_trailing_semi = false
     allow_trailing_comma = multiline
     if kind(node) in KSet"call dotcall macrocall" ||
-            (kind(node) === K"tuple" && ctx.lineage_kinds[end] === K"->" && ctx.next_sibling !== nothing)
+            (
+            kind(node) === K"tuple" && ctx.lineage_kinds[end] === K"->" && ctx.next_sibling !== nothing &&
+                !(n_items == 1 && kind(kids[first_item_idx::Int]) === K"tuple")
+        )
         # For calls and anonymous function argument tuples, trailing commas are never required
         # (and only allowed if multiline, same as regular function definitions).
+        # Exception: `((a, b),) -> body` — when the single item is itself a tuple the outer
+        # trailing comma must be kept, otherwise `((a, b))` is parsed as `(a, b)` (2 args).
         require_trailing_comma = false
     elseif n_items > 0 && kind(kids[last_item_idx::Int]) === K"generator"
         # https://github.com/fredrikekre/Runic.jl/issues/151
@@ -2514,8 +2519,17 @@ function indent_listlike(
     end
     any_kid_changed && push!(kids′, kid)
     accept_node!(ctx, kid)
-    # Keep any remaining kids
-    @assert close_idx == lastindex(kids)
+    # Keep remaining kids. In JuliaSyntax v1, do-block calls are represented as K"call"
+    # nodes with a trailing K"do" child after the closing paren, so close_idx may not be the
+    # last index.
+    if close_idx < lastindex(kids)
+        @assert kind(node) in KSet"call dotcall" && kind(kids[end]) === K"do"
+        if any_kid_changed
+            for i in (close_idx + 1):lastindex(kids)
+                push!(kids′, kids[i])
+            end
+        end
+    end
     # Reset stream
     seek(ctx.fmt_io, pos)
     # Make a new node and return
