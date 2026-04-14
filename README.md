@@ -161,8 +161,10 @@ Example configuration for some editors are given in the following sections.
 
 > [!NOTE]
 > These editor configurations assume you have installed Runic as an app (as suggested in the
-> [Installation](#installation) section above). If you have installed Runic elsewhere you
-> may need to adjust the configuration.
+> [Installation](#installation) section above) and that the `runic` binary is available in
+> the PATH environment variable that your editor is seeing. If the editor doesn't find the
+> `runic` command you can replace `runic` with the full path to the app instead (e.g.
+> `/home/sauron/.julia/bin/runic`).
 
  - [Neovim](#neovim)
  - [VS Code](#vs-code)
