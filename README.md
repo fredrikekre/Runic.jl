@@ -20,8 +20,7 @@ that is appreciated by most Go programmers, see for example the following
 
 ### Table of contents
 
- - [Quick start](#quick-start)
-    - [Legacy installation](#legacy-installation)
+ - [Installation](#installation)
  - [Usage](#usage)
     - [CLI](#cli)
     - [Editor integration](#editor-integration)
@@ -35,15 +34,16 @@ that is appreciated by most Go programmers, see for example the following
  - [Version policy](#version-policy)
  - [Formatting specification](#formatting-specification)
 
-## Quick start
+## Installation
 
-In Julia v1.12 and later, Runic should be installed as a [Pkg app](https://pkgdocs.julialang.org/dev/apps/):
+In Julia v1.12 and later, Runic can be installed as a
+[Pkg app](https://pkgdocs.julialang.org/dev/apps/):
 
 ```sh
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'
 ```
 
-Assuming `~/.julia/bin` is in your `PATH` you can now invoke `runic`, e.g.:
+Assuming `~/.julia/bin` is in your `PATH` you can now invoke `runic` from your shell, e.g.:
 
 ```sh
 runic --version # Show version info
@@ -56,67 +56,24 @@ runic --help    # Show documentation
 runic --inplace .
 ```
 
-### Legacy installation
+<details>
+<summary>Legacy installation instructions</summary>
 
-> [!TIP]
-> Copy-pasteable setup commands for the impatient:
-> ```sh
-> # Install Runic
-> julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
-> # Install the runic shell script
-> curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
-> chmod +x ~/.local/bin/runic
-> # Install the git-runic shell script
-> curl -fsSL -o ~/.local/bin/git-runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
-> chmod +x ~/.local/bin/git-runic
-> ```
-
-In Julia v1.11 and earlier (or if you don't want to use a Pkg app), Runic can also be installed manually with Julia's package manager.
+The following copy-pasteable snippet installs Runic (in a `@runic` shared environment) and
+the `runic` and `git-runic` wrappers (in `.local/bin`).
 
 ```sh
-julia --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
-```
-
-For CLI usage and editor integration (see [Usage](#usage)) it is recommended to install
-Runic in a separate project such as e.g. the shared project `@runic`:
-
-```sh
+# Install Runic
 julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'
-```
-
-The main interface to Runic is the command line interface (CLI) through the `main` function:
-
-```sh
-julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))' -- <args>
-```
-
-To simplify the invocation of the CLI it is recommended to install the
-[`runic`](https://github.com/fredrikekre/Runic.jl/blob/master/bin/runic) shell script into a
-directory in your `PATH`. This can be done with the following commands (replace the two
-occurrences of `~/.local/bin` if needed):
-
-```sh
-# Download the script into ~/.local/bin
+# Install the runic shell script
 curl -fsSL -o ~/.local/bin/runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/runic
-# Make the script executable
 chmod +x ~/.local/bin/runic
-# Verify the installation
-runic --version
+# Install the git-runic shell script
+curl -fsSL -o ~/.local/bin/git-runic https://raw.githubusercontent.com/fredrikekre/Runic.jl/refs/heads/master/bin/git-runic
+chmod +x ~/.local/bin/git-runic
 ```
 
-> [!NOTE]
-> Alternatively you can can add a shell alias to your shell startup file. The drawback of
-> this approach is that runic can only be invoked from the shell and not by other programs.
-> ```sh
-> alias runic="julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))' --"
-> # alias runic="julia --project=@runic --startup-file=no -m Runic"
-> ```
-
-> [!NOTE]
-> In Julia 1.12 and later the `main` function can be invoked with the `-m` flag, i.e.:
-> ```sh
-> julia --project=@runic --startup-file=no -m Runic <args>
-> ```
+</details>
 
 ## Usage
 
@@ -202,6 +159,11 @@ In addition to the CLI there is also the two function `Runic.format_file` and
 Most code editors have code formatting capabilities and many can be configured to use Runic.
 Example configuration for some editors are given in the following sections.
 
+> [!NOTE]
+> These editor configurations assume you have installed Runic as an app (as suggested in the
+> [Installation](#installation) section above). If you have installed Runic elsewhere you
+> may need to adjust the configuration.
+
  - [Neovim](#neovim)
  - [VS Code](#vs-code)
  - [Emacs](#emacs)
@@ -219,16 +181,13 @@ Runic can be used as a formatter in [Neovim](https://neovim.io/) using
 repository for installation and setup instructions.
 
 Runic is not (yet) available directly in conform so the following configuration needs
-to be passed to the setup function. This assumes Runic is installed in the `@runic` shared
-project as suggested in the [Installation](#installation) section above. Adjust the
-`--project` flag if you installed Runic somewhere else.
+to be passed to the setup function.
 
 ```lua
 require("conform").setup({
     formatters = {
         runic = {
-            command = "julia",
-            args = {"--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"},
+            command = "runic",
         },
     },
     formatters_by_ft = {
@@ -254,14 +213,12 @@ Runic can be used as a formatter in [VS Code](https://code.visualstudio.com/) us
 extension [Custom Local Formatters](https://marketplace.visualstudio.com/items?itemName=jkillian.custom-local-formatters&ssr=false#overview).
 
 After installing the extension you can configure Runic as a local formatter by adding the
-following entry to your `settings.json`. This assumes Runic is installed in the `@runic`
-shared project as suggested in the [Installation](#installation) section above. Adjust the
-`--project` flag if you installed Runic somewhere else.
+following entry to your `settings.json`.
 
 ```json
 "customLocalFormatters.formatters": [
     {
-      "command": "julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))'",
+      "command": "runic",
       "languages": ["julia"]
     }
 ]
@@ -271,13 +228,6 @@ Using the "Format Document" VS Code command will now format the file using Runic
 the first time you execute the command you will be prompted to select a formatter since the
 Julia language extension also comes with a formatter.
 
-> [!NOTE]
-> If you've installed Julia with [juliaup](https://github.com/JuliaLang/juliaup), the
-> `julia` executable might not be available in `PATH` within VS Code, causing formatting to
-> fail. In that case, you can find the full path of the `julia` executable using `which
-> julia` (typically something like `${HOME}/.juliaup/bin/julia` with default juliaup
-> settings), and then replace `julia` in the command in `settings.json` with the full path.
-
 #### Emacs
 
 Runic can be used as a formatter in [Emacs](https://www.gnu.org/software/emacs/) using [apheleia](https://github.com/radian-software/apheleia).
@@ -285,12 +235,9 @@ Refer to the apheleia repository for installation and setup instruction.
 
 Runic is not (yet) available directly in apheleia so the
 following configuration needs to be added to your `.emacs`.
-This assumes Runic is installed in the `@runic` shared project as suggested in the
-[Installation](#installation) section above. Adjust the `--project` flag if you installed
-Runic somewhere else.
 
 ```
-(push `(runic . ("julia" "--project=@runic" "--startup-file=no" "-e" "using Runic; exit(Runic.main(ARGS))" "--")) apheleia-formatters)
+(push `(runic . ("runic")) apheleia-formatters)
 (push '(julia-mode . runic) apheleia-mode-alist)
 ```
 
@@ -298,31 +245,26 @@ Runic somewhere else.
 
 Runic can be used as a formatter in [Helix](https://helix-editor.com/). Configure Helix's
 `:format` command to use Runic for julia code by adding the following to the
-`languages.toml` configuration file. This assumes Runic is installed in the `@runic` shared
-project as suggested in the [Installation](#installation) section above. Adjust the
-`--project` flag if you installed Runic somewhere else.
+`languages.toml` configuration file.
 
 ```
 [[language]]
 name = "julia"
 auto-format = false
-formatter = { command = "julia" , args = ["--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"] }
+formatter = { command = "runic" }
 ```
 
 #### Zed
 
-Runic can be used as a formatter in [Zed](https://zed.dev/). You can configure Runic as a 
-local formatter by adding the following entry to your `settings.json`. This assumes Runic 
-is installed in the `@runic` shared project as suggested in the [Installation](#installation) 
-section above. Adjust the `--project` flag if you installed Runic somewhere else.
+Runic can be used as a formatter in [Zed](https://zed.dev/). You can configure Runic as a
+local formatter by adding the following entry to your `settings.json`.
 
 ```json
 "languages": {
   "Julia": {
     "formatter": {
       "external": {
-        "command": "julia",
-        "arguments": ["--project=@runic", "--startup-file=no", "-e", "using Runic; exit(Runic.main(ARGS))"]
+        "command": "runic",
       }
     }
   }
@@ -408,7 +350,7 @@ any of the input files are incorrectly formatted. As an example, the following i
 can be used:
 
 ```sh
-git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia --project=@runic --startup-file=no -m Runic --check --diff
+git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty runic --check --diff
 ```
 
 This will run Runic's check mode (`--check`) on all `.jl` files in the repository and print
@@ -539,7 +481,7 @@ exec 1>&2
 # Run Runic on added and modified files
 git diff-index -z --name-only --diff-filter=AM master | \
     grep -z '\.jl$' | \
-    xargs -0 --no-run-if-empty julia --project=@runic --startup-file=no -m Runic --check --diff
+    xargs -0 --no-run-if-empty runic --check --diff
 ```
 
 ## Version policy
