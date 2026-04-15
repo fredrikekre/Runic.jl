@@ -44,3 +44,22 @@ jobs:
           disable_search: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  apps:
+    name: Apps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Add ~/.julia/bin to PATH
+        run: echo "$HOME/.julia/bin" >> $GITHUB_PATH
+      - name: Install apps
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.instantiate(); Pkg.Apps.develop(path=".")'
+      - name: Smoketest
+        run: |
+          runic --version | grep -q "runic version"
+          runic_help=$(runic --help) && printf '%s' "$runic_help" | grep -q "julia -m Runic"
+          printf '1+1' | runic | grep -qx "1 + 1"
