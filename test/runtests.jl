@@ -684,6 +684,17 @@ end
         @test format_string("function f end") == "function f end"
         @test_broken format_string("function f\nend") == "function f\nend" # TODO
         @test format_string("function ∉ end") == "function ∉ end"
+        # `function @main(args)` syntax (Julia 1.12+)
+        @test format_string("function @main(ARGS)\n$(sp)return 0\n$(sp)end") ==
+            "function @main(ARGS)\n    return 0\nend"
+        @test format_string("function @main(ARGS)\n$(sp)x\n$(sp)y\n$(sp)end") ==
+            "function @main(ARGS)\n    x\n    return y\nend"
+        @test format_string("function @main(ARGS)\n$(sp)end") ==
+            "function @main(ARGS)\nend"
+        @test format_string("function (@main)(ARGS)\n$(sp)return 0\n$(sp)end") ==
+            "function (@main)(ARGS)\n    return 0\nend"
+        @test format_string("function (@main)(ARGS)\n$(sp)end") ==
+            "function (@main)(ARGS)\nend"
         # macro-end
         @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
             "macro f()\n    return x\nend"
