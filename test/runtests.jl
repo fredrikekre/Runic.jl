@@ -695,6 +695,9 @@ end
             "function (@main)(ARGS)\n    return 0\nend"
         @test format_string("function (@main)(ARGS)\n$(sp)end") ==
             "function (@main)(ARGS)\nend"
+        # https://github.com/fredrikekre/Runic.jl/issues/171
+        @test format_string("function f()\n$(sp):T\n$(sp)end") ==
+            "function f()\n    return :T\nend"
         # macro-end
         @test format_string("macro f()\n$(sp)x\n$(sp)end") ==
             "macro f()\n    return x\nend"
