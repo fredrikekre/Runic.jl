@@ -3310,6 +3310,352 @@ function indent_multiline_strings(ctx::Context, node::Node)
     return any_changes ? make_node(node, kids′) : nothing
 end
 
+const re_fence_open = r"^(\h*)(`{3,})\h*([A-Za-z0-9_-]*)"
+
+is_julia_lang(lang::AbstractString) = lang in ("julia", "julia-repl", "jldoctest")
+
+function format_julia_block(block_lines::Vector{String})
+    isempty(block_lines) && return block_lines
+    code = join(block_lines)
+    # When formatting blocks we adhere to "if it parses we format it" since sometimes blocks
+    # are tagged as Julia code but may be pseudo-code for example.
+    formatted = try
+        format_string(code)
+    catch e
+        e isa JuliaSyntax.ParseError || rethrow()
+        # @error "Could not parse julia block" code e
+        return block_lines
+    end
+    return collect(eachline(IOBuffer(formatted); keep = true))
+end
+
+const JULIA_REPL_PROMPT = "julia> "
+
+# Strip the prompt, leading whitespace and output. Format the input lines and re-insert the
+# prompt and leading whitespace.
+function format_repl_block(block_lines::Vector{String})
+    nprompt = length(JULIA_REPL_PROMPT)
+    continuation = " "^nprompt
+    result = String[]
+    i = 1
+    while i <= length(block_lines)
+        line = block_lines[i]
+        if startswith(line, JULIA_REPL_PROMPT)
+            # Collect the full input chunk: strip the prompt prefix and continuations
+            input_lines = String[chop(line; head = nprompt, tail = 0)]
+            j = i + 1
+            while j <= length(block_lines)
+                next_line = block_lines[j]
+                nspaces = 0
+                for c in next_line
+                    c == ' ' ? (nspaces += 1) : break
+                end
+                if isempty(strip(next_line))
+                    push!(input_lines, "\n")
+                    j += 1
+                elseif nspaces >= nprompt
+                    push!(input_lines, chop(next_line; head = nprompt, tail = 0))
+                    j += 1
+                else
+                    break
+                end
+            end
+            code = join(input_lines)
+            # Same as `format_julia_block`: only format if the block parses; fall back
+            # to passing the original prompt/continuation lines through unchanged.
+            formatted = try
+                format_string(code)
+            catch e
+                e isa JuliaSyntax.ParseError || rethrow()
+                # @error "Could not parse julia block" code e
+                for k in i:(j - 1)
+                    push!(result, block_lines[k])
+                end
+                i = j
+                continue
+            end
+            fmt_lines = eachline(IOBuffer(formatted); keep = true)
+            first = true
+            for fl in fmt_lines
+                if isempty(strip(fl))
+                    push!(result, "\n")
+                elseif first
+                    push!(result, JULIA_REPL_PROMPT * fl)
+                    first = false
+                else
+                    push!(result, continuation * fl)
+                end
+            end
+            i = j
+        else
+            push!(result, line)
+            i += 1
+        end
+    end
+    return result
+end
+
+# Dispatch to REPL formatter or regular formatter based on the code blocks language
+function format_code_block(block_lines::Vector{String}, lang::String)
+    if lang == "julia-repl"
+        return format_repl_block(block_lines)
+    elseif lang == "jldoctest"
+        if any(l -> startswith(l, JULIA_REPL_PROMPT), block_lines)
+            return format_repl_block(block_lines)
+        else
+            return format_julia_block(block_lines)
+        end
+    else
+        return format_julia_block(block_lines)
+    end
+end
+
+# Identify julia source code blocks (``` blocks four-space-indent blocks),
+# collect the lines, format the text and re-insert
+function format_markdown(s::String)
+    lines = collect(eachline(IOBuffer(s); keep = true))
+    isempty(lines) && return s
+    # Indented code blocks (CommonMark "indented" style) are handled like implicit
+    # fences: opener is blank-line-or-start-of-docstring followed by a non-blank line
+    # with >= 4 leading spaces; content = consecutive non-blank 4-space-indented lines;
+    # closer = blank line or end-of-docstring. Same strip / format / re-indent pipeline
+    # as ```julia fences, reused via format_julia_block.
+    base_indent = "    "
+    nbase_indent = ncodeunits(base_indent)
+    result = String[]
+    i = 1
+    # True at start-of-content and just after any blank line. Indented code blocks can
+    # only begin at block boundaries (CommonMark rule: must be preceded by a blank line).
+    at_boundary = true
+    while i <= length(lines)
+        line = lines[i]
+        m = match(re_fence_open, line)
+        if m !== nothing
+            indent = String(m.captures[1]::AbstractString)
+            ticks = String(m.captures[2]::AbstractString)
+            lang = String(m.captures[3]::AbstractString)
+            nticks = length(ticks)
+            re_close = Regex("^$(escape_string(indent))`{$(nticks)}\\h*\$")
+            close_i = findnext(l -> occursin(re_close, l), lines, i + 1)
+            if close_i === nothing
+                # Unclosed fence: everything from here to end of string is inside this
+                # (unclosed) block, so there are no further formattable fences.
+                append!(result, @view lines[i:end])
+                break
+            end
+            block_lines = lines[(i + 1):(close_i - 1)]
+            # Non-Julia fence: copy through unchanged
+            if !is_julia_lang(lang)
+                append!(result, @view lines[i:close_i])
+                i = close_i + 1
+                at_boundary = false
+                continue
+            end
+            nindent = ncodeunits(indent)
+            # Require non-empty block lines to have >= nindent leading spaces (empty lines
+            # are exempt). Strip nindent spaces before formatting so format_string sees
+            # toplevel code, then restore using the original count after formatting
+            stripped_block = String[]
+            valid_indent = true
+            for l in block_lines
+                if isempty(strip(l))
+                    push!(stripped_block, l)
+                elseif nindent == 0 || startswith(l, indent)
+                    push!(stripped_block, nindent == 0 ? l : l[(nindent + 1):end])
+                else
+                    valid_indent = false
+                    break
+                end
+            end
+            if !valid_indent
+                append!(result, @view lines[i:close_i])
+                i = close_i + 1
+                at_boundary = false
+                continue
+            end
+            formatted_stripped = format_code_block(stripped_block, lang)
+            formatted_block = nindent == 0 ? formatted_stripped :
+                [isempty(strip(l)) ? l : indent * l for l in formatted_stripped]
+            push!(result, line)
+            append!(result, formatted_block)
+            push!(result, lines[close_i])
+            i = close_i + 1
+            at_boundary = false
+        elseif at_boundary && startswith(line, base_indent) && !all(isspace, line)
+            # Indented code block. Blank lines inside the block are allowed (same as
+            # inside ```-fences): skip them during the scan and only confirm `end_idx`
+            # when another indented non-blank line is found. Terminator = an unindented
+            # non-blank line or EOF. Any trailing blank lines after the last indented
+            # line are *not* included in the block.
+            end_idx = i
+            k = i
+            while k + 1 <= length(lines)
+                next_line = lines[k + 1]
+                if all(isspace, next_line)
+                    k += 1
+                elseif startswith(next_line, base_indent)
+                    k += 1
+                    end_idx = k
+                else
+                    break
+                end
+            end
+            # Strip the indent; normalize blank lines to "\n" (explicit trailing spaces
+            # on blank lines are not meaningful and chop would swallow the '\n').
+            stripped = String[
+                isempty(strip(l)) ? "\n" : chop(l; head = nbase_indent, tail = 0)
+                    for l in lines[i:end_idx]
+            ]
+            formatted = format_julia_block(stripped)
+            if formatted == stripped
+                # parse failed or already idempotent — pass through unchanged
+                append!(result, @view lines[i:end_idx])
+            else
+                for l in formatted
+                    push!(result, isempty(strip(l)) ? l : base_indent * l)
+                end
+            end
+            i = end_idx + 1
+            at_boundary = false
+        else
+            push!(result, line)
+            at_boundary = all(isspace, line)
+            i += 1
+        end
+    end
+    return join(result)
+end
+
+# Extract the string content from a triple string node, pass to format_markdown,
+# re-interpret lines as a triple string node.
+function format_docstring_string(ctx::Context, node::Node)
+    @assert is_triple_string(node)
+    triplekind = K"\"\"\""
+
+    pos = position(ctx.fmt_io)
+    str_kids = verified_kids(node)
+    open_idx = findfirst(x -> kind(x) === triplekind, str_kids)::Int
+    close_idx = findnext(x -> kind(x) === triplekind, str_kids, open_idx + 1)::Int
+
+    # Bail out if the docstring contains anything other than plain string/whitespace
+    # between the triple-quote delimiters (e.g. $-interpolation introduces K"$" and
+    # K"Identifier" / K"parens" kids).
+    # TODO: Support interpolation by collecting bytes from all non-indent kids (skip
+    #       K"Whitespace" + leading trivia K"String" only), formatting as text, then
+    #       re-parsing the formatted output as `"""..."""` and grafting the resulting kids.
+    for i in (open_idx + 1):(close_idx - 1)
+        k = kind(str_kids[i])
+        k === K"String" || k === K"Whitespace" || return nothing
+    end
+
+    # Collect indent whitespace (first K"Whitespace" kid) and content bytes
+    indent_ws_bytes = UInt8[]
+    content_bytes = UInt8[]
+    for kid in str_kids
+        # The `\n` immediately after the opening `"""` is parsed as a trivia-flagged
+        # `K"String"` kid (rather than as content) when content starts on the next line.
+        # Skip it here — that leading newline is part of the delimiter convention, not
+        # the docstring content.
+        if kind(kid) === K"String" && !JuliaSyntax.is_trivia(kid)
+            append!(content_bytes, read_bytes(ctx, kid))
+        elseif kind(kid) === K"Whitespace" && isempty(indent_ws_bytes)
+            # All K"Whitespace" kids of a triple-quoted string contain the same bytes —
+            # the common leading indent stripped by the parser (same size on every
+            # non-empty line). Record the first one we see and skip the rest. A zero-
+            # length `K"Whitespace"` kid is impossible (the parser never emits zero-span
+            # tokens), so `isempty(indent_ws_bytes)` is a reliable "have we recorded
+            # the indent yet?" flag.
+            append!(indent_ws_bytes, read_bytes(ctx, kid))
+        end
+        accept_node!(ctx, kid)
+    end
+    @assert position(ctx.fmt_io) == pos + span(node)
+
+    # Pass the extracted string to the markdown formatter
+    content = String(content_bytes)
+    formatted = format_markdown(content)
+    seek(ctx.fmt_io, pos)
+    content == formatted && return nothing
+
+    # The opening """ may be followed by a trivia K"String" "\n" (when content starts on
+    # a new line) or directly by non-trivia content (when the first line already has
+    # content, e.g. `"""Summary.\n...\n"""`).
+    has_leading_nl = open_idx + 1 < close_idx &&
+        kind(str_kids[open_idx + 1]) === K"String" &&
+        JuliaSyntax.has_flags(str_kids[open_idx + 1], JuliaSyntax.TRIVIA_FLAG)
+    prefix_count = has_leading_nl ? 2 : 1
+    open_idx + prefix_count <= close_idx || return nothing
+
+    # Accept the fixed prefix: opening """ and optional trivia \n
+    for k in 0:(prefix_count - 1)
+        accept_node!(ctx, str_kids[open_idx + k])
+    end
+
+    # Span of the middle section: everything between the accepted prefix and close_idx
+    middle_span = sum(span(str_kids[i]) for i in (open_idx + prefix_count):(close_idx - 1); init = 0)
+
+    # Split up the formatted strings and insert the trivia newlines and leading whitespace
+    new_middle_bytes = UInt8[]
+    new_middle_kids = Node[]
+    ws_head = JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG)
+    str_head = JuliaSyntax.SyntaxHead(K"String", 0)
+    for line in eachline(IOBuffer(formatted); keep = true)
+        line_bytes = codeunits(line)
+        if length(line_bytes) == 1 && line_bytes[1] == UInt8('\n')
+            # Empty line should note have leading whitespace trivia
+            push!(new_middle_bytes, UInt8('\n'))
+            push!(new_middle_kids, Node(str_head, 1))
+        else
+            # Include the indent whitespace from the original source
+            if !isempty(indent_ws_bytes)
+                append!(new_middle_bytes, indent_ws_bytes)
+                push!(new_middle_kids, Node(ws_head, length(indent_ws_bytes)))
+            end
+            append!(new_middle_bytes, line_bytes)
+            push!(new_middle_kids, Node(str_head, length(line_bytes)))
+        end
+    end
+    # For an indented triple string, the parser also emits a K"Whitespace" between the
+    # final content line and the closing `"""` — representing the indent on the closing
+    # delimiter's own line. Append it so the reconstructed structure matches.
+    if !isempty(indent_ws_bytes)
+        append!(new_middle_bytes, indent_ws_bytes)
+        push!(new_middle_kids, Node(ws_head, length(indent_ws_bytes)))
+    end
+
+    # Insert the formatted bytes into the stream
+    replace_bytes!(ctx, new_middle_bytes, middle_span)
+    seek(ctx.fmt_io, pos)
+
+    # Well-formed triple-quoted strings always have the closing """ as the last kid —
+    # `"""` is balanced, and no trailing kids can follow it in a valid parse.
+    @assert close_idx == length(str_kids)
+    new_str_kids = Node[str_kids[i] for i in open_idx:(open_idx + prefix_count - 1)]
+    append!(new_str_kids, new_middle_kids)
+    push!(new_str_kids, str_kids[close_idx])
+    return make_node(node, new_str_kids)
+end
+
+# Find string literals that are docstrings (K"doc" or @doc). We only consider triple-strings
+# even though regular "..." strings can also be docstrings (but they rarely, if ever,
+# contain julia code blocks).
+function format_docstring(ctx::Context, node::Node)
+    ctx.docstrings || return nothing
+    # Only triple-quoted K"string" nodes (not cmdstring) can be docstrings
+    kind(node) === K"string" || return nothing
+    JuliaSyntax.has_flags(node, JuliaSyntax.TRIPLE_STRING_FLAG) || return nothing
+    # Must be a direct child of a doc-string context
+    isempty(ctx.lineage_kinds) && return nothing
+    parent_kind = ctx.lineage_kinds[end]
+    if parent_kind === K"doc"
+        return format_docstring_string(ctx, node)
+    elseif parent_kind === K"macrocall" && !isempty(ctx.lineage_macros) &&
+            ctx.lineage_macros[end] == "@doc"
+        return format_docstring_string(ctx, node)
+    end
+    return nothing
+end
+
 # Pattern matching for "bad" semicolons:
 #  - `\s*;\n` -> `\n`
 #  - `\s*;\s*#\n` -> `\s* \s*#\n`
