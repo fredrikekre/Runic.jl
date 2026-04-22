@@ -665,13 +665,30 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
     if !inplace && (outputfile == inputfile || (isfile(outputfile) && samefile(inputfile, outputfile)))
         error("input and output must not be the same when `inplace = false`")
     end
-    # Format it
+    # Format it!
+    # Dispatch on extension: `.md` goes through the Markdown formatter.
+    if endswith(inputfile, ".md")
+        format_markdown_file(str, outputfile; inplace = inplace)
+        return
+    end
     ctx = Context(str; filename = inputfile, docstrings = docstrings)
     format_tree!(ctx)
     # Write the output but skip if it text didn't change
     changed = ctx.fmt_tree !== nothing
     if changed || !inplace
         write(outputfile, take!(ctx.fmt_io))
+    end
+    return
+end
+
+# Internal: Markdown branch of `format_file`. Takes the already-read source string and
+# an output path — argument handling (normalization, samefile check) lives in
+# `format_file`. Not part of the public API; call `format_file` instead, which
+# dispatches on extension.
+function format_markdown_file(str::AbstractString, outputfile::AbstractString; inplace::Bool = false)
+    formatted = format_markdown(String(str))
+    if formatted != str || !inplace
+        write(outputfile, formatted)
     end
     return
 end

@@ -577,6 +577,108 @@ function maintests(f::R) where {R}
         @test isempty(fd2)
     end
 
+    # runic Markdown stdin dispatch via --stdin-filename
+    let src_md = "```julia\nx=1\n```\n",
+            expected_md = "```julia\nx = 1\n```\n"
+        # Default (no stdin-filename) treats input as Julia — this one would ParseError
+        # since the source contains a code fence. Confirm with a simple source instead.
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md"], src_md)
+        @test rc == 0
+        @test fd1 == expected_md
+        @test isempty(fd2)
+        # Without .md extension, falls back to Julia (backticks parse as Cmd literal, no change)
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.jl"], src_md)
+        @test rc == 0
+        @test fd1 == src_md
+    end
+
+    # runic --extensions for directory walking
+    mktempdir() do dir
+        write(joinpath(dir, "a.jl"), "x=1\n")
+        write(joinpath(dir, "b.md"), "```julia\nx=1\n```\n")
+
+        # Default (only .jl): check finds the .jl file unformatted, ignores .md
+        rc, fd1, fd2 = runic(["--check", dir])
+        @test rc == 1  # .jl needs formatting
+
+        # Format .jl, leave .md alone
+        rc, fd1, fd2 = runic(["-i", dir])
+        @test rc == 0
+        @test read(joinpath(dir, "a.jl"), String) == "x = 1\n"
+        @test read(joinpath(dir, "b.md"), String) == "```julia\nx=1\n```\n"  # untouched
+
+        # Restore mangled input for the next leg
+        write(joinpath(dir, "a.jl"), "x=1\n")
+
+        # Extension filter for .md only
+        rc, fd1, fd2 = runic(["--extensions=md", "-i", dir])
+        @test rc == 0
+        @test read(joinpath(dir, "a.jl"), String) == "x=1\n"  # untouched
+        @test read(joinpath(dir, "b.md"), String) == "```julia\nx = 1\n```\n"
+
+        # Both extensions
+        write(joinpath(dir, "b.md"), "```julia\nx=1\n```\n")  # re-mangle
+        rc, fd1, fd2 = runic(["--extensions=jl,md", "-i", dir])
+        @test rc == 0
+        @test read(joinpath(dir, "a.jl"), String) == "x = 1\n"
+        @test read(joinpath(dir, "b.md"), String) == "```julia\nx = 1\n```\n"
+    end
+
+    # Explicit .md path bypasses the extension filter (format it regardless)
+    mktempdir() do dir
+        md = joinpath(dir, "doc.md")
+        write(md, "```julia\nx=1\n```\n")
+        rc, fd1, fd2 = runic(["-i", md])
+        @test rc == 0
+        @test read(md, String) == "```julia\nx = 1\n```\n"
+    end
+
+    # --lines works with Markdown (block-granular overlap)
+    # Two blocks in the source; range overlaps only the second → only that one formatted.
+    let src = "```julia\nx=1\n```\n\n```julia\ny=2\n```\n",
+            expected = "```julia\nx=1\n```\n\n```julia\ny = 2\n```\n"
+        # Second block occupies lines 5..7; selecting line 6 overlaps that block only.
+        rc, fd1, fd2 = runic(["--lines=6:6", "--stdin-filename=foo.md"], src)
+        @test rc == 0
+        @test fd1 == expected
+    end
+    # Range entirely in prose → no change
+    let src = "prose line\n\n```julia\nx=1\n```\n\nmore prose\n"
+        rc, fd1, fd2 = runic(["--lines=1:1", "--stdin-filename=foo.md"], src)
+        @test rc == 0
+        @test fd1 == src
+    end
+    # Range partially crossing a block → whole block formatted (block-granular rule)
+    let src = "prose\n\n```julia\nx=1\ny=2\n```\n",
+            expected = "prose\n\n```julia\nx = 1\ny = 2\n```\n"
+        # Range 1..4 covers the prose line + fence opener + first content line; block
+        # starts at line 3. Any overlap → full block formatted.
+        rc, fd1, fd2 = runic(["--lines=1:4", "--stdin-filename=foo.md"], src)
+        @test rc == 0
+        @test fd1 == expected
+    end
+
+    # --check for Markdown: returns 1 when reformatting would change the file
+    let (rc, fd1, fd2) = runic(["--check", "--stdin-filename=foo.md"], "```julia\nx=1\n```\n")
+        @test rc == 1
+    end
+    # --check for Markdown: returns 0 when already formatted
+    let (rc, fd1, fd2) = runic(["--check", "--stdin-filename=foo.md"], "```julia\nx = 1\n```\n")
+        @test rc == 0
+    end
+
+    # --diff for Markdown produces a diff
+    let (rc, fd1, fd2) = runic(["--diff", "--stdin-filename=foo.md"], "```julia\nx=1\n```\n")
+        @test rc == 0
+        @test occursin("-x=1", fd2) || occursin("x=1", fd2)
+        @test occursin("+x = 1", fd2) || occursin("x = 1", fd2)
+    end
+
+    # --extensions with invalid (empty) input
+    let (rc, fd1, fd2) = runic(["--extensions=", "."])
+        @test rc != 0
+    end
+
     return
 end
 
