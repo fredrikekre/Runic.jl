@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    have their contents run through Runic. All indented markdown code blocks (including
    leading method signatures) are also formatted (and thus assumed to be Julia code blocks).
    ([#174], [#196])
+ - Markdown file formatting. Files with the `.md` extension are formatted by rewriting
+   the embedded Julia code blocks (same rules as `--docstrings`), leaving prose alone.
+   Dispatch is by extension: `runic foo.md` (or `Runic.format_file("foo.md")`) goes
+   through the Markdown path, stdin dispatches via `--stdin-filename=*.md`, and
+   directory walks use the new `--extensions=<list>` flag (default `jl`, e.g.
+   `--extensions=jl,md` to walk both). `--lines` is supported with block-granular
+   semantics: any code block whose line range overlaps a `--lines` range is formatted
+   in full. ([#197])
 
 ## [v1.6.1] - 2026-04-16
 ### Fixed
@@ -231,3 +239,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#193]: https://github.com/fredrikekre/Runic.jl/pull/193
 [#194]: https://github.com/fredrikekre/Runic.jl/pull/194
 [#196]: https://github.com/fredrikekre/Runic.jl/pull/196
+[#197]: https://github.com/fredrikekre/Runic.jl/pull/197

@@ -3412,9 +3412,14 @@ end
 
 # Identify julia source code blocks (``` blocks four-space-indent blocks),
 # collect the lines, format the text and re-insert
-function format_markdown(s::String)
+function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[])
     lines = collect(eachline(IOBuffer(s); keep = true))
     isempty(lines) && return s
+    # A block at lines `a:b` is formatted iff `line_ranges` is empty (no filter) or at
+    # least one range overlaps the block. Block-granular: partial blocks are formatted
+    # in full when any line within overlaps.
+    in_range(a, b) = isempty(line_ranges) ||
+        any(r -> !isdisjoint(r, a:b), line_ranges)
     # Indented code blocks (CommonMark "indented" style) are handled like implicit
     # fences: opener is blank-line-or-start-of-docstring followed by a non-blank line
     # with >= 4 leading spaces; content = consecutive non-blank 4-space-indented lines;
@@ -3444,6 +3449,13 @@ function format_markdown(s::String)
                 break
             end
             block_lines = lines[(i + 1):(close_i - 1)]
+            # Skip if `--lines` doesn't overlap this block's full extent.
+            if !in_range(i, close_i)
+                append!(result, @view lines[i:close_i])
+                i = close_i + 1
+                at_boundary = false
+                continue
+            end
             # Non-Julia fence: copy through unchanged
             if !is_julia_lang(lang)
                 append!(result, @view lines[i:close_i])
@@ -3499,6 +3511,12 @@ function format_markdown(s::String)
                 else
                     break
                 end
+            end
+            if !in_range(i, end_idx)
+                append!(result, @view lines[i:end_idx])
+                i = end_idx + 1
+                at_boundary = false
+                continue
             end
             # Strip the indent; normalize blank lines to "\n" (explicit trailing spaces
             # on blank lines are not meaningful and chop would swallow the '\n').

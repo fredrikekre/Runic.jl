@@ -1853,6 +1853,85 @@ end
     @test ds(src_nested_nolang) == src_nested_nolang
 end
 
+@testset "markdown" begin
+    # format_markdown is a pure text->text function (no Context), reused from docstrings.
+    fm = Runic.format_markdown
+
+    # Plain prose passes through unchanged
+    @test fm("Just prose.\n") == "Just prose.\n"
+
+    # Fenced julia block gets formatted; prose left alone
+    src = "# Title\n\nSome prose.\n\n```julia\nx=1\n```\n\nMore prose.\n"
+    out = "# Title\n\nSome prose.\n\n```julia\nx = 1\n```\n\nMore prose.\n"
+    @test fm(src) == out
+
+    # Non-Julia fence left untouched
+    @test fm("```python\nx=1\n```\n") == "```python\nx=1\n```\n"
+
+    # jldoctest block with julia> prompts formatted
+    src_jld = "```jldoctest\njulia> x=1\n1\n```\n"
+    out_jld = "```jldoctest\njulia> x = 1\n1\n```\n"
+    @test fm(src_jld) == out_jld
+
+    # Indented code block (CommonMark style) formatted as Julia
+    src_ind = "Prose.\n\n    x=1\n\nMore prose.\n"
+    out_ind = "Prose.\n\n    x = 1\n\nMore prose.\n"
+    @test fm(src_ind) == out_ind
+
+    # Invalid Julia inside a fence: left untouched (ParseError swallowed)
+    src_bad = "```julia\nx = 1 +\n```\n"
+    @test fm(src_bad) == src_bad
+
+    # Idempotency: an already-formatted file is unchanged
+    @test fm(out) == out
+    @test fm(out_jld) == out_jld
+    @test fm(out_ind) == out_ind
+
+    # format_file auto-dispatches to the Markdown path on .md extension
+    mktempdir() do dir
+        path = joinpath(dir, "doc.md")
+        write(path, src)
+        Runic.format_file(path; inplace = true)
+        @test read(path, String) == out
+    end
+
+    # format_file with separate output file
+    mktempdir() do dir
+        in_path = joinpath(dir, "in.md")
+        out_path = joinpath(dir, "out.md")
+        write(in_path, src)
+        Runic.format_file(in_path, out_path)
+        @test read(out_path, String) == out
+        @test read(in_path, String) == src  # input untouched
+    end
+
+    # Idempotent input via format_file: already-formatted content stays the same.
+    mktempdir() do dir
+        path = joinpath(dir, "doc.md")
+        write(path, out)
+        Runic.format_file(path; inplace = true)
+        @test read(path, String) == out
+    end
+
+    # `line_ranges` keyword — block-granular overlap filter
+    let src = "```julia\nx=1\n```\n\n```julia\ny=2\n```\n"
+        # Second block (lines 5..7): format only it
+        @test fm(src; line_ranges = [6:6]) ==
+            "```julia\nx=1\n```\n\n```julia\ny = 2\n```\n"
+        # First block (lines 1..3): format only it
+        @test fm(src; line_ranges = [2:2]) ==
+            "```julia\nx = 1\n```\n\n```julia\ny=2\n```\n"
+        # Both blocks via a single wide range
+        @test fm(src; line_ranges = [1:7]) ==
+            "```julia\nx = 1\n```\n\n```julia\ny = 2\n```\n"
+        # No overlap with prose-only line between blocks
+        @test fm(src; line_ranges = [4:4]) == src
+        # Multiple ranges union
+        @test fm(src; line_ranges = [2:2, 6:6]) ==
+            "```julia\nx = 1\n```\n\n```julia\ny = 2\n```\n"
+    end
+end
+
 module RunicMain1
     using Test: @testset
     using Runic: main

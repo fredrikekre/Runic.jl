@@ -39,7 +39,7 @@ function tryf(f::F, arg, default) where {F}
         return default
     end
 end
-function scandir!(files, root)
+function scandir!(files, root, extensions::Vector{String})
     # Don't recurse into `.git`. If e.g. a branch name ends with `.jl` there are files
     # inside of `.git` which has the `.jl` extension, but they are not Julia source files.
     if occursin(".git", root) && ".git" in splitpath(root)
@@ -52,14 +52,15 @@ function scandir!(files, root)
         jf = joinpath(root, f)
         if tryf(isdir, jf, false)
             push!(dirs, f)
-        elseif (tryf(isfile, jf, false) || tryf(islink, jf, false)) && endswith(jf, ".jl")
+        elseif (tryf(isfile, jf, false) || tryf(islink, jf, false)) &&
+                any(e -> endswith(jf, e), extensions)
             push!(files, jf)
         else
             # Ignore it I guess...
         end
     end
     for dir in dirs
-        scandir!(files, joinpath(root, dir))
+        scandir!(files, joinpath(root, dir), extensions)
     end
     return
 end
@@ -122,7 +123,7 @@ function print_help()
         io, """
                <path>...
                    Input path(s) (files and/or directories) to process. For directories,
-                   all files (recursively) with the '*.jl' suffix are used as input files.
+                   all files matching `--extensions` are collected recursively.
                    If no path is given, or if path is `-`, input is read from stdin.
 
                -c, --check
@@ -132,6 +133,15 @@ function print_help()
                -d, --diff
                    Print the diff between the input and formatted output to stderr.
                    Requires `git` to be installed.
+
+               --docstrings
+                   Format code blocks in docstrings embedded in source files.
+
+               --extensions=<ext>[,<ext>...]
+                   Comma-separated list of file extensions to collect when walking
+                   directories. Defaults to `jl`. Use e.g. `--extensions=jl,md` to
+                   pick up both Julia and Markdown files. Explicit file paths bypass this
+                   filter.
 
                --help
                    Print this message.
@@ -148,16 +158,14 @@ function print_help()
                    is `-`, output is written to stdout.
 
                --stdin-filename=<filename>
-                   Assumed filename when formatting from stdin. Used for error messages.
+                   Assumed filename when formatting from stdin. Used for error messages
+                   and for inferring whether input is Julia or Markdown.
 
                -v, --verbose
                    Enable verbose output.
 
                --version
                    Print Runic and julia version information.
-
-               --docstrings
-                   Format code blocks in docstrings embedded in source files.
         """
     )
     return
@@ -217,6 +225,48 @@ function insert_line_range(line_ranges, lines)
     return 0
 end
 
+# Format a Markdown input string. Returns `(changed, fmt_iob, src_str_for_diff)`.
+function format_markdown_input(sourcetext::String; line_ranges::Vector{UnitRange{Int}})
+    fmt_str = format_markdown(sourcetext; line_ranges = line_ranges)
+    return (fmt_str != sourcetext, IOBuffer(fmt_str), sourcetext)
+end
+
+# Format a Julia source input. Returns `(changed, fmt_iob, src_str_for_diff)` with
+# line-range comment markers stripped from the diff-side source string.
+function format_julia_input(
+        sourcetext::String, inputfile_pretty::String;
+        quiet::Bool, verbose::Bool, debug::Bool, diff::Bool, check::Bool,
+        docstrings::Bool, line_ranges::Vector{UnitRange{Int}},
+    )
+    ctx = Context(
+        sourcetext; quiet, verbose, debug, diff, check, docstrings, line_ranges,
+        filename = inputfile_pretty,
+    )
+    format_tree!(ctx)
+    changed = !nodes_equal(ctx.fmt_tree, ctx.src_tree)
+    fmt_iob = seekstart(ctx.fmt_io)
+    src_str_for_diff = ctx.src_str
+    # The diff side of `src_str_for_diff` is only consumed when we're actually rendering
+    # a diff, i.e. `diff && changed` (see the main loop). Strip the range markers only
+    # when needed; otherwise return the raw source and save the allocation.
+    # TODO: It isn't great that the source string has been modified to begin with, and
+    #       to support --lines in the API functions this filtering needs to be moved
+    #       to the `format_tree` function.
+    if diff && changed && !isempty(line_ranges)
+        io = IOBuffer(; sizehint = sizeof(src_str_for_diff))
+        for line in eachline(IOBuffer(src_str_for_diff); keep = true)
+            if !(
+                    occursin(RANGE_FORMATTING_BEGIN, line) ||
+                        occursin(RANGE_FORMATTING_END, line)
+                )
+                write(io, line)
+            end
+        end
+        src_str_for_diff = String(take!(io))
+    end
+    return (changed, fmt_iob, src_str_for_diff)
+end
+
 function main(argv)
     # Reset errno
     global errno = 0
@@ -236,6 +286,7 @@ function main(argv)
     line_ranges = typeof(1:2)[]
     input_is_stdin = true
     multiple_inputs = false
+    extensions = [".jl"]
 
     # Parse the arguments
     while length(argv) > 0
@@ -268,6 +319,18 @@ function main(argv)
             end
         elseif (m = match(r"^--stdin-filename=(.+)$", x); m !== nothing)
             stdin_filename = String(m.captures[1]::SubString)
+        elseif (m = match(r"^--extensions=(.+)$", x); m !== nothing)
+            raw = String(m.captures[1]::SubString)
+            empty!(extensions)
+            for part in split(raw, ',')
+                s = strip(part)
+                isempty(s) && continue
+                # Accept both `jl` and `.jl`; store as `.jl` for endswith comparison.
+                push!(extensions, startswith(s, ".") ? String(s) : "." * String(s))
+            end
+            if isempty(extensions)
+                return panic("`--extensions` requires at least one extension")
+            end
         elseif x == "-o"
             if length(argv) < 1
                 return panic("expected output file argument after `-o`")
@@ -289,7 +352,7 @@ function main(argv)
                 else
                     input_is_stdin = false
                     if isdir(x)
-                        scandir!(inputfiles, x)
+                        scandir!(inputfiles, x, extensions)
                         # Directories are considered to be multiple (potential) inputs even
                         # if they end up being empty
                         multiple_inputs = true
@@ -417,15 +480,23 @@ function main(argv)
             end
         end
 
-        # Call the library to format the text
+        # Determine per-file format mode. Dispatch is by file extension; for stdin the
+        # virtual filename from `--stdin-filename` is used.
         inputfile_pretty = inputfile == "-" ? stdin_filename : inputfile
-        ctx = try
-            ctx′ = Context(
-                sourcetext; quiet, verbose, debug, diff, check, docstrings, line_ranges,
-                filename = inputfile_pretty,
-            )
-            format_tree!(ctx′)
-            ctx′
+        is_md = endswith(inputfile_pretty, ".md")
+
+        # Call the library to format the text. Both branches produce
+        # `(changed, fmt_iob, src_str_for_diff)`. Errors propagate; the catch below
+        # handles them uniformly.
+        changed, fmt_iob, src_str_for_diff = try
+            if is_md
+                format_markdown_input(sourcetext; line_ranges)
+            else
+                format_julia_input(
+                    sourcetext, inputfile_pretty;
+                    quiet, verbose, debug, diff, check, docstrings, line_ranges,
+                )
+            end
         catch err
             print_progress && errln()
             if err isa JuliaSyntax.ParseError
@@ -452,7 +523,6 @@ function main(argv)
         end
 
         # Output the result
-        changed = !nodes_equal(ctx.fmt_tree, ctx.src_tree)
         if check
             if changed
                 print_progress && errln()
@@ -463,7 +533,7 @@ function main(argv)
         elseif changed || !inplace
             @assert output.which !== :devnull
             try
-                writeo(output, seekstart(ctx.fmt_io))
+                writeo(output, fmt_iob)
             catch err
                 print_progress && errln()
                 panic("could not write to output file `$(output.file)`: ", err)
@@ -480,39 +550,22 @@ function main(argv)
                 file = basename(inputfile)
                 A = joinpath(a, file)
                 B = joinpath(b, file)
-                src_str = ctx.src_str
-                # If we have ranges we need to remove the comment markers
-                # TODO: It isn't great that the source string has been modified to begin
-                #       with, and to support --lines in the API functions this filtering
-                #       needs to be moved to the `format_tree` function.
-                if !isempty(line_ranges)
-                    io = IOBuffer(; sizehint = sizeof(src_str))
-                    for line in eachline(IOBuffer(src_str); keep = true)
-                        if !(
-                                occursin(RANGE_FORMATTING_BEGIN, line) ||
-                                    occursin(RANGE_FORMATTING_END, line)
-                            )
-                            write(io, line)
-                        end
-                    end
-                    src_str = String(take!(io))
-                end
                 # juliac: `open(...) do` uses dynamic dispatch otherwise the following
                 # blocks could be written as
                 # ```
-                # write(A, src_str)
-                # write(B, seekstart(ctx.fmt_io))
+                # write(A, src_str_for_diff)
+                # write(B, seekstart(fmt_iob))
                 # ```
                 let io = open(A, "w")
                     try
-                        write(io, src_str)
+                        write(io, src_str_for_diff)
                     finally
                         close(io)
                     end
                 end
                 let io = open(B, "w")
                     try
-                        write(io, seekstart(ctx.fmt_io))
+                        write(io, seekstart(fmt_iob))
                     finally
                         close(io)
                     end
