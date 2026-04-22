@@ -102,6 +102,23 @@ Format the content of standard in and print the result to standard out:
 echo "1+1" | runic
 ```
 
+Format Julia code blocks inside docstrings of a Julia source file
+(fenced ```` ```julia ````, ```` ```julia-repl ````, and ```` ```jldoctest ````
+blocks, plus indented-code blocks — which covers leading method signatures):
+```sh
+runic --docstrings --inplace src/
+```
+
+Format Julia code blocks inside Markdown files. Dispatch is by file extension — any
+file whose name ends in `.md` is routed through the Markdown formatter, which only
+rewrites the embedded Julia code blocks and leaves the prose alone:
+```sh
+runic --inplace README.md                # explicit path — extension handles it
+runic --extensions=jl,md --inplace .     # directory walk picks up both kinds
+echo '```julia' > foo.md && echo '1+1' >> foo.md && echo '```' >> foo.md
+cat foo.md | runic --stdin-filename=foo.md   # stdin dispatch via virtual filename
+```
+
 Output of `runic --help` for a complete list of options:
 
 ```
@@ -119,7 +136,7 @@ DESCRIPTION
 OPTIONS
        <path>...
            Input path(s) (files and/or directories) to process. For directories,
-           all files (recursively) with the '*.jl' suffix are used as input files.
+           all files matching `--extensions` are collected recursively.
            If no path is given, or if path is `-`, input is read from stdin.
 
        -c, --check
@@ -129,6 +146,15 @@ OPTIONS
        -d, --diff
            Print the diff between the input and formatted output to stderr.
            Requires `git` to be installed.
+
+       --docstrings
+           Format code blocks in docstrings embedded in source files.
+
+       --extensions=<ext>[,<ext>...]
+           Comma-separated list of file extensions to collect when walking
+           directories. Defaults to `jl`. Use e.g. `--extensions=jl,md` to
+           pick up both Julia and Markdown files. Explicit file paths bypass this
+           filter.
 
        --help
            Print this message.
@@ -143,6 +169,10 @@ OPTIONS
        -o <file>, --output=<file>
            File to write formatted output to. If no output is given, or if the file
            is `-`, output is written to stdout.
+
+       --stdin-filename=<filename>
+           Assumed filename when formatting from stdin. Used for error messages
+           and for inferring whether input is Julia or Markdown.
 
        -v, --verbose
            Enable verbose output.
