@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.7.0] - TBD
+### Added
+ - New opt-in flag `--docstrings` (and corresponding `docstrings::Bool` keyword argument for
+   `format_string` / `format_file`) that enables formatting of Julia code inside docstrings.
+   Fenced ```` ```julia ````, ```` ```julia-repl ````, and ```` ```jldoctest ```` blocks
+   have their contents run through Runic. All indented markdown code blocks (including
+   leading method signatures) are also formatted (and thus assumed to be Julia code blocks).
+   ([#174], [#196])
+
 ## [v1.6.1] - 2026-04-16
 ### Fixed
  - Fix indentation of `function @main(args)` bodies ([#175], [#193]).
@@ -215,8 +224,10 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#169]: https://github.com/fredrikekre/Runic.jl/issues/169
 [#170]: https://github.com/fredrikekre/Runic.jl/issues/170
 [#171]: https://github.com/fredrikekre/Runic.jl/issues/171
+[#174]: https://github.com/fredrikekre/Runic.jl/issues/174
 [#175]: https://github.com/fredrikekre/Runic.jl/issues/175
 [#186]: https://github.com/fredrikekre/Runic.jl/issues/186
 [#187]: https://github.com/fredrikekre/Runic.jl/issues/187
 [#193]: https://github.com/fredrikekre/Runic.jl/pull/193
 [#194]: https://github.com/fredrikekre/Runic.jl/pull/194
+[#196]: https://github.com/fredrikekre/Runic.jl/pull/196

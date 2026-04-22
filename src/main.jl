@@ -155,6 +155,9 @@ function print_help()
 
                --version
                    Print Runic and julia version information.
+
+               --docstrings
+                   Format code blocks in docstrings embedded in source files.
         """
     )
     return
@@ -228,6 +231,7 @@ function main(argv)
     inplace = false
     diff = false
     check = false
+    docstrings = false
     fail_fast = false
     line_ranges = typeof(1:2)[]
     input_is_stdin = true
@@ -254,6 +258,8 @@ function main(argv)
             diff = true
         elseif x == "-c" || x == "--check"
             check = true
+        elseif x == "--docstrings"
+            docstrings = true
         elseif x == "-vv" || x == "--debug"
             debug = verbose = true
         elseif (m = match(r"^--lines=(.*)$", x); m !== nothing)
@@ -415,7 +421,7 @@ function main(argv)
         inputfile_pretty = inputfile == "-" ? stdin_filename : inputfile
         ctx = try
             ctx′ = Context(
-                sourcetext; quiet, verbose, debug, diff, check, line_ranges,
+                sourcetext; quiet, verbose, debug, diff, check, docstrings, line_ranges,
                 filename = inputfile_pretty,
             )
             format_tree!(ctx′)

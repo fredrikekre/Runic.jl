@@ -137,6 +137,7 @@ mutable struct Context
     check::Bool
     diff::Bool
     filemode::Bool
+    docstrings::Bool
     filename::String
     line_ranges::Vector{UnitRange{Int}}
     # Global state
@@ -248,6 +249,7 @@ end
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
         diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
+        docstrings::Bool = false,
         line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[], filename::String = "-",
     )
     if !isempty(line_ranges)
@@ -288,7 +290,7 @@ function Context(
     format_on = true
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, filemode, filename, line_ranges, indent_level, call_depth, format_on,
+        diff, filemode, docstrings, filename, line_ranges, indent_level, call_depth, format_on,
         prev_sibling, next_sibling, lineage_kinds, lineage_macros
     )
 end
@@ -564,6 +566,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something explicit_return(ctx, node)
     @return_something braces_around_where_rhs(ctx, node)
     @return_something indent_multiline_strings(ctx, node)
+    @return_something format_docstring(ctx, node)
     @return_something four_space_indent(ctx, node)
     @return_something spaces_in_listlike(ctx, node)
     ctx.call_depth -= 1
@@ -636,8 +639,8 @@ end
 
 Format string `str` and return the formatted string.
 """
-function format_string(str::AbstractString; filemode::Bool = false)
-    ctx = Context(str; filemode = filemode, filename = "string")
+function format_string(str::AbstractString; filemode::Bool = false, docstrings::Bool = false)
+    ctx = Context(str; filemode = filemode, docstrings = docstrings, filename = "string")
     format_tree!(ctx)
     return String(take!(ctx.fmt_io))
 end
@@ -654,7 +657,7 @@ Format file `inputfile` and write the formatted text to `outputfile`.
 Setting the keyword argument `inplace = true` is required if `inputfile` and `outputfile`
 are the same file.
 """
-function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool = false)
+function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool = false, docstrings::Bool = false)
     # Argument handling
     inputfile = normpath(abspath(String(inputfile)))
     outputfile = normpath(abspath(String(outputfile)))
@@ -663,7 +666,7 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
         error("input and output must not be the same when `inplace = false`")
     end
     # Format it
-    ctx = Context(str; filename = inputfile)
+    ctx = Context(str; filename = inputfile, docstrings = docstrings)
     format_tree!(ctx)
     # Write the output but skip if it text didn't change
     changed = ctx.fmt_tree !== nothing

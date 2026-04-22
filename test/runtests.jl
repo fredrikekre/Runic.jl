@@ -1646,6 +1646,213 @@ end
     @test_throws Runic.MainError format_lines("1+1", [1:2])
 end
 
+@testset "docstrings" begin
+    ds(str) = format_string(str; docstrings = true)
+
+    # Disabled by default
+    src = "\"\"\"\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test format_string(src) == src
+    @test ds(src) != src
+
+    # Plain julia block: code is formatted
+    @test ds("\"\"\"\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n") ==
+        "\"\"\"\n```julia\nx = 1\n```\n\"\"\"\nfunction foo()\nend\n"
+
+    # julia-repl block: julia> lines formatted, output untouched
+    @test ds("\"\"\"\n```julia-repl\njulia> x=1\n1\n```\n\"\"\"\nfunction foo()\nend\n") ==
+        "\"\"\"\n```julia-repl\njulia> x = 1\n1\n```\n\"\"\"\nfunction foo()\nend\n"
+
+    # jldoctest plain style
+    @test ds("\"\"\"\n```jldoctest\nx=1\ny=2\n```\n\"\"\"\nfunction foo()\nend\n") ==
+        "\"\"\"\n```jldoctest\nx = 1\ny = 2\n```\n\"\"\"\nfunction foo()\nend\n"
+
+    # jldoctest with julia> prompts
+    @test ds("\"\"\"\n```jldoctest\njulia> x=1\n1\n```\n\"\"\"\nfunction foo()\nend\n") ==
+        "\"\"\"\n```jldoctest\njulia> x = 1\n1\n```\n\"\"\"\nfunction foo()\nend\n"
+
+    # Invalid code block: left untouched
+    src_invalid = "\"\"\"\n```julia\nx = 1 +\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_invalid) == src_invalid
+
+    # Other REPL prompts treated as output (left untouched)
+    src_prompts = "\"\"\"\n```julia-repl\njulia> x=1\n1\npkg> add Foo\nshell> ls\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_prompts) == "\"\"\"\n```julia-repl\njulia> x = 1\n1\npkg> add Foo\nshell> ls\n```\n\"\"\"\nfunction foo()\nend\n"
+
+    # @doc pattern
+    @test ds("@doc \"\"\"\n```julia\nx=1\n```\n\"\"\" function foo()\nend\n") ==
+        "@doc \"\"\"\n```julia\nx = 1\n```\n\"\"\" function foo()\nend\n"
+
+    # Signature formatted when valid Julia
+    @test ds("\"\"\"\n    foo(x, y)\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n") ==
+        "\"\"\"\n    foo(x, y)\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+
+    # Signature with spacing issue is formatted
+    @test ds("\"\"\"\n    foo( x,y )\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n") ==
+        "\"\"\"\n    foo(x, y)\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+
+    # Signatures containing vect-like syntax are NOW formatted (parses → format). Users
+    # who want informal optional-arg notation can rewrite to valid forms themselves.
+    src_sig_vect = "\"\"\"\n    foo(x, [y])\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+    @test ds(src_sig_vect) == src_sig_vect  # already clean — idempotent
+    # Juxtaposition form `[x, ]y` formats by stripping the trailing comma to
+    # `[x]y` — the parse (juxtapose) is preserved. Users wanting `[x], y` can rewrite.
+    src_sig_juxta = "\"\"\"\n    render_asap([callback::Function, ]screen, N)\n\nDocs.\n\"\"\"\nfunction render_asap()\nend\n"
+    @test ds(src_sig_juxta) ==
+        "\"\"\"\n    render_asap([callback::Function]screen, N)\n\nDocs.\n\"\"\"\nfunction render_asap()\nend\n"
+
+    # `f(args) -> T` and `f(args)::T` are formatted like any other parseable Julia
+    src_sig_arrow = "\"\"\"\n    foo( x,y ) -> T\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+    @test ds(src_sig_arrow) ==
+        "\"\"\"\n    foo(x, y) -> T\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+    src_sig_rettype = "\"\"\"\n    foo( x,y )::Vector{T}\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+    @test ds(src_sig_rettype) ==
+        "\"\"\"\n    foo(x, y)::Vector{T}\n\nDocs.\n\"\"\"\nfunction foo(x, y)\nend\n"
+
+    # `where` clause now formats too
+    src_sig_where = "\"\"\"\n    foo( x::T ) where T\n\nDocs.\n\"\"\"\nfunction foo(x)\nend\n"
+    @test ds(src_sig_where) ==
+        "\"\"\"\n    foo(x::T) where {T}\n\nDocs.\n\"\"\"\nfunction foo(x)\nend\n"
+
+    # Multiple consecutive indented signatures (stacked method headers). Formatted as a
+    # single block.
+    src_multi_stacked = "\"\"\"\n    f()\n    f(x)\n\ntext\n\"\"\"\nf(x = 1) = sin(x)\n"
+    @test ds(src_multi_stacked) == src_multi_stacked
+    src_multi_mangled = "\"\"\"\n    f( )\n    f(x)\n\ntext\n\"\"\"\nf(x = 1) = sin(x)\n"
+    @test ds(src_multi_mangled) ==
+        "\"\"\"\n    f()\n    f(x)\n\ntext\n\"\"\"\nf(x = 1) = sin(x)\n"
+
+    # Multi-line signature with hanging args: continuation lines have > 4 spaces of
+    # indent. The whole block is treated as one expression.
+    src_multiline_sig = "\"\"\"\n    f(\n        x,\n        y,\n    )\n\ntext\n\"\"\"\nf(x, y) = x + y\n"
+    @test ds(src_multiline_sig) == src_multiline_sig
+    # Multi-line signature with extra whitespace needing cleanup (not idempotent)
+    src_multiline_mangled = "\"\"\"\n    f(\n        x  ,\n        y,\n    )\n\ntext\n\"\"\"\nf(x, y) = x + y\n"
+    @test ds(src_multiline_mangled) ==
+        "\"\"\"\n    f(\n        x,\n        y,\n    )\n\ntext\n\"\"\"\nf(x, y) = x + y\n"
+
+    # Stacked signatures where one is single-line and another is multi-line — the
+    # whole block is formatted as a sequence of top-level expressions.
+    src_stacked_mixed = "\"\"\"\n    f(x)\n    f(\n        x,\n        y,\n    )\n\ntext\n\"\"\"\nf(x) = x\n"
+    @test ds(src_stacked_mixed) == src_stacked_mixed
+
+    # Stacked block where one sig is ill-formed (unclosed paren): the whole block
+    # fails to parse → everything left unchanged, no partial formatting.
+    src_stacked_illformed = "\"\"\"\n    f( x )\n    f(x,\n\ntext\n\"\"\"\nf(x) = x\n"
+    @test ds(src_stacked_illformed) == src_stacked_illformed
+
+    # Multiple indented blocks separated by prose — ALL are now formatted (each
+    # blank-line-bounded indented block is treated as a code block).
+    src_multi_sig = "\"\"\"\n    sig1( x )\n\nDocs.\n\n    sig2( y )\n\nMore.\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_multi_sig) ==
+        "\"\"\"\n    sig1(x)\n\nDocs.\n\n    sig2(y)\n\nMore.\n\"\"\"\nfunction foo()\nend\n"
+
+    # Indented code block not at the start — also formatted
+    src_middle_block = "\"\"\"\nPlain docs paragraph.\n\n    x=1\n    y=2\n\nMore text.\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_middle_block) ==
+        "\"\"\"\nPlain docs paragraph.\n\n    x = 1\n    y = 2\n\nMore text.\n\"\"\"\nfunction foo()\nend\n"
+
+    # Indented block that doesn't parse as Julia (prose that looks indented) — left
+    # untouched.
+    src_indented_prose = "\"\"\"\ntext\n\n    this is prose that does not parse\n    because it has multiple words\n\nmore text\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_indented_prose) == src_indented_prose
+
+    # Indented block preceded directly by prose (no blank line) is NOT an indented
+    # code block per CommonMark — left untouched.
+    src_indented_no_blank = "\"\"\"\ntext before\n    x=1\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_indented_no_blank) == src_indented_no_blank
+
+    # Blank lines INSIDE an indented region don't terminate the block (same as inside
+    # ```-fences). Block ends only at an unindented non-blank line or EOF. A trailing
+    # blank line after the last indented line is NOT absorbed into the block.
+    src_blank_between = "\"\"\"\n    f( )\n\n    g( )\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_blank_between) ==
+        "\"\"\"\n    f()\n\n    g()\n\"\"\"\nfunction foo()\nend\n"
+
+    # Multi-statement block spanning a blank line — joined, parsed as one piece, which
+    # is the motivating case for the "blank-line-stays-inside" rule.
+    src_block_with_internal_blank = "\"\"\"\n    x=1\n\n    y = x + 1\n\ntext\n\"\"\"\nf() = nothing\n"
+    @test ds(src_block_with_internal_blank) ==
+        "\"\"\"\n    x = 1\n\n    y = x + 1\n\ntext\n\"\"\"\nf() = nothing\n"
+
+    # Fence with 4+ backticks
+    @test ds("\"\"\"\n````julia\nx=1\n````\n\"\"\"\nfunction foo()\nend\n") ==
+        "\"\"\"\n````julia\nx = 1\n````\n\"\"\"\nfunction foo()\nend\n"
+
+    # Non-matching language fences: left untouched
+    for lang in ("python", "shell", "bash", "c", "toml", "")
+        src_other = "\"\"\"\n```$(lang)\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
+        @test ds(src_other) == src_other
+    end
+
+    # Unclosed fence: left untouched
+    src_unclosed = "\"\"\"\n```julia\nx=1\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_unclosed) == src_unclosed
+
+    # Idempotency
+    src_formatted = "\"\"\"\n```julia\nx = 1\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_formatted) == src_formatted
+
+    # Indented docstring (inside module)
+    src_mod = "module M\n\"\"\"\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\nend\n"
+    @test ds(src_mod) == "module M\n\"\"\"\n```julia\nx = 1\n```\n\"\"\"\nfunction foo()\nend\nend\n"
+
+    # Single-quoted docstring: left untouched
+    src_single = "\"Docs.\"\nfunction foo()\nend\n"
+    @test ds(src_single) == src_single
+
+    # raw"""...""" docstring: left untouched (no K"doc" wrapper, lineage macro is not @doc)
+    src_raw = "raw\"\"\"\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_raw) == src_raw
+
+    # Interpolated docstrings are left untouched (K"$"/K"Identifier" kids would otherwise
+    # be silently dropped from the string on writeback).
+    # Prose interpolation + formattable code block
+    src_interp_prose = "\"\"\"\nHello \$name world.\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_interp_prose) == src_interp_prose
+    # Interpolation inside code block that parses after stripping (corruption would be silent)
+    src_interp_block = "\"\"\"\n```julia\nfoo( \$arg )\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_interp_block) == src_interp_block
+    # Prose interpolation + formattable signature
+    src_interp_sig = "\"\"\"\n    foo( x,y )\n\nHello \$name.\n\"\"\"\nfunction foo(x, y)\nend\n"
+    @test ds(src_interp_sig) == src_interp_sig
+
+    # Multi-line REPL with continuation
+    src_repl_multi = "\"\"\"\n```julia-repl\njulia> function f()\n           x=1\n       end\nnothing\n```\n\"\"\"\nfunction foo()\nend\n"
+    r = ds(src_repl_multi)
+    @test occursin("julia> function f()", r)
+    @test occursin("x = 1", r)
+    @test occursin("nothing", r)
+
+    # Indented code block: all lines keep their indent after formatting
+    src_indent = "\"\"\"\nSome docs.\n\n    ```julia\n    1+1\n    2+1\n    ```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_indent) == "\"\"\"\nSome docs.\n\n    ```julia\n    1 + 1\n    2 + 1\n    ```\n\"\"\"\nfunction foo()\nend\n"
+
+    # Indented code block (issue.jl pattern): admonition with indented fence
+    src_issue = "\"\"\"\n    foo()\n\nDo foo.\n\n!!! note\n    Here is a note with indented code block.\n    ```julia\n    1+1\n    2+1\n    ```\n\"\"\"\nfunction foo()\nend\n"
+    r_issue = ds(src_issue)
+    @test occursin("    1 + 1\n", r_issue)
+    @test occursin("    2 + 1\n", r_issue)
+
+    # Indented jldoctest block: indent is preserved
+    src_indent_jld = "\"\"\"\n    ```jldoctest\n    julia> 1+1\n    2\n    ```\n\"\"\"\nfunction foo()\nend\n"
+    r_jld = ds(src_indent_jld)
+    @test occursin("    julia> 1 + 1\n", r_jld)
+    @test occursin("    2\n", r_jld)
+
+    # No leading newline after opening """ (content starts on the opening line)
+    src_noleadnl = "\"\"\"Summary.\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_noleadnl) ==
+        "\"\"\"Summary.\n```julia\nx = 1\n```\n\"\"\"\nfunction foo()\nend\n"
+
+    # Nested fences: a julia block nested inside a wider non-julia outer fence must NOT
+    # be formatted (the outer fence makes the inner one a literal text example).
+    src_nested_md = "\"\"\"\n````markdown\n```julia\n1+1\n```\n````\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_nested_md) == src_nested_md
+    # Same but outer fence has no language tag
+    src_nested_nolang = "\"\"\"\n````\n```julia\n1+1\n```\n````\n\"\"\"\nfunction foo()\nend\n"
+    @test ds(src_nested_nolang) == src_nested_nolang
+end
+
 module RunicMain1
     using Test: @testset
     using Runic: main

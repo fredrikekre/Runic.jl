@@ -567,6 +567,16 @@ function maintests(f::R) where {R}
         end
     end
 
+    # runic --docstrings
+    let src = "\"\"\"\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n",
+            expected = "\"\"\"\n```julia\nx = 1\n```\n\"\"\"\nfunction foo()\nend\n"
+        rc, fd1, fd2 = runic(String[], src)
+        @test rc == 0 && fd1 == src  # no change without --docstrings
+        rc, fd1, fd2 = runic(["--docstrings"], src)
+        @test rc == 0 && fd1 == expected
+        @test isempty(fd2)
+    end
+
     return
 end
 
