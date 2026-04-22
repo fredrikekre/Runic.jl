@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v1.7.0] - TBD
+## [v1.7.0] - 2026-04-22
 ### Added
  - New opt-in flag `--docstrings` (and corresponding `docstrings::Bool` keyword argument for
    `format_string` / `format_file`) that enables formatting of Julia code inside docstrings.
