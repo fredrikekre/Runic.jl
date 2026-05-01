@@ -419,10 +419,14 @@ function main(argv)
             if Sys.iswindows()
                 input_pretty = replace(input_pretty, "\\" => "/")
             end
-            prefix = string(
-                "[", lpad(string(file_counter), textwidth(nfiles_str), " "), "/",
-                nfiles_str, "] "
-            )
+            tw = textwidth(nfiles_str)
+            fc = string(file_counter)
+            lp = lpad(fc, tw, " ")
+            prefix = string("[", lp, "/", nfiles_str, "] ")
+            # prefix = string(
+            #     "[", lpad(string(file_counter), textwidth(nfiles_str), " "), "/",
+            #     nfiles_str, "] "
+            # )
             verb = check ? "Checking" : "Formatting"
             str = string(prefix, verb, " `", input_pretty, "` ")
             ndots = 80 - textwidth(str) - 1 - 1
