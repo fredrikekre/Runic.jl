@@ -3725,6 +3725,16 @@ end
 # Pattern matching for "bad" semicolons:
 #  - `\s*;\n` -> `\n`
 #  - `\s*;\s*#\n` -> `\s* \s*#\n`
+function is_docstring_literal(node::Node)
+    kind(node) === K"string" && return true
+    kind(node) === K"parens" || return false
+    significant_kids = filter(verified_kids(node)) do kid
+        return !JuliaSyntax.is_whitespace(kid) && kind(kid) !== K"Comment" &&
+            !(is_leaf(kid) && kind(kid) in KSet"( )")
+    end
+    return length(significant_kids) == 1 && is_docstring_literal(only(significant_kids))
+end
+
 function remove_trailing_semicolon_block(ctx::Context, node::Node)
     kind(node) === K"block" || return nothing
     @assert !is_leaf(node)
@@ -3733,6 +3743,19 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
     kids′ = kids
     semi_idx = findfirst(x -> kind(x) === K";", kids′)
     while semi_idx !== nothing
+        if is_begin_block(node) || is_begin_block(node, K"quote")
+            prev_expr_idx = findprev(
+                x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K"Comment"),
+                kids′, semi_idx - 1
+            )
+            if prev_expr_idx !== nothing && is_docstring_literal(kids′[prev_expr_idx])
+                # In explicit begin/quote blocks, a string followed by another
+                # expression becomes its docstring unless a semicolon separates them.
+                # Preserve that semicolon to avoid changing the parsed program.
+                semi_idx = findnext(x -> kind(x) === K";", kids′, semi_idx + 1)
+                continue
+            end
+        end
         search_index = semi_idx + 1
         if kmatch(kids′, KSet"; NewlineWs", semi_idx)
             # `\s*;\n` -> `\n`
@@ -3762,13 +3785,34 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
             # `\s*;\s*#\n` -> `\s* \s*#\n`
             # The `;` is replaced by ` ` here in case comments are aligned
             kids′ = kids′ === kids ? copy(kids) : kids′
+            space_after = kmatch(kids′, KSet"; Whitespace", semi_idx)
+            if semi_idx > firstindex(kids′) &&
+                    kind(kids′[semi_idx - 1]) === K"NewlineWs"
+                # A semicolon at the start of a comment-only line should be removed
+                # together with the whitespace between it and the comment. Keeping a
+                # replacement space here gives the comment one extra indentation level
+                # until the formatter is run a second time.
+                span_overwrite = span(kids′[semi_idx])
+                space_after && (span_overwrite += span(kids′[semi_idx + 1]))
+                let p = position(ctx.fmt_io)
+                    for i in 1:(semi_idx - 1)
+                        accept_node!(ctx, kids′[i])
+                    end
+                    replace_bytes!(ctx, "", span_overwrite)
+                    seek(ctx.fmt_io, p)
+                end
+                space_after && deleteat!(kids′, semi_idx + 1)
+                deleteat!(kids′, semi_idx)
+                search_index = semi_idx
+                semi_idx = findnext(x -> kind(x) === K";", kids′, search_index)
+                continue
+            end
             ws_span = span(kids′[semi_idx])
             @assert ws_span == 1
             space_before = kmatch(kids′, KSet"Whitespace ;", semi_idx - 1)
             if space_before
                 ws_span += span(kids′[semi_idx - 1])
             end
-            space_after = kmatch(kids′, KSet"; Whitespace", semi_idx)
             if space_after
                 ws_span += span(kids′[semi_idx + 1])
             end

@@ -1363,6 +1363,15 @@ end
 end
 
 @testset "trailing semicolon" begin
+    # Removing this semicolon would turn the string into a docstring for `x`.
+    @test format_string("begin\n\"not a docstring\";\nx\nend") ==
+        "begin\n    \"not a docstring\";\n    x\nend"
+
+    # A semicolon at the start of a comment-only line must disappear without leaving
+    # indentation that requires a second formatting pass.
+    @test format_string("begin\nx\n; # comment\ny\nend") ==
+        "begin\n    x\n    # comment\n    y\nend"
+
     body = """
         # Semicolons on their own lines
         ;
