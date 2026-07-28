@@ -79,6 +79,33 @@ end
     @test KSet"Whitespace ; Whitespace" == (K"Whitespace", K";", K"Whitespace")
 end
 
+@testset "format_string accepts AbstractString" begin
+    str = SubString("a=1 trailing", 1, 3)
+    @test format_string(str) == "a = 1"
+end
+
+@testset "format_file does not rewrite unchanged input" begin
+    mktempdir() do dir
+        path = joinpath(dir, "tabbed.jl")
+        write(path, "x\t= 1\n")
+        Runic.format_file(path; inplace = true)
+        @test read(path, String) == "x = 1\n"
+    end
+    if Sys.isunix()
+        mktempdir() do dir
+            path = joinpath(dir, "formatted.jl")
+            write(path, "x = 1\n")
+            chmod(path, 0o444)
+            try
+                @test Runic.format_file(path; inplace = true) === nothing
+                @test read(path, String) == "x = 1\n"
+            finally
+                chmod(path, 0o644)
+            end
+        end
+    end
+end
+
 @testset "syntax tree normalization" begin
     function rparse(str)
         node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, str))
@@ -1098,6 +1125,11 @@ end
     @test format_string("@eval import A as \$a") == "@eval import A as \$a"
     # Macro-aliases
     @test format_string("import  A.@a  as  @b") == "import A.@a as @b"
+    # Comments are valid on either side of `as`.
+    @test format_string("using A: x #= lhs =# as #= rhs =# y") ==
+        "using A: x #= lhs =# as #= rhs =# y"
+    @test format_string("using A: x as # alias\n y") ==
+        "using A: x as # alias\n    y"
 end
 
 @testset "spaces in export/public/global/local" begin

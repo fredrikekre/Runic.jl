@@ -1068,12 +1068,15 @@ function format_importpath(ctx::Context, node::Node)
 end
 
 # Used in `spaces_in_import_using`
-# TODO: This doesn't handle comments and newlines which can be present on either side of the
-#       `as`. However, the asserts don't trigger on any julia package so can be fixed
-#       whenever someone files an issue about this :^)
 function format_as(ctx::Context, node::Node)
     @assert kind(node) === K"as"
     kids = verified_kids(node)
+    # Comments and newlines may occur on either side of `as`. Leave these layouts to the
+    # generic comment, whitespace, and indentation passes instead of assuming the compact
+    # five-node layout below.
+    if any(x -> kind(x) in KSet"Comment NewlineWs", kids)
+        return nothing
+    end
     kids′ = kids
     any_changes = false
     pos = position(ctx.fmt_io)

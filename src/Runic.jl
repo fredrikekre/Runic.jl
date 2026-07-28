@@ -697,7 +697,7 @@ end
 Format string `str` and return the formatted string.
 """
 function format_string(str::AbstractString; filemode::Bool = false, docstrings::Bool = false)
-    ctx = Context(str; filemode = filemode, docstrings = docstrings, filename = "string")
+    ctx = Context(String(str); filemode = filemode, docstrings = docstrings, filename = "string")
     format_tree!(ctx)
     return String(take!(ctx.fmt_io))
 end
@@ -731,9 +731,10 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
     ctx = Context(str; filename = inputfile, docstrings = docstrings)
     format_tree!(ctx)
     # Write the output but skip if it text didn't change
-    changed = ctx.fmt_tree !== nothing
+    formatted = String(take!(ctx.fmt_io))
+    changed = formatted != str
     if changed || !inplace
-        write(outputfile, take!(ctx.fmt_io))
+        write(outputfile, formatted)
     end
     return
 end
