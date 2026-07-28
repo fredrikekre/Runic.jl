@@ -307,8 +307,11 @@ function insert_line_range(line_ranges, lines)
     if m === nothing
         return panic("can not parse `--lines` argument as an integer range")
     end
-    range_start = parse(Int, m.captures[1]::SubString)
-    range_end = parse(Int, m.captures[2]::SubString)
+    range_start = tryparse(Int, m.captures[1]::SubString)
+    range_end = tryparse(Int, m.captures[2]::SubString)
+    if range_start === nothing || range_end === nothing
+        return panic("can not parse `--lines` argument as an integer range")
+    end
     if range_start > range_end
         return panic("empty `--lines` range")
     end
@@ -338,8 +341,9 @@ function format_julia_input(
         filename = inputfile_pretty,
     )
     format_tree!(ctx)
-    changed = !nodes_equal(ctx.fmt_tree, ctx.src_tree)
     fmt_iob = seekstart(ctx.fmt_io)
+    changed = sourcetext != String(read(fmt_iob))
+    seekstart(fmt_iob)
     src_str_for_diff = ctx.src_str
     # The diff side of `src_str_for_diff` is only consumed when we're actually rendering
     # a diff, i.e. `diff && changed` (see the main loop). Strip the range markers only
@@ -351,8 +355,8 @@ function format_julia_input(
         io = IOBuffer(; sizehint = sizeof(src_str_for_diff))
         for line in eachline(IOBuffer(src_str_for_diff); keep = true)
             if !(
-                    occursin(RANGE_FORMATTING_BEGIN, line) ||
-                        occursin(RANGE_FORMATTING_END, line)
+                    is_range_formatting_begin(line, ctx.range_formatting_begin) ||
+                        is_range_formatting_end(line, ctx.range_formatting_end)
                 )
                 write(io, line)
             end

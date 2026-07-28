@@ -140,6 +140,8 @@ mutable struct Context
     docstrings::Bool
     filename::String
     line_ranges::Vector{UnitRange{Int}}
+    range_formatting_begin::String
+    range_formatting_end::String
     # Global state
     indent_level::Int # track (hard) indentation level
     call_depth::Int # track call-depth level for debug printing
@@ -156,11 +158,60 @@ end
 const RANGE_FORMATTING_BEGIN = "#= RUNIC RANGE FORMATTING " * "BEGIN =#"
 const RANGE_FORMATTING_END = "#= RUNIC RANGE FORMATTING " * "END =#"
 
-function add_line_range_markers(str, line_ranges)
+is_range_formatting_begin(
+    line::AbstractString, marker::AbstractString = RANGE_FORMATTING_BEGIN
+) = strip(line) == marker
+is_range_formatting_end(
+    line::AbstractString, marker::AbstractString = RANGE_FORMATTING_END
+) = strip(line) == marker
+
+function range_formatting_markers(str::String)
+    lines = collect(eachline(IOBuffer(str)))
+    begin_marker = RANGE_FORMATTING_BEGIN
+    end_marker = RANGE_FORMATTING_END
+    suffix = 0
+    while any(
+            line -> is_range_formatting_begin(line, begin_marker) ||
+                is_range_formatting_end(line, end_marker),
+            lines
+        )
+        suffix += 1
+        begin_marker = "#= RUNIC RANGE FORMATTING BEGIN $(suffix) =#"
+        end_marker = "#= RUNIC RANGE FORMATTING END $(suffix) =#"
+    end
+    return begin_marker, end_marker
+end
+
+function validate_line_ranges(lines::Vector{String}, line_ranges::Vector{UnitRange{Int}})
+    isempty(line_ranges) && return
+    # Like the Julia range formatter, accept the virtual line after a trailing newline.
+    # An empty buffer likewise has a virtual first line, as editors and language servers
+    # commonly report it.
+    nlines = length(lines)
+    max_line = nlines + (isempty(lines) || endswith(lines[end], "\n"))
+    for r in line_ranges
+        a, b = first(r), last(r)
+        if a > b
+            throw(MainError("empty `--lines` range"))
+        elseif a < 1 || b > max_line
+            throw(MainError("`--lines` range out of bounds"))
+        end
+    end
+    return
+end
+
+function add_line_range_markers(str, line_ranges, begin_marker, end_marker)
     lines = collect(eachline(IOBuffer(str); keep = true))
+    validate_line_ranges(lines, line_ranges)
+    if isempty(lines)
+        # The only valid selection is the virtual first line, so there is no marker to
+        # insert (and consequently none for `format_tree!` to remove).
+        empty!(line_ranges)
+        return str
+    end
     sort!(line_ranges, rev = true)
     for r in line_ranges
-        a, b = extrema(r)
+        a, b = first(r), last(r)
         # Some tooling considers a trailing \n to start a new line (as opposed to just
         # ending the previous line) so let's allow that by clamping b.
         if endswith(lines[end], "\n") && b == length(lines) + 1
@@ -175,8 +226,8 @@ function add_line_range_markers(str, line_ranges)
         if b == length(lines) && !endswith(lines[end], "\n")
             lines[end] *= "\n"
         end
-        insert!(lines, b + 1, RANGE_FORMATTING_END * "\n")
-        insert!(lines, a, RANGE_FORMATTING_BEGIN * "\n")
+        insert!(lines, b + 1, end_marker * "\n")
+        insert!(lines, a, begin_marker * "\n")
     end
     io = IOBuffer(; maxsize = sum(sizeof, lines; init = 0))
     join(io, lines)
@@ -184,7 +235,7 @@ function add_line_range_markers(str, line_ranges)
     return src_str
 end
 
-function remove_line_range_markers(src_io, fmt_io)
+function remove_line_range_markers(src_io, fmt_io, begin_marker, end_marker)
     src_lines = eachline(seekstart(src_io); keep = true)
     fmt_lines = eachline(seekstart(fmt_io); keep = true)
     io = IOBuffer()
@@ -198,8 +249,8 @@ function remove_line_range_markers(src_io, fmt_io)
     eof = false
     while true
         # Take source lines until range start or eof
-        while !occursin(RANGE_FORMATTING_BEGIN, src_ln)
-            if !occursin(RANGE_FORMATTING_END, src_ln)
+        while !is_range_formatting_begin(src_ln, begin_marker)
+            if !is_range_formatting_end(src_ln, end_marker)
                 write(io, src_ln)
             end
             src_itr = iterate(src_lines, src_token)
@@ -210,35 +261,31 @@ function remove_line_range_markers(src_io, fmt_io)
             src_ln, src_token = src_itr
         end
         eof && break
-        @assert occursin(RANGE_FORMATTING_BEGIN, src_ln) &&
-            strip(src_ln) == RANGE_FORMATTING_BEGIN
+        @assert is_range_formatting_begin(src_ln, begin_marker)
         # Skip ahead in the source lines until the range end
-        while !occursin(RANGE_FORMATTING_END, src_ln)
+        while !is_range_formatting_end(src_ln, end_marker)
             src_itr = iterate(src_lines, src_token)
             @assert src_itr !== nothing
             src_ln, src_token = src_itr
         end
-        @assert occursin(RANGE_FORMATTING_END, src_ln) &&
-            strip(src_ln) == RANGE_FORMATTING_END
+        @assert is_range_formatting_end(src_ln, end_marker)
         # Skip ahead in the formatted lines until range start
-        while !occursin(RANGE_FORMATTING_BEGIN, fmt_ln)
+        while !is_range_formatting_begin(fmt_ln, begin_marker)
             fmt_itr = iterate(fmt_lines, fmt_token)
             @assert fmt_itr !== nothing
             fmt_ln, fmt_token = fmt_itr
         end
-        @assert occursin(RANGE_FORMATTING_BEGIN, fmt_ln) &&
-            strip(fmt_ln) == RANGE_FORMATTING_BEGIN
+        @assert is_range_formatting_begin(fmt_ln, begin_marker)
         # Take formatted lines until range end
-        while !occursin(RANGE_FORMATTING_END, fmt_ln)
-            if !occursin(RANGE_FORMATTING_BEGIN, fmt_ln)
+        while !is_range_formatting_end(fmt_ln, end_marker)
+            if !is_range_formatting_begin(fmt_ln, begin_marker)
                 write(io, fmt_ln)
             end
             fmt_itr = iterate(fmt_lines, fmt_token)
             @assert fmt_itr !== nothing
             fmt_ln, fmt_token = fmt_itr
         end
-        @assert occursin(RANGE_FORMATTING_END, fmt_ln) &&
-            strip(fmt_ln) == RANGE_FORMATTING_END
+        @assert is_range_formatting_end(fmt_ln, end_marker)
         eof && break
     end
     write(seekstart(fmt_io), take!(io))
@@ -252,10 +299,13 @@ function Context(
         docstrings::Bool = false,
         line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[], filename::String = "-",
     )
+    range_formatting_begin, range_formatting_end = range_formatting_markers(src_str)
     if !isempty(line_ranges)
         # If formatting is limited to certain line ranges we modify the source string to
         # include begin and end marker comments.
-        src_str = add_line_range_markers(src_str, line_ranges)
+        src_str = add_line_range_markers(
+            src_str, line_ranges, range_formatting_begin, range_formatting_end
+        )
     end
     src_io = IOBuffer(src_str)
     # TODO: If parsing here fails, and we have line ranges, perhaps try to parse without the
@@ -290,8 +340,9 @@ function Context(
     format_on = true
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, filemode, docstrings, filename, line_ranges, indent_level, call_depth, format_on,
-        prev_sibling, next_sibling, lineage_kinds, lineage_macros
+        diff, filemode, docstrings, filename, line_ranges, range_formatting_begin,
+        range_formatting_end, indent_level, call_depth, format_on, prev_sibling, next_sibling,
+        lineage_kinds, lineage_macros
     )
 end
 
@@ -675,7 +726,9 @@ function format_tree!(ctx::Context)
     truncate(ctx.fmt_io, span(root′))
     # Remove line range markers if any
     if !isempty(ctx.line_ranges)
-        remove_line_range_markers(ctx.src_io, ctx.fmt_io)
+        remove_line_range_markers(
+            ctx.src_io, ctx.fmt_io, ctx.range_formatting_begin, ctx.range_formatting_end
+        )
     end
     # Check that the output is parseable
     try

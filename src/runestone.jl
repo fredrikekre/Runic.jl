@@ -3440,23 +3440,33 @@ end
 
 # Dispatch to REPL formatter or regular formatter based on the code blocks language
 function format_code_block(block_lines::Vector{String}, lang::String)
-    if lang == "julia-repl"
-        return format_repl_block(block_lines)
+    # `format_string` emits LF. Normalize CRLF input while parsing, then restore CRLF
+    # so formatting a Markdown code block does not introduce mixed line endings.
+    crlf = any(l -> endswith(l, "\r\n"), block_lines) &&
+        all(l -> !endswith(l, "\n") || endswith(l, "\r\n"), block_lines)
+    normalized_lines =
+        crlf ? [replace(l, "\r\n" => "\n") for l in block_lines] : block_lines
+    formatted = if lang == "julia-repl"
+        format_repl_block(normalized_lines)
     elseif lang == "jldoctest"
-        if any(l -> startswith(l, JULIA_REPL_PROMPT), block_lines)
-            return format_repl_block(block_lines)
+        if any(l -> startswith(l, JULIA_REPL_PROMPT), normalized_lines)
+            format_repl_block(normalized_lines)
         else
-            return format_julia_block(block_lines)
+            format_julia_block(normalized_lines)
         end
     else
-        return format_julia_block(block_lines)
+        format_julia_block(normalized_lines)
     end
+    return crlf ?
+        [endswith(l, "\n") ? chop(l; tail = 1) * "\r\n" : l for l in formatted] :
+        formatted
 end
 
 # Identify julia source code blocks (``` blocks four-space-indent blocks),
 # collect the lines, format the text and re-insert
 function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[])
     lines = collect(eachline(IOBuffer(s); keep = true))
+    validate_line_ranges(lines, line_ranges)
     isempty(lines) && return s
     # A block at lines `a:b` is formatted iff `line_ranges` is empty (no filter) or at
     # least one range overlaps the block. Block-granular: partial blocks are formatted
@@ -3488,7 +3498,7 @@ function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRa
                 lang = String(chop(lang; head = 1, tail = 1))
             end
             nticks = length(ticks)
-            re_close = Regex("^$(escape_string(indent))`{$(nticks)}\\h*\$")
+            re_close = Regex("^$(escape_string(indent))`{$(nticks),}\\h*\\r?\$")
             close_i = findnext(l -> occursin(re_close, l), lines, i + 1)
             if close_i === nothing
                 # Unclosed fence: everything from here to end of string is inside this
@@ -3566,13 +3576,14 @@ function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRa
                 at_boundary = false
                 continue
             end
-            # Strip the indent; normalize blank lines to "\n" (explicit trailing spaces
-            # on blank lines are not meaningful and chop would swallow the '\n').
+            # Strip the indent; normalize whitespace-only lines while preserving their
+            # newline style (chop would otherwise swallow the newline).
             stripped = String[
-                isempty(strip(l)) ? "\n" : chop(l; head = nbase_indent, tail = 0)
+                isempty(strip(l)) ? (endswith(l, "\r\n") ? "\r\n" : "\n") :
+                    chop(l; head = nbase_indent, tail = 0)
                     for l in lines[i:end_idx]
             ]
-            formatted = format_julia_block(stripped)
+            formatted = format_code_block(stripped, "julia")
             if formatted == stripped
                 # parse failed or already idempotent — pass through unchanged
                 append!(result, @view lines[i:end_idx])

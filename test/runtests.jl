@@ -2075,6 +2075,17 @@ end
     out = "# Title\n\nSome prose.\n\n```julia\nx = 1\n```\n\nMore prose.\n"
     @test fm(src) == out
 
+    # CRLF line endings are preserved while fenced code is formatted.
+    src_crlf = "```julia\r\nx=1\r\n```\r\n"
+    @test fm(src_crlf) == "```julia\r\nx = 1\r\n```\r\n"
+    src_crlf_indented = "Prose.\r\n\r\n    x=1\r\n\r\n    y=2\r\n\r\nEnd.\r\n"
+    @test fm(src_crlf_indented) ==
+        "Prose.\r\n\r\n    x = 1\r\n\r\n    y = 2\r\n\r\nEnd.\r\n"
+
+    # CommonMark permits a closing backtick fence to be longer than its opener.
+    src_long_close = "```julia\nx=1\n````\n"
+    @test fm(src_long_close) == "```julia\nx = 1\n````\n"
+
     # Non-Julia fence left untouched
     @test fm("```python\nx=1\n```\n") == "```python\nx=1\n```\n"
 
@@ -2160,6 +2171,9 @@ end
         # Multiple ranges union
         @test fm(src; line_ranges = [2:2, 6:6]) ==
             "```julia\nx = 1\n```\n\n```julia\ny = 2\n```\n"
+        # Invalid ranges are rejected rather than silently ignored.
+        @test_throws Runic.MainError fm(src; line_ranges = [0:1])
+        @test_throws Runic.MainError fm(src; line_ranges = [9:9])
     end
 end
 
