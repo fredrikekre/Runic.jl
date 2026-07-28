@@ -7,6 +7,8 @@ using Test:
 using JuliaSyntax:
     JuliaSyntax, @K_str, @KSet_str
 
+include("gitrunictests.jl")
+
 @testset "Node" begin
     node = Runic.Node(JuliaSyntax.parseall(JuliaSyntax.GreenNode, "a = 1 + b\n"))
 
