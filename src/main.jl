@@ -4,7 +4,6 @@
 errno::Cint = 0
 
 # Check whether we are compiling with juliac
-using Preferences: @load_preference
 const juliac = @load_preference("juliac", false)
 
 @static if juliac
