@@ -52,9 +52,14 @@ runic --help    # Show documentation
 
 ```sh
 # Format all files in-place in the current directory (recursively)
-# !! DON'T DO THIS FROM YOUR HOME DIRECTORY !!
 runic --inplace .
 ```
+
+> [!NOTE]
+> When walking directories Runic refuses to recurse into your home directory and into Julia
+> depot subdirectories (e.g. `~/.julia/packages`), and skips nested git repositories (e.g.
+> git submodules). Pass `--recurse` to include nested git repositories and `--force-recurse` to
+> disable all checks.
 
 <details>
 <summary>Legacy installation instructions</summary>
@@ -156,6 +161,11 @@ OPTIONS
            pick up both Julia and Markdown files. Explicit file paths bypass this
            filter.
 
+       --force-recurse
+           Disable the safety checks that prevent formatting of the home
+           directory and Julia depot subdirectories (e.g. `~/.julia/packages`).
+           Implies `--recurse`.
+
        --help
            Print this message.
 
@@ -169,6 +179,11 @@ OPTIONS
        -o <file>, --output=<file>
            File to write formatted output to. If no output is given, or if the file
            is `-`, output is written to stdout.
+
+       --recurse
+           Recurse into nested git repositories (e.g. git submodules and vendored
+           clones) when walking directories. By default nested git repositories
+           are skipped.
 
        --stdin-filename=<filename>
            Assumed filename when formatting from stdin. Used for error messages
