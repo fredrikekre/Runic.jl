@@ -341,6 +341,63 @@ function validate_toggle(ctx, kids, i)
     return valid
 end
 
+# Pre-scan kids for valid `# runic: off` ↔ `# runic: on` toggle pairs at the same sibling
+# level. Returns the inclusive index ranges `off_idx:on_idx`, or `nothing` if there are no
+# toggles (the common case, kept allocation free).
+# This is used by sibling-aware rules (e.g. spaces_in_listlike) which need to honor the
+# toggle themselves since they run on the parent node, before format_node_with_kids! gets
+# a chance to turn formatting off for the kids.
+function find_format_toggle_ranges(ctx::Context, kids::Vector)
+    # Bail out early (without allocating) unless there are at least two comments to pair up
+    n_comments = count(x -> kind(x) === K"Comment", kids)
+    n_comments < 2 && return nothing
+    ranges = nothing
+    reg = r"#(!)? (runic|format): (on|off)"
+    pos = position(ctx.fmt_io)
+    # Byte offset of each kid relative to the start of the parent node
+    offsets = Vector{Int}(undef, length(kids))
+    let o = 0
+        for k in eachindex(kids)
+            offsets[k] = o
+            o += span(kids[k])
+        end
+    end
+    i = 1
+    while i <= length(kids)
+        kid = kids[i]
+        i_advance = 1
+        if kind(kid) === K"Comment"
+            seek(ctx.fmt_io, pos + offsets[i])
+            offmatch = match(reg, String(read_bytes(ctx, kid)))
+            if offmatch !== nothing && offmatch.captures[3] == "off" &&
+                    validate_toggle(ctx, kids, i)
+                # Look for the matching `on` toggle among the following siblings
+                for j in (i + 1):length(kids)
+                    lkid = kids[j]
+                    kind(lkid) === K"Comment" || continue
+                    seek(ctx.fmt_io, pos + offsets[j])
+                    onmatch = match(reg, String(read_bytes(ctx, lkid)))
+                    onmatch === nothing && continue
+                    # The toggles must match in style (`#` vs `#!`, `runic` vs `format`)
+                    offmatch.captures[1] == onmatch.captures[1] || continue
+                    offmatch.captures[2] == onmatch.captures[2] || continue
+                    onmatch.captures[3] == "on" || continue
+                    validate_toggle(ctx, kids, j) || continue
+                    if ranges === nothing
+                        ranges = UnitRange{Int}[]
+                    end
+                    push!(ranges, i:j)
+                    i_advance = j - i + 1
+                    break
+                end
+            end
+        end
+        i += i_advance
+    end
+    seek(ctx.fmt_io, pos)
+    return ranges
+end
+
 function check_format_toggle(ctx::Context, node::Node, kid::Node, i::Int)::Union{Int, Nothing}
     @assert ctx.format_on
     @assert !is_leaf(node)

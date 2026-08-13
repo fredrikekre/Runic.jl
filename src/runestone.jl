@@ -326,6 +326,13 @@ function spaces_in_listlike(ctx::Context, node::Node)
         last_item_idx = nothing
     end
 
+    # Pre-scan for `# runic: off` / `# runic: on` toggle pairs among the kids. Kids inside
+    # such a region are "frozen": they are accepted verbatim instead of having their
+    # whitespace rewritten. Note that the state machine below still transitions as usual
+    # for frozen kids, only the byte mutations are suppressed.
+    toggle_ranges = find_format_toggle_ranges(ctx, kids)
+    is_frozen(i) = toggle_ranges !== nothing && any(r -> i in r, toggle_ranges)
+
     # Multiline lists require leading and trailing newline
     # multiline = contains_outer_newline(kids, opening_leaf_idx, closing_leaf_idx)
     # multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (opening_leaf_idx + 1):(closing_leaf_idx - 1))
@@ -397,6 +404,14 @@ function spaces_in_listlike(ctx::Context, node::Node)
         )
     end
 
+    # If the last item is inside a `# runic: off` region we can't insert the trailing comma
+    # after it without touching the region. Trailing commas that are required by the parser
+    # (single item tuples etc.) are always already present in the source, so the only thing
+    # given up here is the Runic-mandated trailing comma of multiline lists.
+    if require_trailing_comma && last_item_idx !== nothing && is_frozen(last_item_idx)
+        require_trailing_comma = false
+    end
+
     # Helper to compute the new state after a given item
     function state_after_item(i, last_item_idx, require_trailing_comma)
         @assert i <= last_item_idx
@@ -435,18 +450,20 @@ function spaces_in_listlike(ctx::Context, node::Node)
     for i in (opening_leaf_idx + 1):(closing_leaf_idx - 1)
         kid′ = kids[i]
         this_kid_changed = false
+        # Kids inside a `# runic: off` region are accepted verbatim
+        frozen = is_frozen(i)
         if state === :expect_item
-            if kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+            if kind(kid′) === K"Whitespace" && peek(i) !== K"Comment" && !frozen
                 # Delete whitespace unless followed by a comment
                 replace_bytes!(ctx, "", span(kid′))
                 this_kid_changed = true
                 if kids′ === kids
                     kids′ = kids[1:(i - 1)]
                 end
-            elseif kind(kid′) === K"NewlineWs" ||
-                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment")
+            elseif kind(kid′) === K"NewlineWs" || kind(kid′) === K"Whitespace"
                 # Newline here can happen if this kid is just after the opening leaf or if
-                # there is an empty line between items. No state change.
+                # there is an empty line between items. Whitespace reaching this branch is
+                # either followed by a comment or frozen. No state change.
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
             elseif kind(kid′) === K"Comment"
@@ -457,19 +474,19 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # This is an item (probably?).
                 @assert !JuliaSyntax.is_whitespace(first_leaf(kid′))
                 @assert !JuliaSyntax.is_whitespace(last_leaf(kid′))
-                if kind(kid′) === K"parameters" && require_trailing_comma &&
+                if !frozen && kind(kid′) === K"parameters" && require_trailing_comma &&
                         i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA)
                     # Tag the node to require a trailing comma
                     kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
                     this_kid_changed = true
                 end
-                if kind(kid′) === K"parameters" && allow_trailing_comma &&
+                if !frozen && kind(kid′) === K"parameters" && allow_trailing_comma &&
                         i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
                     # Tag the node to optionally have a trailing comma
                     kid′ = add_tag(kid′, TAG_TRAILING_COMMA_OPT)
                     this_kid_changed = true
                 end
-                if kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
+                if !frozen && kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
                         count(
                         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
                         verified_kids(kid′)
@@ -510,7 +527,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 end
                 # Transition to the next state
                 state = before_last_item ? (:expect_space) : (:expect_closing)
-            elseif kind(kid′) === K"Whitespace" && peek(i) !== K"Comment"
+            elseif kind(kid′) === K"Whitespace" && peek(i) !== K"Comment" && !frozen
                 # Delete space (unless followed by a comment) and hope next is still comma
                 # (no state change)
                 this_kid_changed = true
@@ -519,7 +536,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 end
                 replace_bytes!(ctx, "", span(kid′))
             elseif kind(kid′) === K"NewlineWs" ||
-                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment") ||
+                    kind(kid′) === K"Whitespace" ||
                     kind(kid′) === K"Comment"
                 # This branch can be reached if:
                 #  - we have passed the last item and there is no trailing comma
@@ -529,8 +546,9 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     !JuliaSyntax.is_whitespace, @view(kids[1:(closing_leaf_idx - 1)]), i + 1
                 )
                 next_kind = next_non_ws_idx === nothing ? nothing : kind(kids[next_non_ws_idx])
-                # Insert a comma if there isn't one coming
-                if trailing && next_kind !== K","
+                # Insert a comma if there isn't one coming (never inside a frozen region,
+                # the comma would end up inside the `# runic: on` comment)
+                if trailing && next_kind !== K"," && !frozen
                     @assert require_trailing_comma
                     this_kid_changed = true
                     if kids′ === kids
@@ -553,7 +571,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # Note that some of these are not valid Julia syntax still parse
                 @assert kind(node) in KSet"call dotcall macrocall curly tuple vect ref braces"
                 @assert !JuliaSyntax.is_whitespace(first_leaf(kid′))
-                if require_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA)
+                if !frozen && require_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA)
                     # Tag the parameters node to require a trailing comma
                     kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
                     this_kid_changed = true
@@ -561,12 +579,12 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     #     kids′ = kids[1:i - 1]
                     # end
                 end
-                if allow_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
+                if !frozen && allow_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
                     # Tag the parameters node to optionally allow a trailing comma
                     kid′ = add_tag(kid′, TAG_TRAILING_COMMA_OPT)
                     this_kid_changed = true
                 end
-                if !require_trailing_comma &&
+                if !frozen && !require_trailing_comma &&
                         count(
                         x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
                         verified_kids(kid′)
@@ -599,10 +617,11 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 unreachable()
             end
         elseif state === :expect_space
-            if (kind(kid′) === K"Whitespace" && span(kid′) == 1) ||
-                    (kind(kid′) === K"Whitespace" && peek(i) === K"Comment")
+            if kind(kid′) === K"Whitespace" &&
+                    (span(kid′) == 1 || peek(i) === K"Comment" || frozen)
                 # Whitespace with correct span
                 # Whitespace before a comment
+                # Frozen whitespace, kept as is
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
                 state = :expect_item
@@ -622,6 +641,12 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 accept_node!(ctx, kid′)
                 any_kid_changed && push!(kids′, kid′)
                 state = :expect_item
+            elseif frozen
+                # Item inside a frozen region: accept it without inserting a space
+                @assert !(kind(kid′) in KSet", ;")
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
+                state = state_after_item(i, last_item_idx, require_trailing_comma)
             else
                 # Probably a list item, insert a space before it
                 @assert !(kind(kid′) in KSet", ;")
@@ -640,9 +665,11 @@ function spaces_in_listlike(ctx::Context, node::Node)
             end
         else
             @assert state === :expect_closing
-            if (kind(kid′) === K"," && !allow_trailing_comma) ||
-                    (kind(kid′) === K";" && !allow_trailing_semi) ||
-                    (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
+            if !frozen && (
+                    (kind(kid′) === K"," && !allow_trailing_comma) ||
+                        (kind(kid′) === K";" && !allow_trailing_semi) ||
+                        (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
+                )
                 # Trailing comma (when not wanted) and space not followed by a comment are
                 # removed
                 this_kid_changed = true
@@ -650,6 +677,16 @@ function spaces_in_listlike(ctx::Context, node::Node)
                     kids′ = kids[1:(i - 1)]
                 end
                 replace_bytes!(ctx, "", span(kid′))
+            elseif frozen
+                # Frozen region: accept the kid verbatim, but keep the trailing
+                # comma/semicolon bookkeeping in sync
+                if kind(kid′) === K";"
+                    allow_trailing_semi = n_items == 0
+                elseif kind(kid′) === K","
+                    allow_trailing_comma = false
+                end
+                accept_node!(ctx, kid′)
+                any_kid_changed && push!(kids′, kid′)
             elseif kind(node) === K"block" && kind(kid′) === K";" && allow_trailing_semi ||
                     (kind(kid′) === K"," && allow_trailing_comma) ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
