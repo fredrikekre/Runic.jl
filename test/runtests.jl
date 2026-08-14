@@ -1590,6 +1590,173 @@ end
             ]"""
             @test format_string(str) == str
         end
+        # Toggles as siblings inside listlike nodes: `spaces_in_listlike` must not
+        # rewrite whitespace between commas inside the off region. The toggle
+        # comments span the full body (matches mwe.jl).
+        let str = """
+            (
+                $off
+                   1,    1,    1,
+                1000, 1000, 1000,
+                $on
+            )
+            """
+            @test format_string(str) == str
+        end
+        let str = """
+            [
+                $off
+                   1,    1,    1,
+                1000, 1000, 1000,
+                $on
+            ]
+            """
+            @test format_string(str) == str
+        end
+        let str = """
+            f(
+                $off
+                a   ,   b,
+                c,d,
+                $on
+            )
+            """
+            @test format_string(str) == str
+        end
+        let str = """
+            {
+                $off
+                a   ,   b,
+                c,d,
+                $on
+            }
+            """
+            @test format_string(str) == str
+        end
+        # Toggles in the middle of a listlike: items before/after the off region
+        # are still formatted, items inside are preserved verbatim.
+        @test format_string(
+            """
+            (
+                a,b,
+                $off
+                c   ,    d,
+                $on
+                e,f,
+            )
+            """
+        ) == """
+            (
+                a, b,
+                $off
+                c   ,    d,
+                $on
+                e, f,
+            )
+            """
+        @test format_string(
+            """
+            [
+                a,b,
+                $off
+                c   ,    d,
+                $on
+                e,f,
+            ]
+            """
+        ) == """
+            [
+                a, b,
+                $off
+                c   ,    d,
+                $on
+                e, f,
+            ]
+            """
+        # Multiple disjoint toggle regions in the same listlike.
+        @test format_string(
+            """
+            (
+                $off
+                a   ,    b,
+                $on
+                c,d,
+                $off
+                e   ,    f,
+                $on
+            )
+            """
+        ) == """
+            (
+                $off
+                a   ,    b,
+                $on
+                c, d,
+                $off
+                e   ,    f,
+                $on
+            )
+            """
+        # The trailing comma that Runic requires for multiline listlikes is given up
+        # when the last item is inside the off region -- inserting it would either
+        # touch the region or (worse) end up inside the `on` comment.
+        let str = """
+            [
+                $off
+                a
+                $on
+            ]
+            """
+            @test format_string(str) == str
+        end
+        let str = """
+            [
+                a,
+                $off
+                b
+                $on
+            ]
+            """
+            @test format_string(str) == str
+        end
+        # ... but a trailing comma is still inserted when the last item is outside
+        # the off region, even if the region follows it.
+        @test format_string(
+            """
+            [
+                a
+                $off
+                $on
+            ]
+            """
+        ) == """
+            [
+                a,
+                $off
+                $on
+            ]
+            """
+        # Keyword arguments (K"parameters" kids) inside the off region.
+        let str = """
+            f(
+                $off
+                a,   b;
+                c   =   1,
+                $on
+            )
+            """
+            @test format_string(str) == str
+        end
+        let str = """
+            f(
+                $off
+                a;
+                b
+                $on
+            )
+            """
+            @test format_string(str) == str
+        end
     end
 end
 

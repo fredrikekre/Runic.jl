@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+### Fixed
+ - `# runic: off` / `# runic: on` toggles now work as expected also when the toggle comments
+   are direct children of a listlike expression (tuples, function calls, `[ ]`, `{ }`, ...)
+   ([#145], [#210]).
+
 ## [v1.7.0] - 2026-04-22
 ### Added
  - New opt-in flag `--docstrings` (and corresponding `docstrings::Bool` keyword argument for
@@ -233,6 +239,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#136]: https://github.com/fredrikekre/Runic.jl/issues/136
 [#137]: https://github.com/fredrikekre/Runic.jl/issues/137
 [#138]: https://github.com/fredrikekre/Runic.jl/issues/138
+[#145]: https://github.com/fredrikekre/Runic.jl/issues/145
 [#151]: https://github.com/fredrikekre/Runic.jl/issues/151
 [#152]: https://github.com/fredrikekre/Runic.jl/issues/152
 [#154]: https://github.com/fredrikekre/Runic.jl/issues/154
@@ -249,3 +256,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#194]: https://github.com/fredrikekre/Runic.jl/issues/194
 [#196]: https://github.com/fredrikekre/Runic.jl/issues/196
 [#197]: https://github.com/fredrikekre/Runic.jl/issues/197
+[#210]: https://github.com/fredrikekre/Runic.jl/issues/210
