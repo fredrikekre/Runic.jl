@@ -3354,8 +3354,11 @@ const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|[A-Za-z0-9_-]*)"
 
 is_julia_lang(lang::AbstractString) = lang in ("julia", "julia-repl", "jldoctest")
 
-# Markdown and Quarto markdown file extensions
-is_markdown_file(path::AbstractString) = endswith(path, ".md") || endswith(path, ".qmd")
+# Markdown and Quarto markdown file extensions (case-insensitive, e.g. `README.MD`)
+function is_markdown_file(path::AbstractString)
+    ext = lowercase(path)
+    return endswith(ext, ".md") || endswith(ext, ".qmd")
+end
 
 function format_julia_block(block_lines::Vector{String})
     isempty(block_lines) && return block_lines
@@ -3441,9 +3444,10 @@ end
 # Dispatch to REPL formatter or regular formatter based on the code blocks language
 function format_code_block(block_lines::Vector{String}, lang::String)
     # `format_string` emits LF. Normalize CRLF input while parsing, then restore CRLF
-    # so formatting a Markdown code block does not introduce mixed line endings.
-    crlf = any(l -> endswith(l, "\r\n"), block_lines) &&
-        all(l -> !endswith(l, "\n") || endswith(l, "\r\n"), block_lines)
+    # so formatting a Markdown code block does not introduce mixed line endings. Blocks
+    # with mixed endings count as CRLF so that stray LF lines converge to CRLF instead
+    # of the block flip-flopping to LF.
+    crlf = any(l -> endswith(l, "\r\n"), block_lines)
     normalized_lines =
         crlf ? [replace(l, "\r\n" => "\n") for l in block_lines] : block_lines
     formatted = if lang == "julia-repl"
@@ -3746,23 +3750,34 @@ function is_docstring_literal(node::Node)
     return length(significant_kids) == 1 && is_docstring_literal(only(significant_kids))
 end
 
-function remove_trailing_semicolon_block(ctx::Context, node::Node)
+function remove_trailing_semicolon_block(ctx::Context, node::Node, struct_body::Bool = false)
     kind(node) === K"block" || return nothing
     @assert !is_leaf(node)
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
     kids′ = kids
+    # Whether strings in this block can become docstrings of the following expression.
+    # Struct bodies can not be detected from the block node itself so the caller passes
+    # `struct_body` instead.
+    docstring_context = struct_body || is_begin_block(node) || is_begin_block(node, K"quote")
     semi_idx = findfirst(x -> kind(x) === K";", kids′)
     while semi_idx !== nothing
-        if is_begin_block(node) || is_begin_block(node, K"quote")
+        if docstring_context
             prev_expr_idx = findprev(
                 x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K"Comment"),
                 kids′, semi_idx - 1
             )
-            if prev_expr_idx !== nothing && is_docstring_literal(kids′[prev_expr_idx])
-                # In explicit begin/quote blocks, a string followed by another
+            next_expr_idx = findnext(
+                x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet"Comment ; end"),
+                kids′, semi_idx + 1
+            )
+            if prev_expr_idx !== nothing && is_docstring_literal(kids′[prev_expr_idx]) &&
+                    next_expr_idx !== nothing
+                # In begin/quote blocks and struct bodies, a string followed by another
                 # expression becomes its docstring unless a semicolon separates them.
-                # Preserve that semicolon to avoid changing the parsed program.
+                # Preserve that semicolon to avoid changing the parsed program. If no
+                # expression follows the string no docstring can form and the semicolon
+                # can be removed as usual.
                 semi_idx = findnext(x -> kind(x) === K";", kids′, semi_idx + 1)
                 continue
             end
@@ -3879,7 +3894,9 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
             for i in 1:(block_idx - 1)
                 accept_node!(ctx, kids′[i])
             end
-            block′ = remove_trailing_semicolon_block(ctx, kids′[block_idx])
+            block′ = remove_trailing_semicolon_block(
+                ctx, kids′[block_idx], kind(node) === K"struct"
+            )
             if block′ !== nothing
                 any_changed = true
                 if kids′ === kids

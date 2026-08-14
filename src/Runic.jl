@@ -299,8 +299,12 @@ function Context(
         docstrings::Bool = false,
         line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[], filename::String = "-",
     )
-    range_formatting_begin, range_formatting_end = range_formatting_markers(src_str)
+    # The markers are only used when formatting is limited to certain line ranges so
+    # the (comparatively expensive) collision scan is skipped on the common path.
+    range_formatting_begin, range_formatting_end =
+        RANGE_FORMATTING_BEGIN, RANGE_FORMATTING_END
     if !isempty(line_ranges)
+        range_formatting_begin, range_formatting_end = range_formatting_markers(src_str)
         # If formatting is limited to certain line ranges we modify the source string to
         # include begin and end marker comments.
         src_str = add_line_range_markers(

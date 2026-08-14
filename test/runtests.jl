@@ -1366,6 +1366,18 @@ end
     # Removing this semicolon would turn the string into a docstring for `x`.
     @test format_string("begin\n\"not a docstring\";\nx\nend") ==
         "begin\n    \"not a docstring\";\n    x\nend"
+    @test format_string("quote\n\"not a docstring\";\nx\nend") ==
+        "quote\n    \"not a docstring\";\n    x\nend"
+    # Same in (mutable) struct bodies where the string would become a field docstring.
+    @test format_string("struct S\n\"not a docstring\";\nx\nend") ==
+        "struct S\n    \"not a docstring\";\n    x\nend"
+    @test format_string("mutable struct S\n\"not a docstring\";\nx\nend") ==
+        "mutable struct S\n    \"not a docstring\";\n    x\nend"
+    # If no expression follows the string no docstring can form and the semicolon is
+    # removed as usual.
+    @test format_string("begin\n\"str\";\nend") == "begin\n    \"str\"\nend"
+    @test format_string("quote\n\"str\";\nend") == "quote\n    \"str\"\nend"
+    @test format_string("struct S\n\"str\";\nend") == "struct S\n    \"str\"\nend"
 
     # A semicolon at the start of a comment-only line must disappear without leaving
     # indentation that requires a second formatting pass.
@@ -2082,6 +2094,13 @@ end
     @test fm(src_crlf_indented) ==
         "Prose.\r\n\r\n    x = 1\r\n\r\n    y = 2\r\n\r\nEnd.\r\n"
 
+    # Blocks with mixed line endings converge to CRLF instead of flipping the CRLF
+    # lines to LF.
+    src_crlf_mixed = "```julia\r\nx=1\r\ny=2\n```\r\n"
+    out_crlf_mixed = "```julia\r\nx = 1\r\ny = 2\r\n```\r\n"
+    @test fm(src_crlf_mixed) == out_crlf_mixed
+    @test fm(out_crlf_mixed) == out_crlf_mixed
+
     # CommonMark permits a closing backtick fence to be longer than its opener.
     src_long_close = "```julia\nx=1\n````\n"
     @test fm(src_long_close) == "```julia\nx = 1\n````\n"
@@ -2135,6 +2154,14 @@ end
         write(path, src_qmd)
         Runic.format_file(path; inplace = true)
         @test read(path, String) == out_qmd
+    end
+
+    # Extension dispatch is case-insensitive (`README.MD` etc), same as in git-runic
+    mktempdir() do dir
+        path = joinpath(dir, "doc.MD")
+        write(path, src)
+        Runic.format_file(path; inplace = true)
+        @test read(path, String) == out
     end
 
     # format_file with separate output file

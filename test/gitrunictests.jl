@@ -133,6 +133,47 @@ end
             @test GitRunic.git(["show", ":new.jl"]) == "x = 1"
             @test read("new.jl", String) == "x=1\n"
         end
+        # Other spellings of the (unresolvable) default commit work the same way
+        with_repository(; commit = false) do
+            write("new.jl", "x=1\n")
+            GitRunic.git(["add", "new.jl"])
+
+            @test GitRunic._main(["--staged", "--quiet", "--commit=@"]) == 1
+            @test GitRunic.git(["show", ":new.jl"]) == "x = 1"
+        end
+    end
+
+    @testset "glob metacharacters in filenames" begin
+        if Sys.isunix()
+            with_repository() do
+                # As a glob pathspec `?.jl` also matches the symlink `0.jl`, which used
+                # to trick the symlink filter into dropping the regular file instead.
+                write("?.jl", "x=1\n")
+                write("outside", "outside")
+                symlink("outside", "0.jl")
+                GitRunic.git(["add", "."])
+
+                @test GitRunic._main(["--staged", "--quiet"]) == 1
+                @test GitRunic.git(["show", ":?.jl"]) == "x = 1"
+                @test islink("0.jl")
+                @test readlink("0.jl") == "outside"
+            end
+        end
+    end
+
+    @testset "index entries of unmodified files are preserved" begin
+        with_repository() do
+            write("a.jl", "a=2\n")
+            write("b.jl", "b = 2\n") # already formatted
+            GitRunic.git(["add", "a.jl", "b.jl"])
+            GitRunic.git(["update-index", "--skip-worktree", "b.jl"])
+
+            @test GitRunic._main(["--staged", "--quiet"]) == 1
+            @test GitRunic.git(["show", ":a.jl"]) == "a = 2"
+            # b.jl was not modified by the formatter so its index entry, including the
+            # skip-worktree flag, must be left alone.
+            @test startswith(GitRunic.git(["ls-files", "-v", "--", "b.jl"]), "S")
+        end
     end
 
     @testset "temporary index isolation" begin
