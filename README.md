@@ -115,11 +115,13 @@ runic --docstrings --inplace src/
 ```
 
 Format Julia code blocks inside Markdown files. Dispatch is by file extension — any
-file whose name ends in `.md` is routed through the Markdown formatter, which only
-rewrites the embedded Julia code blocks and leaves the prose alone:
+file whose name ends in `.md` or `.qmd` (Quarto) is routed through the Markdown
+formatter, which only rewrites the embedded Julia code blocks and leaves the prose
+alone. In addition to the fences listed above, Quarto executable code cells
+(```` ```{julia} ````) are recognized as Julia code blocks:
 ```sh
 runic --inplace README.md                # explicit path — extension handles it
-runic --extensions=jl,md --inplace .     # directory walk picks up both kinds
+runic --extensions=jl,md,qmd --inplace . # directory walk picks up all three kinds
 echo '```julia' > foo.md && echo '1+1' >> foo.md && echo '```' >> foo.md
 cat foo.md | runic --stdin-filename=foo.md   # stdin dispatch via virtual filename
 ```

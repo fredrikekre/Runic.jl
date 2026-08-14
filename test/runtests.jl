@@ -2049,10 +2049,23 @@ end
     src_bad = "```julia\nx = 1 +\n```\n"
     @test fm(src_bad) == src_bad
 
+    # Quarto executable code cell (```{julia}) formatted; cell options (#| key: value)
+    # pass through as regular comments
+    src_qmd = "```{julia}\n#| echo: false\nx=1\n```\n"
+    out_qmd = "```{julia}\n#| echo: false\nx = 1\n```\n"
+    @test fm(src_qmd) == out_qmd
+
+    # Non-Julia and malformed cells left untouched
+    @test fm("```{python}\nx=1\n```\n") == "```{python}\nx=1\n```\n"
+    @test fm("```{}\nx=1\n```\n") == "```{}\nx=1\n```\n"
+    @test fm("```{julia\nx=1\n```\n") == "```{julia\nx=1\n```\n"
+    @test fm("```{julia, echo=FALSE}\nx=1\n```\n") == "```{julia, echo=FALSE}\nx=1\n```\n"
+
     # Idempotency: an already-formatted file is unchanged
     @test fm(out) == out
     @test fm(out_jld) == out_jld
     @test fm(out_ind) == out_ind
+    @test fm(out_qmd) == out_qmd
 
     # format_file auto-dispatches to the Markdown path on .md extension
     mktempdir() do dir
@@ -2060,6 +2073,14 @@ end
         write(path, src)
         Runic.format_file(path; inplace = true)
         @test read(path, String) == out
+    end
+
+    # format_file auto-dispatches to the Markdown path on .qmd extension
+    mktempdir() do dir
+        path = joinpath(dir, "doc.qmd")
+        write(path, src_qmd)
+        Runic.format_file(path; inplace = true)
+        @test read(path, String) == out_qmd
     end
 
     # format_file with separate output file

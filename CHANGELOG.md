@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+ - Formatting of Julia code in Quarto markdown files. Files with the `.qmd` extension are
+   routed through the Markdown formatter (same as `.md` files), and Quarto executable code
+   cells (```` ```{julia} ```` fences) are recognized as Julia code blocks in addition to
+   the plain ```` ```julia ````, ```` ```julia-repl ````, and ```` ```jldoctest ```` fences.
+   ([#207], [#212])
+
 ## [v1.8.0] - 2026-08-14
 ### Added
  - Safety checks for directory recursion. When collecting files from a directory Runic now
@@ -265,5 +273,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#196]: https://github.com/fredrikekre/Runic.jl/issues/196
 [#197]: https://github.com/fredrikekre/Runic.jl/issues/197
 [#200]: https://github.com/fredrikekre/Runic.jl/issues/200
+[#207]: https://github.com/fredrikekre/Runic.jl/issues/207
 [#210]: https://github.com/fredrikekre/Runic.jl/issues/210
 [#211]: https://github.com/fredrikekre/Runic.jl/issues/211
+[#212]: https://github.com/fredrikekre/Runic.jl/issues/212

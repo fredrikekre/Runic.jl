@@ -639,6 +639,15 @@ function maintests(f::R, real_home::String) where {R}
         @test fd1 == src_md
     end
 
+    # runic Quarto markdown stdin dispatch via --stdin-filename=*.qmd
+    let src_qmd = "```{julia}\n#| echo: false\nx=1\n```\n",
+            expected_qmd = "```{julia}\n#| echo: false\nx = 1\n```\n"
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.qmd"], src_qmd)
+        @test rc == 0
+        @test fd1 == expected_qmd
+        @test isempty(fd2)
+    end
+
     # runic --extensions for directory walking
     mktempdir() do dir
         write(joinpath(dir, "a.jl"), "x=1\n")

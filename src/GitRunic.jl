@@ -8,7 +8,7 @@
 
 module GitRunic
 
-import ..Context, ..format_tree!, ..format_markdown, ..MainError
+import ..Context, ..format_tree!, ..format_markdown, ..is_markdown_file, ..MainError
 
 const USAGE = "git runic [OPTIONS] [<commit>] [<commit>|--staged] [--] [<file>...]"
 
@@ -255,11 +255,11 @@ function runic_to_blob(filename, line_ranges::Vector{UnitRange{Int}}; revision =
         src_str = read(filename, String)
     end
 
-    # Format in-process. Dispatch on extension: `.md` through the Markdown
+    # Format in-process. Dispatch on extension: `.md` and `.qmd` through the Markdown
     # formatter, everything else through the Julia formatter. Mirrors the
     # extension dispatch in `Runic.main` / `Runic.format_file`.
     local fmt_io::IO
-    if endswith(filename, ".md")
+    if is_markdown_file(filename)
         fmt_io = IOBuffer(format_markdown(src_str; line_ranges = line_ranges))
     else
         ctx = Context(src_str; line_ranges = line_ranges, filename = filename)
