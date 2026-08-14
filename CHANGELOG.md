@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v1.8.0] - 2026-08-14
+### Added
+ - Safety checks for directory recursion. When collecting files from a directory Runic now
+   errors if the home directory or a Julia depot subdirectory (e.g. `~/.julia/packages`,
+   `~/.julia/dev`) is encountered, whether given as the input path or reached recursively,
+   and silently skips nested git repositories (e.g. git submodules and vendored clones).
+   The new `--recurse` flag includes nested git repositories in the walk and the new
+   `--force-recurse` flag disables all checks. ([#200], [#211])
 ### Fixed
  - `# runic: off` / `# runic: on` toggles now work as expected also when the toggle comments
    are direct children of a listlike expression (tuples, function calls, `[ ]`, `{ }`, ...)
@@ -217,6 +224,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.6.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.6.0
 [v1.6.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.6.1
 [v1.7.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.7.0
+[v1.8.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.8.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -256,4 +264,6 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#194]: https://github.com/fredrikekre/Runic.jl/issues/194
 [#196]: https://github.com/fredrikekre/Runic.jl/issues/196
 [#197]: https://github.com/fredrikekre/Runic.jl/issues/197
+[#200]: https://github.com/fredrikekre/Runic.jl/issues/200
 [#210]: https://github.com/fredrikekre/Runic.jl/issues/210
+[#211]: https://github.com/fredrikekre/Runic.jl/issues/211

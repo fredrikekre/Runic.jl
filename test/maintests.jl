@@ -3,7 +3,34 @@
 using Test: @test
 using Runic: Runic
 
+# Entrypoint which points `homedir()` to a temporary directory for the duration of the
+# tests so that Runic never operates on the real home directory, even if a test (or Runic
+# itself) misbehaves. If `homedir()` can not be redirected through the environment the
+# tests still run: `assert_not_real_home` below guards every runic invocation either way.
 function maintests(f::R) where {R}
+    real_home = try
+        realpath(homedir())
+    catch
+        ""
+    end
+    mktempdir() do fake_home
+        env_keys = ["HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"]
+        old_env = [get(ENV, k, nothing) for k in env_keys]
+        try
+            ENV["HOME"] = ENV["USERPROFILE"] = fake_home
+            delete!(ENV, "HOMEDRIVE")
+            delete!(ENV, "HOMEPATH")
+            maintests(f, real_home)
+        finally
+            for (k, v) in zip(env_keys, old_env)
+                v === nothing ? delete!(ENV, k) : (ENV[k] = v)
+            end
+        end
+    end
+    return
+end
+
+function maintests(f::R, real_home::String) where {R}
 
     bad = "1+1"
     good = "1 + 1\n"
@@ -12,10 +39,30 @@ function maintests(f::R) where {R}
     function cdtmp(f)
         return mktempdir(tmp -> cd(f, tmp))
     end
+    # Safety net: refuse to invoke runic if any input path resolves to the real home
+    # directory (or its parent). The tests run `runic --inplace` so a bug in Runic's
+    # directory protection could otherwise be disastrous. Note that `realpath` resolves
+    # relative paths (e.g. `.`) against the current working directory.
+    function assert_not_real_home(argv::Vector{String})
+        isempty(real_home) && return
+        for p in argv
+            startswith(p, "-") && continue # skip options (and stdin input `-`)
+            rp = try
+                realpath(p)
+            catch
+                continue
+            end
+            if rp == real_home || rp == dirname(real_home)
+                error("tests must not run runic on the real home directory: `$(p)`")
+            end
+        end
+        return
+    end
     function runic(std_in::String)
         return runic(String[], std_in)
     end
     function runic(argv::Vector{String} = String[], std_in::String = "")
+        assert_not_real_home(argv)
         rc, stdout_str, stderr_str = mktemp() do stdin_path, stdin
             write(stdin_path, std_in)
             mktemp() do stdout_path, stdout
@@ -675,8 +722,213 @@ function maintests(f::R) where {R}
     end
 
     # --extensions with invalid (empty) input
-    let (rc, fd1, fd2) = runic(["--extensions=", "."])
+    cdtmp() do
+        rc, fd1, fd2 = runic(["--extensions=", "."])
         @test rc != 0
+    end
+
+    # Safety checks for directory recursion (see #200)
+
+    # Temporarily point `homedir()` to `home` and, if given, replace `DEPOT_PATH` with
+    # `depot`. Returns `false` (and does nothing but warn) if `homedir()` can not be
+    # controlled through the environment on this system.
+    function withhome(f, home::String; depot::Union{String, Nothing} = nothing)
+        keys = ["HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"]
+        old = [get(ENV, k, nothing) for k in keys]
+        old_depot_path = copy(Base.DEPOT_PATH)
+        try
+            ENV["HOME"] = ENV["USERPROFILE"] = home
+            delete!(ENV, "HOMEDRIVE")
+            delete!(ENV, "HOMEPATH")
+            if realpath(homedir()) != realpath(home)
+                @warn "`homedir()` can not be controlled through the environment on " *
+                    "this system, skipping tests that depend on the home directory"
+                return false
+            end
+            if depot !== nothing
+                push!(empty!(Base.DEPOT_PATH), depot)
+            end
+            f()
+            return true
+        finally
+            for (k, v) in zip(keys, old)
+                v === nothing ? delete!(ENV, k) : (ENV[k] = v)
+            end
+            append!(empty!(Base.DEPOT_PATH), old_depot_path)
+        end
+    end
+
+    # Nested git repositories are skipped, the root one is not
+    cdtmp() do
+        mkdir(".git")
+        mkpath(joinpath("sub", ".git"))
+        # The contents of `.git` folders are never collected, not even with
+        # --recurse/--force-recurse
+        rootgitfile = joinpath(".git", "git.jl")
+        write(rootgitfile, "this is not a Julia file")
+        subgitfile = joinpath("sub", ".git", "git.jl")
+        write(subgitfile, "this is not a Julia file")
+        f_root = "root.jl"
+        f_sub = joinpath("sub", "sub.jl")
+        write(f_root, bad)
+        write(f_sub, bad)
+        rc, fd1, fd2 = runic(["-i", "."])
+        @test rc == 0
+        @test read(f_root, String) == good
+        @test read(f_sub, String) == bad # untouched
+        @test isempty(fd2) # skipped silently
+        # ... unless --recurse is passed
+        rc, fd1, fd2 = runic(["--recurse", "-i", "."])
+        @test rc == 0
+        @test read(f_root, String) == read(f_sub, String) == good
+        @test isempty(fd2)
+        # --force-recurse implies --recurse
+        write(f_sub, bad)
+        rc, fd1, fd2 = runic(["--force-recurse", "-i", "."])
+        @test rc == 0
+        @test read(f_sub, String) == good
+        @test isempty(fd2)
+        # ... but not even --recurse/--force-recurse collect files inside `.git` folders
+        # (rc would be 1 from the parse failure if these files were collected)
+        @test read(rootgitfile, String) == "this is not a Julia file"
+        @test read(subgitfile, String) == "this is not a Julia file"
+        # A `.git` file (submodule, linked worktree) also marks a nested repository
+        rm(joinpath("sub", ".git"), recursive = true)
+        write(joinpath("sub", ".git"), "gitdir: ../.git/modules/sub\n")
+        write(f_sub, bad)
+        rc, fd1, fd2 = runic(["-i", "."])
+        @test rc == 0
+        @test read(f_sub, String) == bad # untouched
+        # Directories listed explicitly on the command line are walk roots and thus
+        # exempt from the nested git repository check
+        rc, fd1, fd2 = runic(["-i", "sub"])
+        @test rc == 0
+        @test read(f_sub, String) == good
+        write(f_sub, bad)
+        rc, fd1, fd2 = runic(["-i", ".", "sub"])
+        @test rc == 0
+        @test read(f_root, String) == read(f_sub, String) == good
+        # ... and the order of the arguments does not matter
+        write(f_root, bad)
+        write(f_sub, bad)
+        rc, fd1, fd2 = runic(["-i", "sub", "."])
+        @test rc == 0
+        @test read(f_root, String) == read(f_sub, String) == good
+        @test isempty(fd2)
+    end
+
+    # Refuse to recurse into the home directory
+    cdtmp() do
+        home = mkdir("home")
+        f_home = joinpath(home, "home.jl")
+        write(f_home, bad)
+        withhome(abspath(home)) do
+            # Explicitly passing the home directory, and `.` from within it, is an error
+            for (dir, argv) in [(".", ["-i", home]), (home, ["-i", "."])]
+                write(f_home, bad)
+                rc, fd1, fd2 = cd(() -> runic(argv), dir)
+                @test rc == 1
+                @test read(f_home, String) == bad # untouched
+                @test occursin("refusing to recurse into", fd2)
+                @test occursin("--force-recurse", fd2)
+            end
+            # ... and --recurse does not override it (only --force-recurse does)
+            rc, fd1, fd2 = runic(["--recurse", "-i", home])
+            @test rc == 1
+            @test read(f_home, String) == bad # untouched
+            @test occursin("refusing to recurse into", fd2)
+            # ... unless --force-recurse is passed
+            rc, fd1, fd2 = runic(["--force-recurse", "-i", home])
+            @test rc == 0
+            @test read(f_home, String) == good
+            # A home directory nested below the input path is also an error (e.g.
+            # `runic -i /` should error when the walk reaches the home directory), also
+            # with --recurse
+            write(f_home, bad)
+            f_other = "other.jl"
+            write(f_other, bad)
+            for argv in [["-i", "."], ["--recurse", "-i", "."]]
+                rc, fd1, fd2 = runic(argv)
+                @test rc == 1
+                @test occursin("refusing to recurse into", fd2)
+                @test read(f_home, String) == bad # untouched
+                @test read(f_other, String) == bad # untouched (the run is aborted)
+            end
+            # ... unless --force-recurse is passed
+            rc, fd1, fd2 = runic(["--force-recurse", "-i", "."])
+            @test rc == 0
+            @test read(f_home, String) == read(f_other, String) == good
+        end
+    end
+
+    # Refuse to recurse into the depot and its immediate subdirectories
+    cdtmp() do
+        home = abspath(mkdir("home"))
+        depot = mkpath(joinpath(home, ".julia"))
+        f_depot = joinpath(depot, "depot.jl")
+        write(f_depot, bad)
+        pkgdir = mkpath(joinpath(depot, "packages", "Foo", "abc123"))
+        f_pkg = joinpath(pkgdir, "pkg.jl")
+        write(f_pkg, bad)
+        devdir = mkpath(joinpath(depot, "dev", "Foo"))
+        f_dev = joinpath(devdir, "dev.jl")
+        write(f_dev, bad)
+        withhome(home) do
+            # The depot itself, and `packages`/`dev`/... below it
+            for dir in [depot, joinpath(depot, "packages"), joinpath(depot, "dev")]
+                rc, fd1, fd2 = runic(["-i", dir])
+                @test rc == 1
+                @test occursin("refusing to recurse into", fd2)
+                @test occursin("--force-recurse", fd2)
+            end
+            @test read(f_depot, String) == read(f_pkg, String) == read(f_dev, String) == bad
+            # Development checkouts below `~/.julia/dev` are still formatted
+            rc, fd1, fd2 = runic(["-i", devdir])
+            @test rc == 0
+            @test read(f_dev, String) == good
+            # ... and so is a package in `~/.julia/packages` if requested explicitly
+            rc, fd1, fd2 = runic(["-i", pkgdir])
+            @test rc == 0
+            @test read(f_pkg, String) == good
+            # --force-recurse overrides
+            rc, fd1, fd2 = runic(["--force-recurse", "-i", depot])
+            @test rc == 0
+            @test read(f_depot, String) == good
+        end
+    end
+
+    # Depots configured via `DEPOT_PATH` are also protected (not just the default
+    # `~/.julia` under the home directory)
+    cdtmp() do
+        home = abspath(mkdir("home"))
+        depot = abspath(mkpath(joinpath("custom", "depot")))
+        f_depot = joinpath(depot, "depot.jl")
+        write(f_depot, bad)
+        pkgdir = mkpath(joinpath(depot, "packages", "Foo", "abc123"))
+        f_pkg = joinpath(pkgdir, "pkg.jl")
+        write(f_pkg, bad)
+        withhome(home; depot = depot) do
+            # The depot itself and its immediate subdirectories are refused as input paths
+            for dir in [depot, joinpath(depot, "packages")]
+                rc, fd1, fd2 = runic(["-i", dir])
+                @test rc == 1
+                @test occursin("refusing to recurse into", fd2)
+            end
+            @test read(f_depot, String) == read(f_pkg, String) == bad
+            # ... and result in an error when reached recursively
+            rc, fd1, fd2 = runic(["-i", "custom"])
+            @test rc == 1
+            @test occursin("refusing to recurse into", fd2)
+            @test read(f_depot, String) == bad
+            # Deeper directories can still be formatted
+            rc, fd1, fd2 = runic(["-i", pkgdir])
+            @test rc == 0
+            @test read(f_pkg, String) == good
+            # --force-recurse overrides
+            rc, fd1, fd2 = runic(["--force-recurse", "-i", depot])
+            @test rc == 0
+            @test read(f_depot, String) == good
+        end
     end
 
     return

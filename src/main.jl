@@ -3,6 +3,8 @@
 # Return code of main
 errno::Cint = 0
 
+using Base.Filesystem: StatStruct
+
 # Check whether we are compiling with juliac
 using Preferences: @load_preference
 const juliac = @load_preference("juliac", false)
@@ -39,14 +41,92 @@ function tryf(f::F, arg, default) where {F}
         return default
     end
 end
-function scandir!(files, root, extensions::Vector{String})
+
+# Stats of directories that are protected in directory recursion
+struct Guard
+    home::StatStruct
+    depots::Vector{StatStruct}
+end
+
+function Guard()
+    depots = Vector{StatStruct}()
+    for depot in Base.DEPOT_PATH
+        st = tryf(stat, depot, StatStruct())
+        isdir(st) && push!(depots, st)
+    end
+    homepath = try
+        homedir()
+    catch
+        ""
+    end
+    if !isempty(homepath)
+        st = tryf(stat, joinpath(homepath, ".julia"), StatStruct())
+        if isdir(st) && !any(depot -> samefile(st, depot), depots)
+            push!(depots, st)
+        end
+    end
+    return Guard(tryf(stat, homepath, StatStruct()), depots)
+end
+
+# Directories that Runic refuses to recurse into: the home directory and Julia depots
+# (including their immediate subdirectories). These result in an error wherever they are
+# encountered in the walk, whether given as the input path or reached recursively.
+function protected_directory(guard::Guard, dir::String)
+    # `dir` exists (the caller checks `isdir`) but `stat` can still fail (e.g. removed
+    # concurrently). This is safe: `samefile` requires `ispath` for both arguments so
+    # zeroed `StatStruct`s (failed `stat`, unknown home directory) never compare equal,
+    # not even to each other.
+    st = tryf(stat, dir, StatStruct())
+    # The home directory itself (formatting e.g. `~/dev/Runic.jl` is still fine)
+    if samefile(st, guard.home)
+        return true
+    end
+    # Julia depots and their immediate subdirectories (`packages`, `dev`, `clones`, `logs`,
+    # ...). Note that this still allows formatting of e.g. `~/.julia/dev/MyPackage` since
+    # that is a common place to keep development checkouts.
+    parent = tryf(stat, joinpath(dir, ".."), StatStruct())
+    for depot in guard.depots
+        if samefile(st, depot) || samefile(parent, depot)
+            return true
+        end
+    end
+    return false
+end
+
+function scandir!(
+        files, root, extensions::Vector{String};
+        recurse::Bool = false, force_recurse::Bool = false, isroot::Bool = true,
+        guard::Guard,
+    )
     # Don't recurse into `.git`. If e.g. a branch name ends with `.jl` there are files
     # inside of `.git` which has the `.jl` extension, but they are not Julia source files.
     if occursin(".git", root) && ".git" in splitpath(root)
         @assert endswith(root, ".git")
-        return
+        return 0
     end
-    tryf(isdir, root, false) || return
+    tryf(isdir, root, false) || return 0
+    if !force_recurse
+        # The home directory and Julia depots are refused with an error wherever they are
+        # encountered in the walk (e.g. `runic -i /` errors when the walk reaches the home
+        # directory).
+        if protected_directory(guard, String(root))
+            msg = string(
+                "refusing to recurse into `", root, "`, use `--force-recurse` to override"
+            )
+            return panic(msg)
+        end
+        # Nested git repositories (git submodules, vendored clones, ...) are silently
+        # skipped (`--recurse` includes them). Directories listed explicitly on the
+        # command line are walked in their own right (as roots), since formatting the
+        # repository you are currently in is the most common usecase. `.git` is a
+        # directory in a regular clone and a file in e.g. submodules and linked worktrees.
+        if !isroot && !recurse
+            dotgit = joinpath(root, ".git")
+            if tryf(isdir, dotgit, false) || tryf(isfile, dotgit, false)
+                return 0
+            end
+        end
+    end
     dirs = Vector{String}()
     for f in tryf(readdir, root, String[])
         jf = joinpath(root, f)
@@ -60,9 +140,14 @@ function scandir!(files, root, extensions::Vector{String})
         end
     end
     for dir in dirs
-        scandir!(files, joinpath(root, dir), extensions)
+        rc = scandir!(
+            files, joinpath(root, dir), extensions;
+            recurse = recurse, force_recurse = force_recurse, isroot = false,
+            guard = guard,
+        )
+        rc == 0 || return rc
     end
-    return
+    return 0
 end
 
 function panic(
@@ -143,6 +228,11 @@ function print_help()
                    pick up both Julia and Markdown files. Explicit file paths bypass this
                    filter.
 
+               --force-recurse
+                   Disable the safety checks that prevent formatting of the home
+                   directory and Julia depot subdirectories (e.g. `~/.julia/packages`).
+                   Implies `--recurse`.
+
                --help
                    Print this message.
 
@@ -156,6 +246,11 @@ function print_help()
                -o <file>, --output=<file>
                    File to write formatted output to. If no output is given, or if the file
                    is `-`, output is written to stdout.
+
+               --recurse
+                   Recurse into nested git repositories (e.g. git submodules and vendored
+                   clones) when walking directories. By default nested git repositories
+                   are skipped.
 
                --stdin-filename=<filename>
                    Assumed filename when formatting from stdin. Used for error messages
@@ -283,6 +378,8 @@ function main(argv)
     check = false
     docstrings = false
     fail_fast = false
+    recurse = false
+    force_recurse = false
     line_ranges = typeof(1:2)[]
     input_is_stdin = true
     multiple_inputs = false
@@ -311,6 +408,11 @@ function main(argv)
             check = true
         elseif x == "--docstrings"
             docstrings = true
+        elseif x == "--recurse"
+            recurse = true
+        elseif x == "--force-recurse"
+            force_recurse = true
+            recurse = true # --force-recurse implies --recurse
         elseif x == "-vv" || x == "--debug"
             debug = verbose = true
         elseif (m = match(r"^--lines=(.*)$", x); m !== nothing)
@@ -340,6 +442,7 @@ function main(argv)
             outputfile = String(m.captures[1]::SubString)
         else
             # Remaining arguments must be `-`, files, or directories
+            guard = Guard()
             first = true
             while true
                 if x == "-"
@@ -352,7 +455,13 @@ function main(argv)
                 else
                     input_is_stdin = false
                     if isdir(x)
-                        scandir!(inputfiles, x, extensions)
+                        if scandir!(
+                                inputfiles, x, extensions;
+                                recurse = recurse, force_recurse = force_recurse,
+                                guard = guard,
+                            ) != 0
+                            return errno
+                        end
                         # Directories are considered to be multiple (potential) inputs even
                         # if they end up being empty
                         multiple_inputs = true
