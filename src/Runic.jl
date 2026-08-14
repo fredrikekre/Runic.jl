@@ -723,8 +723,8 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
         error("input and output must not be the same when `inplace = false`")
     end
     # Format it!
-    # Dispatch on extension: `.md` goes through the Markdown formatter.
-    if endswith(inputfile, ".md")
+    # Dispatch on extension: `.md` and `.qmd` go through the Markdown formatter.
+    if is_markdown_file(inputfile)
         format_markdown_file(str, outputfile; inplace = inplace)
         return
     end

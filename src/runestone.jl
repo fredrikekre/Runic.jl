@@ -3347,9 +3347,12 @@ function indent_multiline_strings(ctx::Context, node::Node)
     return any_changes ? make_node(node, kids′) : nothing
 end
 
-const re_fence_open = r"^(\h*)(`{3,})\h*([A-Za-z0-9_-]*)"
+const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|[A-Za-z0-9_-]*)"
 
 is_julia_lang(lang::AbstractString) = lang in ("julia", "julia-repl", "jldoctest")
+
+# Markdown and Quarto markdown file extensions
+is_markdown_file(path::AbstractString) = endswith(path, ".md") || endswith(path, ".qmd")
 
 function format_julia_block(block_lines::Vector{String})
     isempty(block_lines) && return block_lines
@@ -3476,6 +3479,11 @@ function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRa
             indent = String(m.captures[1]::AbstractString)
             ticks = String(m.captures[2]::AbstractString)
             lang = String(m.captures[3]::AbstractString)
+            # Quarto wrap the language of executable code blocks in braces, e.g. `{julia}`.
+            # Strip them so that the language checks below see the plain language name.
+            if startswith(lang, "{") && endswith(lang, "}")
+                lang = String(chop(lang; head = 1, tail = 1))
+            end
             nticks = length(ticks)
             re_close = Regex("^$(escape_string(indent))`{$(nticks)}\\h*\$")
             close_i = findnext(l -> occursin(re_close, l), lines, i + 1)

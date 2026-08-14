@@ -592,7 +592,7 @@ function main(argv)
         # Determine per-file format mode. Dispatch is by file extension; for stdin the
         # virtual filename from `--stdin-filename` is used.
         inputfile_pretty = inputfile == "-" ? stdin_filename : inputfile
-        is_md = endswith(inputfile_pretty, ".md")
+        is_md = is_markdown_file(inputfile_pretty)
 
         # Call the library to format the text. Both branches produce
         # `(changed, fmt_iob, src_str_for_diff)`. Errors propagate; the catch below
