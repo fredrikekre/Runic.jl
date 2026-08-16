@@ -60,9 +60,66 @@ function isatty(io::RawIO)
 end
 supports_color(io::RawIO) = isatty(io)
 
+# Base.repeat(::String, ::Int) fails to compile under `--trim` (Julia 1.13.0-rc3) so
+# provide a simple replacement.
+function repeat_juliac(str::String, n::Integer)
+    n <= 0 && return ""
+    io = IOBuffer(; sizehint = n * sizeof(str))
+    for _ in 1:n
+        write(io, str)
+    end
+    return String(take!(io))
+end
+
+# juliac-compatible `Base.lpad` (Base.lpad uses Base.repeat, see above)
+function lpad_juliac(s::String, n::Integer, p::String = " ")
+    m = Int(n) - textwidth(s)
+    m <= 0 && return s
+    l = textwidth(p)
+    q, r = divrem(m, l)
+    return r == 0 ? string(repeat_juliac(p, q), s) :
+        string(repeat_juliac(p, q), first(p, r), s)
+end
+lpad_juliac(s, n::Integer, p::String = " ") = lpad_juliac(string(s)::String, n, p)
+
+# juliac-compatible `Base.relpath` (Base.relpath uses Base.repeat, see above). This is a
+# copy of the Base implementation (minus the Windows branch) with `repeat` swapped out.
+function relpath_juliac(path::String, startpath::String = ".")
+    isempty(path) && throw(ArgumentError("`path` must be non-empty"))
+    isempty(startpath) && throw(ArgumentError("`startpath` must be non-empty"))
+    curdir = "."
+    pardir = ".."
+    path == startpath && return curdir
+    @assert !Sys.iswindows()
+    path_arr = split(abspath(path), Base.Filesystem.path_separator_re)
+    start_arr = split(abspath(startpath), Base.Filesystem.path_separator_re)
+    i = 0
+    while i < min(length(path_arr), length(start_arr))
+        i += 1
+        if path_arr[i] != start_arr[i]
+            i -= 1
+            break
+        end
+    end
+    pathpart = join(
+        path_arr[(i + 1):something(findlast(x -> !isempty(x), path_arr), 0)],
+        Base.Filesystem.path_separator
+    )
+    prefix_num = something(findlast(x -> !isempty(x), start_arr), 0) - i - 1
+    if prefix_num >= 0
+        prefix = pardir * Base.Filesystem.path_separator
+        relpath_ = isempty(pathpart) ?
+            repeat_juliac(prefix, prefix_num) * pardir :
+            repeat_juliac(prefix, prefix_num) * pardir * Base.Filesystem.path_separator * pathpart
+    else
+        relpath_ = pathpart
+    end
+    return isempty(relpath_) ? curdir : relpath_
+end
+
 # juliac-compatible `Base.showerror`
 # TODO: Special case for JuliaSyntax.ParseError
-function sprint_showerror_juliac(err::Exception)
+function sprint_showerror_juliac(@nospecialize(err::Exception))
     if err isa SystemError
         return "SystemError: " * err.prefix * ": " * Libc.strerror(err.errnum)
     elseif err isa AssertionError

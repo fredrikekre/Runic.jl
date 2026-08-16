@@ -122,8 +122,8 @@ function format_float_literals(ctx::Context, node::Node)
     frac_part = replace(frac_part, r"^((?:\d*[1-9])|0)0*$" => s"\1")
     write(io, frac_part)
     # Write the exponent part
-    if m[:epm] !== nothing
-        write(io, replace(m[:epm], "E" => "e", "−" => "-")) # \u2212 => \u002D
+    if (epm = m[:epm]; epm !== nothing)
+        write(io, replace(epm, "E" => "e", "−" => "-")) # \u2212 => \u002D
         @assert m[:exp] !== nothing
         # Strip leading zeros from integral part
         exp_part = isempty(m[:exp]) ? "0" : m[:exp]
@@ -2113,7 +2113,7 @@ function indent_block(
         # into multiples lines. This means that we haven't yet updated the indent level for
         # the keyword just before this block so in most cases we save a roundtrip by
         # increasing the indent level with 1 here.
-        nl = "\n" * " "^(4 * (ctx.indent_level + 1))
+        nl = "\n" * repeat(" ", 4 * (ctx.indent_level + 1))
         # Skip past whitespace + comment
         for i in 1:(insert_idx - 1)
             accept_node!(ctx, kids′[i])
@@ -3306,7 +3306,7 @@ function indent_multiline_strings(ctx::Context, node::Node)
                 accept_node!(ctx, kid)
                 any_changes && push!(kids′, kid)
             elseif kind(kid) === K"Whitespace"
-                replace_bytes!(ctx, " "^indent_span, span(kid))
+                replace_bytes!(ctx, repeat(" ", indent_span), span(kid))
                 if kids′ === kids
                     kids′ = kids[1:(idx - 1)]
                 end
@@ -3315,7 +3315,7 @@ function indent_multiline_strings(ctx::Context, node::Node)
                 push!(kids′, kid′)
                 accept_node!(ctx, kid′)
             else
-                replace_bytes!(ctx, " "^indent_span, 0)
+                replace_bytes!(ctx, repeat(" ", indent_span), 0)
                 if kids′ === kids
                     kids′ = kids[1:(idx - 1)]
                 end
@@ -3330,7 +3330,7 @@ function indent_multiline_strings(ctx::Context, node::Node)
     end
     # Make sure to add indent before the closing triple quote
     if state === :expect_indent_ws
-        replace_bytes!(ctx, " "^indent_span, 0)
+        replace_bytes!(ctx, repeat(" ", indent_span), 0)
         if kids′ === kids
             kids′ = kids[1:(idx - 1)]
         end
@@ -3372,7 +3372,7 @@ function format_julia_block(block_lines::Vector{String})
         # @error "Could not parse julia block" code e
         return block_lines
     end
-    return collect(eachline(IOBuffer(formatted); keep = true))
+    return collect_lines(IOBuffer(formatted); keep = true)
 end
 
 const JULIA_REPL_PROMPT = "julia> "
@@ -3381,7 +3381,7 @@ const JULIA_REPL_PROMPT = "julia> "
 # prompt and leading whitespace.
 function format_repl_block(block_lines::Vector{String})
     nprompt = length(JULIA_REPL_PROMPT)
-    continuation = " "^nprompt
+    continuation = repeat(" ", nprompt)
     result = String[]
     i = 1
     while i <= length(block_lines)
@@ -3420,7 +3420,7 @@ function format_repl_block(block_lines::Vector{String})
                 i = j
                 continue
             end
-            fmt_lines = eachline(IOBuffer(formatted); keep = true)
+            fmt_lines = collect_lines(IOBuffer(formatted); keep = true)
             first = true
             for fl in fmt_lines
                 if isempty(strip(fl))
@@ -3469,7 +3469,7 @@ end
 # Identify julia source code blocks (``` blocks four-space-indent blocks),
 # collect the lines, format the text and re-insert
 function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[])
-    lines = collect(eachline(IOBuffer(s); keep = true))
+    lines = collect_lines(IOBuffer(s); keep = true)
     validate_line_ranges(lines, line_ranges)
     isempty(lines) && return s
     # A block at lines `a:b` is formatted iff `line_ranges` is empty (no filter) or at
@@ -3680,7 +3680,7 @@ function format_docstring_string(ctx::Context, node::Node)
     new_middle_kids = Node[]
     ws_head = JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG)
     str_head = JuliaSyntax.SyntaxHead(K"String", 0)
-    for line in eachline(IOBuffer(formatted); keep = true)
+    for line in collect_lines(IOBuffer(formatted); keep = true)
         line_bytes = codeunits(line)
         if length(line_bytes) == 1 && line_bytes[1] == UInt8('\n')
             # Empty line should note have leading whitespace trivia
@@ -4004,9 +4004,14 @@ function has_return(node::Node)
         # Check direct kids but also recurse into blocks to catch e.g. `@foo begin ... end`.
         idx = findfirst(x -> kind(x) === K"return", kids)
         idx === nothing || return true
-        return any(kids) do x
-            return !is_leaf(x) && kind(x) in KSet"let try if block macrocall" && has_return(x)
+        # juliac: written as a loop instead of `any(f, kids)` since the `any` keyword
+        # argument body fails `--trim` verification on Julia 1.12.
+        for x in kids
+            if !is_leaf(x) && kind(x) in KSet"let try if block macrocall" && has_return(x)
+                return true
+            end
         end
+        return false
     elseif kind(node) === K"block"
         # Don't care whether this is the last expression,
         # that is the job of a linter or something I guess.
@@ -4083,7 +4088,7 @@ function explicit_return_block(ctx, node)
                 @assert kind(first_leaf(rexpr)) !== K"Whitespace"
             end
             @assert kind(first_leaf(rexpr)) !== K"Whitespace"
-            nl = "\n" * " "^(4 * ctx.indent_level)
+            nl = "\n" * repeat(" ", 4 * ctx.indent_level)
             nlnode = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), sizeof(nl))
             insert!(kids′, rexpr_idx, nlnode)
             rexpr_idx += 1
@@ -4103,7 +4108,7 @@ function explicit_return_block(ctx, node)
             accept_node!(ctx, kids′[i])
         end
         # Insert newline
-        nl = "\n" * " "^(4 * ctx.indent_level)
+        nl = "\n" * repeat(" ", 4 * ctx.indent_level)
         nlnode = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), sizeof(nl))
         insert!(kids′, insert_idx, nlnode)
         replace_bytes!(ctx, nl, 0)

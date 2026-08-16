@@ -165,16 +165,35 @@ is_range_formatting_end(
     line::AbstractString, marker::AbstractString = RANGE_FORMATTING_END
 ) = strip(line) == marker
 
+# juliac: `Base.eachline` stores the `ondone` callback in a field of type `Function` which
+# results in dynamic dispatch. Collect the lines eagerly with `readline` instead.
+function collect_lines(io::IO; keep::Bool = false)
+    lines = String[]
+    while !eof(io)
+        push!(lines, readline(io; keep = keep))
+    end
+    return lines
+end
+
+# juliac: a closure over `begin_marker`/`end_marker` directly in the `while` condition of
+# `range_formatting_markers` would box the variables (they are captured and assigned more
+# than once) which results in dynamic dispatch. Pass them as arguments instead.
+function has_range_formatting_markers(
+        lines::Vector{String}, begin_marker::String, end_marker::String
+    )
+    return any(
+        line -> is_range_formatting_begin(line, begin_marker) ||
+            is_range_formatting_end(line, end_marker),
+        lines
+    )
+end
+
 function range_formatting_markers(str::String)
-    lines = collect(eachline(IOBuffer(str)))
+    lines = collect_lines(IOBuffer(str))
     begin_marker = RANGE_FORMATTING_BEGIN
     end_marker = RANGE_FORMATTING_END
     suffix = 0
-    while any(
-            line -> is_range_formatting_begin(line, begin_marker) ||
-                is_range_formatting_end(line, end_marker),
-            lines
-        )
+    while has_range_formatting_markers(lines, begin_marker, end_marker)
         suffix += 1
         begin_marker = "#= RUNIC RANGE FORMATTING BEGIN $(suffix) =#"
         end_marker = "#= RUNIC RANGE FORMATTING END $(suffix) =#"
@@ -201,7 +220,7 @@ function validate_line_ranges(lines::Vector{String}, line_ranges::Vector{UnitRan
 end
 
 function add_line_range_markers(str, line_ranges, begin_marker, end_marker)
-    lines = collect(eachline(IOBuffer(str); keep = true))
+    lines = collect_lines(IOBuffer(str); keep = true)
     validate_line_ranges(lines, line_ranges)
     if isempty(lines)
         # The only valid selection is the virtual first line, so there is no marker to
@@ -236,8 +255,8 @@ function add_line_range_markers(str, line_ranges, begin_marker, end_marker)
 end
 
 function remove_line_range_markers(src_io, fmt_io, begin_marker, end_marker)
-    src_lines = eachline(seekstart(src_io); keep = true)
-    fmt_lines = eachline(seekstart(fmt_io); keep = true)
+    src_lines = collect_lines(seekstart(src_io); keep = true)
+    fmt_lines = collect_lines(seekstart(fmt_io); keep = true)
     io = IOBuffer()
     # These can't fail because we will at the minimum have the begin/end comments
     src_itr = iterate(src_lines)

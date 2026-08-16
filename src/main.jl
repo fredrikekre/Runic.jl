@@ -19,6 +19,9 @@ const juliac = @load_preference("juliac", false)
     const mktempdir = mktempdir_juliac
     const sprint_showerror = sprint_showerror_juliac
     const print_vnum = print_vnum_juliac
+    const repeat = repeat_juliac
+    const lpad = lpad_juliac
+    const relpath = relpath_juliac
 else
     # const stdin = Base.stdin
     # const stdout = Base.stdout
@@ -26,8 +29,11 @@ else
     const run_cmd = Base.run
     const printstyled = Base.printstyled
     const mktempdir = Base.mktempdir
-    sprint_showerror(err::Exception) = sprint(showerror, err)
+    sprint_showerror(@nospecialize(err::Exception)) = sprint(showerror, err)
     const print_vnum = Base.print
+    const repeat = Base.repeat
+    const lpad = Base.lpad
+    const relpath = Base.relpath
 end
 
 supports_color(io) = get(io, :color, false)
@@ -60,9 +66,9 @@ function Guard()
         ""
     end
     if !isempty(homepath)
-        st = tryf(stat, joinpath(homepath, ".julia"), StatStruct())
-        if isdir(st) && !any(depot -> samefile(st, depot), depots)
-            push!(depots, st)
+        st_home = tryf(stat, joinpath(homepath, ".julia"), StatStruct())
+        if isdir(st_home) && !any(depot -> samefile(st_home, depot), depots)
+            push!(depots, st_home)
         end
     end
     return Guard(tryf(stat, homepath, StatStruct()), depots)
@@ -150,14 +156,20 @@ function scandir!(
     return 0
 end
 
+# juliac: `catch` variables are typed `Any` which would result in dynamic dispatch with a
+# `panic` method constrained to `err::Union{Exception, Nothing}`. Accept (`@nospecialize`d)
+# `Any` instead, which makes the calls statically resolvable, and narrow with `isa` inside.
 function panic(
-        msg::String, err::Union{Exception, Nothing} = nothing,
+        msg::String, @nospecialize(err = nothing),
         bt::Union{Vector{Base.StackFrame}, Nothing} = nothing
     )
     printstyled(stderr, "ERROR: "; color = :red, bold = true)
     print(stderr, msg)
-    if err !== nothing
+    if err isa Exception
         print(stderr, sprint_showerror(err))
+    elseif err !== nothing
+        # In practice all thrown values are `Exception`s but other values can be thrown.
+        print(stderr, "unknown error object thrown")
     end
     @static if juliac
         @assert bt === nothing
@@ -353,7 +365,7 @@ function format_julia_input(
     #       to the `format_tree` function.
     if diff && changed && !isempty(line_ranges)
         io = IOBuffer(; sizehint = sizeof(src_str_for_diff))
-        for line in eachline(IOBuffer(src_str_for_diff); keep = true)
+        for line in collect_lines(IOBuffer(src_str_for_diff); keep = true)
             if !(
                     is_range_formatting_begin(line, ctx.range_formatting_begin) ||
                         is_range_formatting_end(line, ctx.range_formatting_end)
@@ -539,7 +551,7 @@ function main(argv)
             verb = check ? "Checking" : "Formatting"
             str = string(prefix, verb, " `", input_pretty, "` ")
             ndots = 80 - textwidth(str) - 1 - 1
-            dots = ndots > 0 ? "."^ndots : ""
+            dots = ndots > 0 ? repeat(".", ndots) : ""
             printstyled(stderr, string(str, dots, " "); color = :blue)
         end
 
