@@ -745,12 +745,11 @@ function spaces_around_assignments(ctx::Context, node::Node)
         )
         return nothing
     end
+    # The operator spans multiple leaves for op= (`+` `=`), .= (`.` `=`), and
+    # .op= (`.` `+` `=`) nodes
     n_leaves_per_x = 1
-    if kind(node) in KSet"op="
-        n_leaves_per_x += 1
-        if JuliaSyntax.is_dotted(node)
-            n_leaves_per_x += 1
-        end
+    if kind(node) in KSet"op= .op= .="
+        n_leaves_per_x += kind(node) === K".op=" ? 2 : 1
     end
     return spaces_around_x(ctx, node, n_leaves_per_x)
 end
@@ -827,11 +826,8 @@ function spaces_in_export_public(ctx::Context, node::Node)
             end
         elseif state === :expect_identifier
             state = :expect_comma
-            if kind(kid) in KSet"Identifier @ MacroName $ var" || JuliaSyntax.is_operator(kid)
+            if kind(kid) in KSet"Identifier macro_name $ var" || JuliaSyntax.is_operator(kid)
                 accept!(b, kid)
-                if kind(kid) === K"@"
-                    state = :expect_identifier
-                end
                 if kind(kid) === K"$"
                     @assert findlast(x -> x in KSet"quote macrocall", ctx.lineage_kinds) !== nothing
                 end
@@ -1002,7 +998,7 @@ function format_as(ctx::Context, node::Node)
     # Alias-identifier (RHS of the `as`)
     idx += 1
     kid = kids[idx]
-    @assert kind(kid) in KSet"Identifier $ @"
+    @assert kind(kid) in KSet"Identifier $ macro_name"
     if !is_leaf(kid)
         @assert kind(first_leaf(kid)) !== K"Whitespace"
     end
@@ -1010,12 +1006,6 @@ function format_as(ctx::Context, node::Node)
         @assert findlast(x -> x in KSet"quote macrocall", ctx.lineage_kinds) !== nothing
     end
     accept!(b, kid)
-    if kind(kid) === K"@"
-        idx += 1
-        kid = kids[idx]
-        @assert kind(kid) === K"MacroName"
-        accept!(b, kid)
-    end
     return finish!(b, node)
 end
 
@@ -2295,11 +2285,10 @@ function indent_assignment(ctx::Context, node::Node)
     kids = verified_kids(node)
     lhsidx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     eqidx = findnext(!JuliaSyntax.is_whitespace, kids, lhsidx + 1)::Int
-    if kind(node) in KSet"op="
-        eqidx += 1
-        if JuliaSyntax.is_dotted(node)
-            eqidx += 1
-        end
+    # The operator spans multiple leaves for op= (`+` `=`), .= (`.` `=`), and
+    # .op= (`.` `+` `=`) nodes; advance eqidx to the final `=` leaf
+    if kind(node) in KSet"op= .op= .="
+        eqidx += kind(node) === K".op=" ? 2 : 1
     end
     @assert length(kids) > eqidx
     rhsidx = findnext(!JuliaSyntax.is_whitespace, kids, eqidx + 1)::Int
@@ -2492,7 +2481,7 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_parens(ctx, node)
     elseif kind(node) in KSet"curly braces bracescat"
         return indent_braces(ctx, node)
-    elseif kind(node) in KSet"|| &&"
+    elseif kind(node) in KSet"|| && .|| .&&"
         return indent_short_circuit(ctx, node)
     elseif kind(node) in KSet"using import export public" || is_global_local_list(node)
         return indent_using_import_export_public(ctx, node)
@@ -3295,7 +3284,7 @@ function explicit_return_block(ctx, node)
     @assert kind(rexpr) !== K"return" # Should have been caught by has_return
     if is_leaf(rexpr) ||
             kind(rexpr) in KSet"call dotcall tuple vect ref hcat typed_hcat vcat typed_vcat \
-                ? && || :: juxtapose <: >: comparison string . -> comprehension do macro \
+                ? && || .&& .|| :: juxtapose <: >: comparison string . -> comprehension do macro \
                 typed_comprehension where parens curly function quote global local cmdstring" ||
             is_string_macro(rexpr) || is_assignment(rexpr) ||
             (kind(rexpr) in KSet"let if try" && !has_return(rexpr)) ||

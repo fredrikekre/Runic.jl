@@ -28,9 +28,6 @@ function stringify_flags(node::Node)
         write(io, "trivia,")
     end
     if JuliaSyntax.is_operator(kind(node))
-        if JuliaSyntax.has_flags(node, JuliaSyntax.DOTOP_FLAG)
-            write(io, "dotted,")
-        end
         if JuliaSyntax.has_flags(node, JuliaSyntax.SUFFIXED_FLAG)
             write(io, "suffixed,")
         end
@@ -97,6 +94,12 @@ end
 function normalize_tree!(node)
     is_leaf(node) && return node
     kids = verified_kids(node)
+
+    # The parser inserts invisible zero-span K"VERSION" marker nodes (after the module
+    # keyword, and after syntax-version macros) which encode the parser version for the
+    # runtime. They are irrelevant for formatting and would confuse the
+    # find-the-next-non-whitespace-kid logic in many rules, so remove them.
+    filter!(x -> !(kind(x) === K"VERSION" && span(x) == 0), kids)
 
     # For K"let" the token (K"NewlineWs" or K";") separating the vars block from the
     # body ends up in between the two K"block" nodes. Move it into the body block.
@@ -811,7 +814,7 @@ function is_string_macro(node)
     @assert !is_leaf(node)
     kids = verified_kids(node)
     return length(kids) >= 2 &&
-        kind(kids[1]) in KSet"StringMacroName CmdMacroName" &&
+        kind(kids[1]) in KSet"StrMacroName CmdMacroName" &&
         kind(kids[2]) in KSet"string cmdstring"
 end
 
@@ -824,7 +827,7 @@ function is_triple_string_macro(node)
     if kind(node) === K"macrocall"
         kids = verified_kids(node)
         if length(kids) >= 2 &&
-                kind(kids[1]) in KSet"StringMacroName CmdMacroName" &&
+                kind(kids[1]) in KSet"StrMacroName CmdMacroName" &&
                 is_triple_string(kids[2])
             return true
         end
@@ -864,20 +867,16 @@ end
 function macrocall_name(ctx, node)
     @assert kind(node) === K"macrocall"
     kids = verified_kids(node)
-    pred = x -> kind(x) in KSet"MacroName StringMacroName CmdMacroName"
-    mkind = kind(first_leaf_predicate(node, pred)::Node)
-    if kmatch(kids, KSet"@ MacroName")
-        p = position(ctx.fmt_io)
-        bytes = read(ctx.fmt_io, span(kids[1]) + span(kids[2]))
-        seek(ctx.fmt_io, p)
-        return String(bytes)
-    elseif kmatch(kids, KSet".") || kmatch(kids, KSet"CmdMacroName") ||
-            kmatch(kids, KSet"StringMacroName")
+    if kmatch(kids, KSet"macro_name") || kmatch(kids, KSet".") ||
+            kmatch(kids, KSet"StrMacroName") || kmatch(kids, KSet"CmdMacroName")
+        # The name node bytes spell the macro name as written (`@foo`, `Base.@foo`,
+        # `foo` for string/cmd macros, ...)
         bytes = read_bytes(ctx, kids[1])
-        if mkind === K"CmdMacroName"
-            append!(bytes, "_cmd")
-        elseif mkind === K"StringMacroName"
-            append!(bytes, "_str")
+        # String and cmd macro functions have the `_str`/`_cmd` suffix in their name
+        pred = x -> kind(x) in KSet"StrMacroName CmdMacroName"
+        mleaf = first_leaf_predicate(kids[1], pred)
+        if mleaf !== nothing
+            append!(bytes, kind(mleaf) === K"CmdMacroName" ? "_cmd" : "_str")
         end
         return String(bytes)
     else
