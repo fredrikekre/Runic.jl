@@ -330,7 +330,9 @@ nlws_node(spn::Integer = 1) = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyn
 
 # Call `f(ctx, kids[idx])` with the stream positioned at the start of that kid, assuming
 # the stream is currently at the start of the parent node, and restore the stream
-# position before returning. This is the common way to apply a sub-rule to a single kid.
+# position before returning. If `f` returns a replacement node the kid is replaced in
+# `kids` in place. Return whether the kid changed. This is the common way to apply a
+# sub-rule to a single kid.
 function apply_at_kid!(f::F, ctx, kids::Vector{Node}, idx::Int) where {F}
     pos = position(ctx.fmt_io)
     for i in 1:(idx - 1)
@@ -338,7 +340,9 @@ function apply_at_kid!(f::F, ctx, kids::Vector{Node}, idx::Int) where {F}
     end
     kid′ = f(ctx, kids[idx])
     seek(ctx.fmt_io, pos)
-    return kid′
+    kid′ === nothing && return false
+    kids[idx] = kid′::Node
+    return true
 end
 
 # Tags all leading NewlineWs nodes as continuation nodes. Note that comments are skipped
