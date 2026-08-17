@@ -1154,7 +1154,7 @@ function space_after_for(ctx::Context, node::Node)
     kids = verified_kids(node)
     for_leaf = kids[1]
     @assert kind(for_leaf) === K"for" && is_leaf(for_leaf)
-    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    ws = ws_node(1)
     if kind(kids[2]) in KSet"Whitespace NewlineWs"
         # In some tree configurations the whitespace after `for` is already a
         # direct child of the K"for" node (e.g. after another pass has
@@ -1224,7 +1224,7 @@ function space_after_let(ctx, node)
         return nothing
     else
         replace_bytes!(ctx, " ", span(vars_kid))
-        ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+        ws = ws_node(1)
         vars_kids′ = copy(vars_kids)
         vars_kids′[1] = ws
         vars_node′ = make_node(vars_node, vars_kids′)
@@ -1262,7 +1262,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
     kids′ = kids
     any_changes = false
     pos = position(ctx.fmt_io)
-    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    ws = ws_node(1)
 
     peek_kinds = KSet"where"
     state = kind(node) in peek_kinds ? (:peeking_for_keyword) : (:looking_for_keyword)
@@ -1495,7 +1495,7 @@ function no_leading_and_single_trailing_newline(ctx::Context, node::Node)
     l = last_leaf(node)
     if l === nothing || kind(l) !== K"NewlineWs"
         kids′ = copy(verified_kids(node))
-        push!(kids′, Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1))
+        push!(kids′, nlws_node(1))
         replace_bytes!(ctx, "\n", 0)
         changed = true
         node = make_node(node, kids′)
@@ -2281,7 +2281,7 @@ end
 function indent_iterator(ctx::Context, node::Node)
     @assert kind(node) in KSet"iteration generator"
     if kind(node) === K"iteration" && ctx.lineage_kinds[end] === K"for" &&
-            count(x -> kind(x) == K"in", verified_kids(node)) == 1
+            count(x -> kind(x) === K"in", verified_kids(node)) == 1
         # Single-iterator for loop: the K"in" child handles its own continuation
         # indentation via indent_op_call, so nothing to do here.
         return nothing
@@ -2695,14 +2695,10 @@ function format_repl_block(block_lines::Vector{String})
             j = i + 1
             while j <= length(block_lines)
                 next_line = block_lines[j]
-                nspaces = 0
-                for c in next_line
-                    c == ' ' ? (nspaces += 1) : break
-                end
                 if isempty(strip(next_line))
                     push!(input_lines, "\n")
                     j += 1
-                elseif nspaces >= nprompt
+                elseif startswith(next_line, continuation)
                     push!(input_lines, chop(next_line; head = nprompt, tail = 0))
                     j += 1
                 else
@@ -2753,17 +2749,10 @@ function format_code_block(block_lines::Vector{String}, lang::String)
     crlf = any(l -> endswith(l, "\r\n"), block_lines)
     normalized_lines =
         crlf ? [replace(l, "\r\n" => "\n") for l in block_lines] : block_lines
-    formatted = if lang == "julia-repl"
-        format_repl_block(normalized_lines)
-    elseif lang == "jldoctest"
-        if any(l -> startswith(l, JULIA_REPL_PROMPT), normalized_lines)
-            format_repl_block(normalized_lines)
-        else
-            format_julia_block(normalized_lines)
-        end
-    else
-        format_julia_block(normalized_lines)
-    end
+    # jldoctest blocks can be either REPL style or plain code; dispatch on the content
+    repl = lang == "julia-repl" ||
+        (lang == "jldoctest" && any(l -> startswith(l, JULIA_REPL_PROMPT), normalized_lines))
+    formatted = repl ? format_repl_block(normalized_lines) : format_julia_block(normalized_lines)
     return crlf ?
         [endswith(l, "\n") ? chop(l; tail = 1) * "\r\n" : l for l in formatted] :
         formatted
@@ -3031,18 +3020,16 @@ function format_docstring(ctx::Context, node::Node)
     # Must be a direct child of a doc-string context
     isempty(ctx.lineage_kinds) && return nothing
     parent_kind = ctx.lineage_kinds[end]
-    if parent_kind === K"doc"
-        return format_docstring_string(ctx, node)
-    elseif parent_kind === K"macrocall" && !isempty(ctx.lineage_macros) &&
-            ctx.lineage_macros[end] == "@doc"
+    if parent_kind === K"doc" ||
+            (
+            parent_kind === K"macrocall" && !isempty(ctx.lineage_macros) &&
+                ctx.lineage_macros[end] == "@doc"
+        )
         return format_docstring_string(ctx, node)
     end
     return nothing
 end
 
-# Pattern matching for "bad" semicolons:
-#  - `\s*;\n` -> `\n`
-#  - `\s*;\s*#\n` -> `\s* \s*#\n`
 function is_docstring_literal(node::Node)
     kind(node) === K"string" && return true
     kind(node) === K"parens" || return false
@@ -3053,6 +3040,9 @@ function is_docstring_literal(node::Node)
     return length(significant_kids) == 1 && is_docstring_literal(only(significant_kids))
 end
 
+# Pattern matching for "bad" semicolons:
+#  - `\s*;\n` -> `\n`
+#  - `\s*;\s*#\n` -> `\s* \s*#\n`
 function remove_trailing_semicolon_block(ctx::Context, node::Node, struct_body::Bool = false)
     kind(node) === K"block" || return nothing
     @assert !is_leaf(node)
@@ -3154,7 +3144,7 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node, struct_body::
             end
             # Insert new node
             @assert kind(kids′[semi_idx]) === K";"
-            ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), ws_span)
+            ws = ws_node(ws_span)
             kids′[semi_idx] = ws
             # Delete the consumed whitespace nodes
             space_after && deleteat!(kids′, semi_idx + 1)
@@ -3170,8 +3160,7 @@ end
 
 function remove_trailing_semicolon(ctx::Context, node::Node)
     if is_begin_block(node)
-        r = remove_trailing_semicolon_block(ctx, node)
-        return r
+        return remove_trailing_semicolon_block(ctx, node)
     end
     if !(!is_leaf(node) && kind(node) in KSet"if elseif quote function for let while macro try catch finally else do struct")
         return nothing
@@ -3180,40 +3169,25 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
         # This node is `:(...)` and not `quote...end`
         return nothing
     end
-    pos = position(ctx.fmt_io)
     kids = verified_kids(node)
-    kids′ = kids
     block_predicate = function (x)
         return kind(x) === K"block" && !JuliaSyntax.has_flags(x, JuliaSyntax.PARENS_FLAG)
     end
-    block_idx = findfirst(block_predicate, kids′)
+    struct_body = kind(node) === K"struct"
+    block_idx = findfirst(block_predicate, kids)
     if kind(node) === K"let"
         # The first block of let is the variables
-        block_idx = findnext(block_predicate, kids′, block_idx + 1)
+        block_idx = findnext(block_predicate, kids, block_idx + 1)
     end
     any_changed = false
     while block_idx !== nothing
-        let p = position(ctx.fmt_io)
-            for i in 1:(block_idx - 1)
-                accept_node!(ctx, kids′[i])
-            end
-            block′ = remove_trailing_semicolon_block(
-                ctx, kids′[block_idx], kind(node) === K"struct"
-            )
-            if block′ !== nothing
-                any_changed = true
-                if kids′ === kids
-                    kids′ = copy(kids)
-                end
-                kids′[block_idx] = block′
-            end
-            seek(ctx.fmt_io, p)
-        end
-        block_idx = findnext(block_predicate, kids′, block_idx + 1)
+        any_changed |= apply_at_kid!(
+            (ctx, kid) -> remove_trailing_semicolon_block(ctx, kid, struct_body),
+            ctx, kids, block_idx
+        )
+        block_idx = findnext(block_predicate, kids, block_idx + 1)
     end
-    # Reset the stream and return
-    seek(ctx.fmt_io, pos)
-    return any_changed ? make_node(node, kids′) : nothing
+    return any_changed ? make_node(node, kids) : nothing
 end
 
 function spaces_around_comments(ctx::Context, node::Node)
@@ -3255,20 +3229,11 @@ function spaces_around_comments(ctx::Context, node::Node)
 end
 
 function return_node(ctx::Context, ret::Node)
-    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
-    kids = [
-        Node(JuliaSyntax.SyntaxHead(K"return", 0), 6),
-    ]
-    if is_leaf(ret)
-        replace_bytes!(ctx, "return ", 0)
-        push!(kids, ws)
-        push!(kids, ret)
-    else
+    if !is_leaf(ret)
         @assert !(kind(first_leaf(ret)) in KSet"NewlineWs Whitespace")
-        replace_bytes!(ctx, "return ", 0)
-        push!(kids, ws)
-        push!(kids, ret)
     end
+    replace_bytes!(ctx, "return ", 0)
+    kids = [Node(JuliaSyntax.SyntaxHead(K"return", 0), 6), ws_node(1), ret]
     return Node(JuliaSyntax.SyntaxHead(K"return", 0), kids)
 end
 
@@ -3331,12 +3296,11 @@ function explicit_return_block(ctx, node)
     if is_leaf(rexpr) ||
             kind(rexpr) in KSet"call dotcall tuple vect ref hcat typed_hcat vcat typed_vcat \
                 ? && || :: juxtapose <: >: comparison string . -> comprehension do macro \
-                typed_comprehension where parens curly function quote global local = cmdstring" ||
+                typed_comprehension where parens curly function quote global local cmdstring" ||
             is_string_macro(rexpr) || is_assignment(rexpr) ||
             (kind(rexpr) in KSet"let if try" && !has_return(rexpr)) ||
             (kind(rexpr) === K"macrocall" && !has_return(rexpr)) ||
-            (is_begin_block(rexpr) && !has_return(rexpr)) ||
-            kind(rexpr) === K"quote" && JuliaSyntax.has_flags(rexpr, JuliaSyntax.COLON_QUOTE)
+            (is_begin_block(rexpr) && !has_return(rexpr))
         # The cases caught in this branch are simple, just wrap the last expression in a
         # return node. Also make sure the previous node is a K"NewlineWs".
         for i in 1:(rexpr_idx - 1)
@@ -3381,7 +3345,7 @@ function explicit_return_block(ctx, node)
             end
             @assert kind(first_leaf(rexpr)) !== K"Whitespace"
             nl = "\n" * repeat(" ", 4 * ctx.indent_level)
-            nlnode = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), sizeof(nl))
+            nlnode = nlws_node(sizeof(nl))
             insert!(kids′, rexpr_idx, nlnode)
             rexpr_idx += 1
             replace_bytes!(ctx, nl, spn)
@@ -3401,7 +3365,7 @@ function explicit_return_block(ctx, node)
         end
         # Insert newline
         nl = "\n" * repeat(" ", 4 * ctx.indent_level)
-        nlnode = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), sizeof(nl))
+        nlnode = nlws_node(sizeof(nl))
         insert!(kids′, insert_idx, nlnode)
         replace_bytes!(ctx, nl, 0)
         accept_node!(ctx, nlnode)
