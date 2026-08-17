@@ -547,6 +547,7 @@ This is a list of things that Runic currently is doing:
 
  - [Toggle formatting](#toggle-formatting)
  - [Line width limit](#line-width-limit)
+ - [Line endings](#line-endings)
  - [Newlines in blocks](#newlines-in-blocks)
  - [Indentation](#indentation)
  - [Explicit `return`](#explicit-return)
@@ -604,6 +605,31 @@ end
 ### Line width limit
 
 No. Use your <kbd>Enter</kbd> key or refactor your code.
+
+### Line endings
+
+All line endings are normalized to UNIX style line endings (LF, `"\n"`). This include line
+endings inside of string literals and docstrings, where the transformation is safe because
+Julia's parser performs the same normalization when computing the string values (i.e. the
+value of the string is unchanged).
+
+Note that if a file with Windows style line endings (CRLF, `"\r\n"`) is managed by git the
+CRLF line endings typically come from git's line ending conversion (e.g. the configuration
+option `core.autocrlf = true`, which is the Git for Windows default). With this setting git
+converts line endings to CRLF in the working tree on checkout, which means that i) `--check`
+can never pass (Runic's output will have LF line endings which differ from the CRLF line
+endings of the input) and ii) formatting with `--inplace` results in a file that git
+considers unchanged (git normalizes line endings back on commit, so there is no diff to
+commit). The fix is to tell git to always use LF line endings for Julia files by adding a
+[`.gitattributes`](https://git-scm.com/docs/gitattributes) file to the repository with the
+following content:
+
+```
+*.jl text eol=lf
+```
+
+Line endings in Markdown files (`.md`, `.qmd`) are preserved since, unlike for Julia source
+files, there is no parser normalization that would make a conversion safe.
 
 ###  Newlines in blocks
 
