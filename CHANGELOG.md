@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    that returns normally). This extends the existing exception for when the last expression
    is a direct call to such a function. Note that already formatted code is not impacted by
    this change since existing `return`s are kept as is. ([#202], [#217])
+### Fixed
+ - Multiline element expressions in generators (e.g. a multiline call or tuple before the
+   `for` keyword) no longer have their interior lines and closing token indented as
+   continuation lines. The closing token now aligns with the line of the opening token,
+   consistent with how such expressions are indented in e.g. operator call chains ([#173]).
 
 ## [v1.9.0] - 2026-08-20
 ### Added
@@ -284,6 +289,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#169]: https://github.com/fredrikekre/Runic.jl/issues/169
 [#170]: https://github.com/fredrikekre/Runic.jl/issues/170
 [#171]: https://github.com/fredrikekre/Runic.jl/issues/171
+[#173]: https://github.com/fredrikekre/Runic.jl/issues/173
 [#174]: https://github.com/fredrikekre/Runic.jl/issues/174
 [#175]: https://github.com/fredrikekre/Runic.jl/issues/175
 [#186]: https://github.com/fredrikekre/Runic.jl/issues/186

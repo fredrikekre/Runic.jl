@@ -920,6 +920,19 @@ end
                 format_string("$(t)[$(sp)\n$(sp)a for a in b$(sp)]") ==
                 format_string("$(t)[$(sp)\n$(sp)a for a in b$(sp)\n$(sp)]") ==
                 "$(t)[\n    a for a in b\n]"
+            # https://github.com/fredrikekre/Runic.jl/issues/173
+            # Line break before `for` is a continuation line
+            @test format_string("$(t)[\n$(sp)a\n$(sp)for a in b\n$(sp)]") ==
+                "$(t)[\n    a\n        for a in b\n]"
+            @test format_string("$(t)[\n$(sp)a\n$(sp)for a in b\n$(sp)if a > c\n$(sp)]") ==
+                "$(t)[\n    a\n        for a in b\n        if a > c\n]"
+            # Multiline element expressions handle their own indentation
+            @test format_string("$(t)[\n$(sp)f(\n$(sp)a\n$(sp))\n$(sp)for a in b\n$(sp)]") ==
+                "$(t)[\n    f(\n        a\n    )\n        for a in b\n]"
+            @test format_string("$(t)[\n$(sp)f(\n$(sp)a\n$(sp)) for a in b\n$(sp)]") ==
+                "$(t)[\n    f(\n        a\n    ) for a in b\n]"
+            @test format_string("$(t)[\n$(sp)(\n$(sp)a, a^2,\n$(sp))\n$(sp)for a in b\n$(sp)]") ==
+                "$(t)[\n    (\n        a, a^2,\n    )\n        for a in b\n]"
         end
         # Single line begin-end
         @test format_string("begin x\n$(sp)end") == "begin\n    x\nend"
