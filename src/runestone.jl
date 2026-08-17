@@ -238,14 +238,10 @@ end
 # `<something><space><x><space><something>`, for example the spaces around `+` and `=` in
 # `a = x + y`.
 function spaces_around_x(ctx::Context, node::Node, n_leaves_per_x::Int = 1)
-    # TODO: So much boilerplate here...
     @assert !is_leaf(node)
 
     kids = verified_kids(node)
-    kids′ = kids
-    any_changes = false
-    pos = position(ctx.fmt_io)
-    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
+    ws = ws_node(1)
 
     # Toggle for whether we are currently looking for whitespace or not
     looking_for_whitespace = false
@@ -254,6 +250,8 @@ function spaces_around_x(ctx::Context, node::Node, n_leaves_per_x::Int = 1)
 
     peek(kids, i) = i < length(kids) ? kind(kids[i + 1]) : nothing
 
+    b = NodeBuilder(ctx, node)
+
     for (i, kid) in pairs(kids)
         if kind(kid) === K"NewlineWs" ||
                 (i == 1 && kind(kid) === K"Whitespace")
@@ -261,60 +259,28 @@ function spaces_around_x(ctx::Context, node::Node, n_leaves_per_x::Int = 1)
             # Whitespace is accepted as is if this is the first kid even if the span is
             # larger than we expect since we don't look backwards. It should be cleaned up
             # by some other pass.
-            accept_node!(ctx, kid)
-            any_changes && push!(kids′, kid)
+            accept!(b, kid)
             looking_for_whitespace = false
-        elseif looking_for_whitespace
-            if (kind(kid) === K"Whitespace" && span(kid) == 1) ||
-                    (kind(kid) === K"Whitespace" && peek(kids, i) === K"Comment" && peek(kids, i + 1) === K"NewlineWs")
+        elseif looking_for_whitespace && kind(kid) === K"Whitespace"
+            if span(kid) == 1 ||
+                    (peek(kids, i) === K"Comment" && peek(kids, i + 1) === K"NewlineWs")
                 # All good, just advance the IO
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
-                looking_for_whitespace = false
-            elseif kind(kid) === K"Whitespace"
-                # Whitespace node but replace since not single space
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                push!(kids′, ws)
-                replace_bytes!(ctx, " ", span(kid))
-                accept_node!(ctx, ws)
-                looking_for_whitespace = false
+                accept!(b, kid)
             else
-                @assert !(first_leaf(kid) in KSet"Whitespace NewlineWs")
-                # Not a whitespace node, insert one
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                push!(kids′, ws)
-                replace_bytes!(ctx, " ", 0)
-                accept_node!(ctx, ws)
-                # Write and accept the node
-                push!(kids′, kid)
-                accept_node!(ctx, kid)
-                looking_for_whitespace = kind(last_leaf(kid)) !== K"Whitespace"
-                # TODO: Duplicated with the branch below.
-                if kind(kid) === K"Comment"
-                    # Keep the state
-                elseif looking_for_x
-                    n_x_leaves_visited += 1
-                    if n_x_leaves_visited == n_leaves_per_x
-                        looking_for_x = false
-                        n_x_leaves_visited = 0
-                    else
-                        looking_for_whitespace = false
-                    end
-                else
-                    looking_for_x = kind(kid) !== K"Comment"
-                end
+                # Whitespace node but replace since not single space
+                emit!(b, ws, " ", span(kid))
             end
-        else # !expect_ws
-            # We end up here if we look for x, or the things in between x's
-            @assert kind(kid) !== K"Whitespace" # This would be weird, I think?
-            any_changes && push!(kids′, kid)
-            accept_node!(ctx, kid)
+            looking_for_whitespace = false
+        else
+            if looking_for_whitespace
+                # Not a whitespace node, insert one before handling the node itself
+                @assert !(first_leaf(kid) in KSet"Whitespace NewlineWs")
+                emit!(b, ws, " ", 0)
+            else
+                # We end up here if we look for x, or the things in between x's
+                @assert kind(kid) !== K"Whitespace" # This would be weird, I think?
+            end
+            accept!(b, kid)
             looking_for_whitespace = kind(last_leaf(kid)) !== K"Whitespace"
             if kind(kid) === K"Comment"
                 # Just skip through and keep the state?
@@ -336,14 +302,7 @@ function spaces_around_x(ctx::Context, node::Node, n_leaves_per_x::Int = 1)
             end
         end
     end
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    if any_changes
-        # Create new node and return it
-        return make_node(node, kids′)
-    else
-        return nothing
-    end
+    return finish!(b, node)
 end
 
 # Insert space after comma and semicolon in list-like expressions. Aim for the form
@@ -815,53 +774,19 @@ function no_spaces_around_x(ctx::Context, node::Node)
     end
 
     kids = verified_kids(node)
-    kids′ = kids
-    any_changes = false
-    pos = position(ctx.fmt_io)
-
-    looking_for_x = false
-
-    # K"::", K"<:", and K">:" are special cases here since they can be used without an LHS
-    # in e.g. `f(::Int) = ...` and `Vector{<:Real}`. Detect prefix form by checking whether
-    # the first non-whitespace child is the operator leaf itself (not an LHS operand).
-    if kind(node) in KSet":: <: >:"
-        first_kid = first_non_whitespace_kid(node)
-        looking_for_x = is_leaf(first_kid) && kind(first_kid) in KSet":: <: >:"
-    end
-
+    b = NodeBuilder(ctx, node)
     for (i, kid) in pairs(kids)
         if kind(kid) === K"Whitespace"
-            # Leading and trailing whitespace should not be dropped but normalization should
-            # make sure these never exist.
+            # Leading and trailing whitespace should not be dropped but normalization
+            # should make sure these never exist.
             @assert 1 < i < length(kids)
-            # Ignore it but need to copy kids and re-write bytes
-            any_changes = true
-            if kids′ === kids
-                kids′ = kids[1:(i - 1)]
-            end
-            replace_bytes!(ctx, "", span(kid))
+            skip_kid!(b, kid)
         else
             @assert !JuliaSyntax.is_whitespace(kid) # Filtered out above
-            if any_changes
-                if kids === kids′
-                    kids′ = kids[1:(i - 1)]
-                end
-                push!(kids′, kid)
-            end
-            accept_node!(ctx, kid)
-            looking_for_x = !looking_for_x
+            accept!(b, kid)
         end
     end
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    if any_changes
-        # Create new node and return it
-        node′ = make_node(node, kids′)
-        @assert span(node′) < span(node)
-        return node′
-    else
-        return nothing
-    end
+    return finish!(b, node)
 end
 
 function spaces_in_export_public(ctx::Context, node::Node)
