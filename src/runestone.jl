@@ -1658,6 +1658,9 @@ end
 
 function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
     @assert kind(node) === K"block"
+    # Note: indent_block may advance the stream even when it returns nothing (for
+    # begin/quote blocks it accepts the keyword before bailing out on empty blocks) so
+    # the position must be restored before returning.
     pos = position(ctx.fmt_io)
     node′ = indent_block(ctx, node)
     any_kid_changed = false
@@ -1668,39 +1671,48 @@ function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
     kids = verified_kids(node)
     # First node is the begin/quote keyword
     begin_idx = 1
-    begin_node = kids[begin_idx]
-    @assert is_leaf(begin_node) && kind(begin_node) === block_kind
-    if !has_tag(begin_node, TAG_INDENT)
-        kids[begin_idx] = add_tag(begin_node, TAG_INDENT)
-        any_kid_changed = true
-    end
-    # Second node is the newline
-    # TODO: Require newline?
-    # ln_idx = 2
-    # ln_node = kids[ln_idx]
-    # @assert is_leaf(ln_node) && kind(ln_node) === K"NewlineWs"
-    # After the NewlineWs node we skip over all kids until the end
-    end_idx = findlast(x -> kind(x) === K"end", kids)
+    @assert is_leaf(kids[begin_idx]) && kind(kids[begin_idx]) === block_kind
+    any_kid_changed |= tag_kid!(kids, begin_idx, TAG_INDENT)
+    # Last node is the end keyword
+    end_idx = findlast(x -> kind(x) === K"end", kids)::Int
     @assert end_idx == lastindex(kids) # ??
-    # Tag last newline as pre-dedent
-    ln_idx = end_idx - 1
-    ln_node = kids[ln_idx]
-    if kind(ln_node) === K"NewlineWs"
-        if !has_tag(ln_node, TAG_PRE_DEDENT)
-            kids[ln_idx] = add_tag(ln_node, TAG_PRE_DEDENT)
-            any_kid_changed = true
-        end
+    @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
+    # Tag the newline just before the end keyword as pre-dedent
+    if kind(kids[end_idx - 1]) === K"NewlineWs"
+        any_kid_changed |= tag_kid!(kids, end_idx - 1, TAG_PRE_DEDENT)
     end
-    end_node = kids[end_idx]
-    @assert is_leaf(end_node) && kind(end_node) === K"end"
-    if !has_tag(end_node, TAG_DEDENT)
-        kids[end_idx] = add_tag(end_node, TAG_DEDENT)
-        any_kid_changed = true
-    end
-    @assert verified_kids(node) === kids
+    any_kid_changed |= tag_kid!(kids, end_idx, TAG_DEDENT)
     # Reset stream
     seek(ctx.fmt_io, pos)
     return any_kid_changed ? make_node(node, kids) : nothing
+end
+
+# Find the opening and closing delimiter leafs and defer to indent_listlike.
+function indent_listlike_between(
+        ctx::Context, node::Node, open_kind::JuliaSyntax.Kind, close_kind::JuliaSyntax.Kind
+    )
+    kids = verified_kids(node)
+    open_idx = findfirst(x -> kind(x) === open_kind, kids)::Int
+    close_idx = findnext(x -> kind(x) === close_kind, kids, open_idx + 1)::Int
+    return indent_listlike(ctx, node, open_idx, close_idx)
+end
+
+# Shared skeleton for `<keyword> ... <block> ... end` nodes: tag the keyword with
+# indent, indent the block, and tag the closing `end` with dedent.
+function indent_keyword_block_end!(
+        ctx::Context, node::Node, kw_idx::Int, block_idx::Int, end_idx::Int;
+        do_indent::Bool = true
+    )
+    kids = verified_kids(node)
+    @assert is_leaf(kids[kw_idx])
+    @assert kind(kids[block_idx]) === K"block"
+    @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
+    changed = do_indent && tag_kid!(kids, kw_idx, TAG_INDENT)
+    changed |= apply_at_kid!(
+        (ctx, kid) -> indent_block(ctx, kid; do_indent = do_indent), ctx, kids, block_idx
+    )
+    changed |= do_indent && tag_kid!(kids, end_idx, TAG_DEDENT)
+    return changed ? make_node(node, kids) : nothing
 end
 
 # This function ensures that the block start, and ends, with a newline, and make sure that
@@ -2125,18 +2137,12 @@ end
 # Mark opening and closing parentheses, in a call or a tuple, with indent and dedent tags.
 function indent_paren(ctx::Context, node::Node)
     @assert kind(node) in KSet"call dotcall tuple parens macrocall"
-    kids = verified_kids(node)
-    opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)::Int
-    closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
-    return indent_listlike(ctx, node, opening_paren_idx, closing_paren_idx)
+    return indent_listlike_between(ctx, node, K"(", K")")
 end
 
 function indent_braces(ctx::Context, node::Node)
     @assert kind(node) in KSet"curly braces bracescat"
-    kids = verified_kids(node)
-    opening_brace_idx = findfirst(x -> kind(x) === K"{", kids)::Int
-    closing_brace_idx = findnext(x -> kind(x) === K"}", kids, opening_brace_idx + 1)::Int
-    return indent_listlike(ctx, node, opening_brace_idx, closing_brace_idx)
+    return indent_listlike_between(ctx, node, K"{", K"}")
 end
 
 # Insert line-continuation nodes instead of bumping the indent level.
@@ -2152,31 +2158,11 @@ end
 function indent_loop(ctx::Context, node::Node)
     @assert kind(node) in KSet"for while"
     kids = verified_kids(node)
-    any_kid_changed = false
-    for_idx = findfirst(x -> kind(x) in KSet"for while", kids)::Int
-    if !has_tag(kids[for_idx], TAG_INDENT)
-        kids[for_idx] = add_tag(kids[for_idx], TAG_INDENT)
-        any_kid_changed = true
-    end
+    kw_idx = findfirst(x -> kind(x) in KSet"for while", kids)::Int
     # findlast because the condition can also be a block
     block_idx = findlast(x -> kind(x) === K"block", kids)::Int
-    let p = position(ctx.fmt_io)
-        for i in 1:(block_idx - 1)
-            accept_node!(ctx, kids[i])
-        end
-        block_node′ = indent_block(ctx, kids[block_idx])
-        if block_node′ !== nothing
-            kids[block_idx] = block_node′
-            any_kid_changed = true
-        end
-        seek(ctx.fmt_io, p)
-    end
     end_idx = findlast(x -> kind(x) === K"end", kids)::Int
-    if !has_tag(kids[end_idx], TAG_DEDENT)
-        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
-        any_kid_changed = true
-    end
-    return any_kid_changed ? make_node(node, kids) : nothing
+    return indent_keyword_block_end!(ctx, node, kw_idx, block_idx, end_idx)
 end
 
 function indent_implicit_tuple(ctx::Context, node::Node)
@@ -2208,44 +2194,14 @@ function indent_parens(ctx::Context, node::Node)
 end
 
 # TODO: This is not needed? NamedTuples?
-function indent_parameters(ctx::Context, node::Node)
-    # kids = verified_kids(node)
-    # # TODO: This is always here?
-    # semicolon_idx = findfirst(x -> kind(x) === K";", kids)::Int
-    # last_non_ws_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
-    # return indent_newlines_between_indices(
-    #     ctx, node, semicolon_idx, last_non_ws_idx; indent_closing_token = true,
-    # )
-end
-
 function indent_struct(ctx::Context, node::Node)
     @assert kind(node) === K"struct"
     kids = verified_kids(node)
-    any_kid_changed = false
     struct_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     @assert kind(kids[struct_idx]) in KSet"mutable struct"
-    if !has_tag(kids[struct_idx], TAG_INDENT)
-        kids[struct_idx] = add_tag(kids[struct_idx], TAG_INDENT)
-        any_kid_changed = true
-    end
     block_idx = findnext(x -> kind(x) === K"block", kids, struct_idx + 1)::Int
-    let p = position(ctx.fmt_io)
-        for i in 1:(block_idx - 1)
-            accept_node!(ctx, kids[i])
-        end
-        block_node′ = indent_block(ctx, kids[block_idx])
-        if block_node′ !== nothing
-            kids[block_idx] = block_node′
-            any_kid_changed = true
-        end
-        seek(ctx.fmt_io, p)
-    end
     end_idx = findlast(x -> kind(x) === K"end", kids)::Int
-    if !has_tag(kids[end_idx], TAG_DEDENT)
-        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
-        any_kid_changed = true
-    end
-    return any_kid_changed ? make_node(node, kids) : nothing
+    return indent_keyword_block_end!(ctx, node, struct_idx, block_idx, end_idx)
 end
 
 function indent_short_circuit(ctx::Context, node::Node)
@@ -2256,44 +2212,41 @@ function indent_triple_thing(ctx::Context, node::Node)
     @assert is_triple_thing(node)
     if is_triple_string(node)
         return has_tag(node, TAG_LINE_CONT) ? nothing : add_tag(node, TAG_LINE_CONT)
-    elseif is_triple_string_macro(node)
-        kids = verified_kids(node)
-        @assert is_triple_string(kids[2])
-        kid′ = indent_triple_thing(ctx, kids[2])
-        kid′ === nothing && return nothing
-        kids′ = copy(kids)
-        kids′[2] = kid′
-        return make_node(node, kids′)
-    else
-        @assert kind(node) === K"juxtapose" && is_triple_string_macro(verified_kids(node)[1])
-        kids = verified_kids(node)
-        kid′ = indent_triple_thing(ctx, kids[1])
-        kid′ === nothing && return nothing
-        kids′ = copy(kids)
-        kids′[1] = kid′
-        return make_node(node, kids′)
     end
+    # Recurse into the string of a triple string macro (kid 2) or into the macro of a
+    # juxtaposed triple string (kid 1)
+    kids = verified_kids(node)
+    if is_triple_string_macro(node)
+        idx = 2
+        @assert is_triple_string(kids[idx])
+    else
+        @assert kind(node) === K"juxtapose" && is_triple_string_macro(kids[1])
+        idx = 1
+    end
+    kid′ = indent_triple_thing(ctx, kids[idx])
+    kid′ === nothing && return nothing
+    kids′ = copy(kids)
+    kids′[idx] = kid′
+    return make_node(node, kids′)
 end
 
 # TODO: This function can be used for more things than just indent_using I think. Perhaps
 # with a max_depth parameter.
 function continue_all_newlines(
-        ctx::Context, node::Node; skip_last::Bool = true, is_last::Bool = is_leaf(node),
-        skip_first::Bool = true, is_first::Bool = true
+        ctx::Context, node::Node; is_last::Bool = is_leaf(node), is_first::Bool = true
     )
-    # Not sure these need to arguments since they should always(?) be `true`.
-    @assert skip_last
-    @assert skip_first
+    # Leading and trailing newlines are skipped; they are the responsibility of the
+    # parent node.
     if is_leaf(node)
         if kind(node) === K"NewlineWs" && !has_tag(node, TAG_LINE_CONT) &&
-                !((skip_last && is_last) || (skip_first && is_first))
+                !(is_last || is_first)
             return add_tag(node, TAG_LINE_CONT)
         else
             return nothing
         end
     elseif is_triple_thing(node)
-        # Check skip_first inside to break the recursion and considier triple strings leafs
-        if !(skip_first && is_first)
+        # Check is_first inside to break the recursion and considier triple strings leafs
+        if !is_first
             return indent_triple_thing(ctx, node)
         else
             return nothing
@@ -2303,8 +2256,8 @@ function continue_all_newlines(
         kids = verified_kids(node)
         for (i, kid) in pairs(kids)
             kid′ = continue_all_newlines(
-                ctx, kid; skip_last = skip_last, is_last = i == lastindex(kids),
-                skip_first = skip_first, is_first = is_first && i == firstindex(kids)
+                ctx, kid; is_last = i == lastindex(kids),
+                is_first = is_first && i == firstindex(kids)
             )
             if kid′ !== nothing
                 kids[i] = kid′
@@ -2389,85 +2342,47 @@ end
 function indent_paren_block(ctx::Context, node::Node)
     @assert kind(node) === K"block"
     @assert JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)
-    kids = verified_kids(node)
-    opening_paren_idx = findfirst(x -> kind(x) === K"(", kids)::Int
-    closing_paren_idx = findnext(x -> kind(x) === K")", kids, opening_paren_idx + 1)::Int
-    return indent_listlike(ctx, node, opening_paren_idx, closing_paren_idx)
+    return indent_listlike_between(ctx, node, K"(", K")")
 end
 
 function indent_do(ctx::Context, node::Node)
     @assert kind(node) === K"do"
     kids = verified_kids(node)
-    any_kid_changed = false
     # Skip over the call and go directly to the do-keyword
     do_idx = findfirst(x -> kind(x) === K"do", kids)::Int
-    if !has_tag(kids[do_idx], TAG_INDENT)
-        kids[do_idx] = add_tag(kids[do_idx], TAG_INDENT)
-        any_kid_changed = true
-    end
-    # Find the do body block
     block_idx = findnext(x -> kind(x) === K"block", kids, do_idx + 1)::Int
-    let p = position(ctx.fmt_io)
-        for i in 1:(block_idx - 1)
-            accept_node!(ctx, kids[i])
-        end
-        block_node′ = indent_block(ctx, kids[block_idx])
-        if block_node′ !== nothing
-            kids[block_idx] = block_node′
-            any_kid_changed = true
-        end
-        seek(ctx.fmt_io, p)
-    end
-    # Closing `end`
     end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)::Int
-    if !has_tag(kids[end_idx], TAG_DEDENT)
-        kids[end_idx] = add_tag(kids[end_idx], TAG_DEDENT)
-        any_kid_changed = true
-    end
-    return any_kid_changed ? make_node(node, kids) : nothing
+    return indent_keyword_block_end!(ctx, node, do_idx, block_idx, end_idx)
 end
 
 function indent_quote(ctx::Context, node::Node)
     @assert kind(node) === K"quote"
-    kids = verified_kids(node)
-    any_kid_changed = false
-    # K"quote" can be `quote ... end` or `:(...)`.
-    block_form = !JuliaSyntax.has_flags(node, JuliaSyntax.COLON_QUOTE)
-    if block_form
-        block_idx = findfirst(x -> kind(x) === K"block", kids)
-        if block_idx === nothing
-            # `bar` in `foo.bar` is a quote block...
-            return nothing
-        end
-        @assert block_idx == 1 # Otherwise need to seek the stream
-        block_node′ = indent_begin(ctx, kids[block_idx], K"quote")
-        if block_node′ !== nothing
-            kids[block_idx] = block_node′
-            any_kid_changed = true
-        end
-        return any_kid_changed ? make_node(node, kids) : nothing
-    else
-        # The short form can be ignored since the inside (K"block", K"tuple", or
-        # K"Identifier") of the quote will be handled by other passes.
+    # The short (`:(...)`) form can be ignored since the inside (K"block", K"tuple", or
+    # K"Identifier") of the quote will be handled by other passes.
+    if JuliaSyntax.has_flags(node, JuliaSyntax.COLON_QUOTE)
         return nothing
     end
+    # Long (`quote ... end`) form
+    kids = verified_kids(node)
+    block_idx = findfirst(x -> kind(x) === K"block", kids)
+    if block_idx === nothing
+        # `bar` in `foo.bar` is a quote block...
+        return nothing
+    end
+    @assert block_idx == 1 # Otherwise need to seek the stream
+    kid′ = indent_begin(ctx, kids[block_idx], K"quote")
+    kid′ === nothing && return nothing
+    kids[block_idx] = kid′
+    return make_node(node, kids)
 end
 
 # Literal array nodes and also ref-nodes (which can be either a typed-array or a getindex)
 function indent_array(ctx::Context, node::Node)
     @assert kind(node) in KSet"vect vcat typed_vcat ncat ref comprehension typed_comprehension"
-    kids = verified_kids(node)
-    opening_bracket_idx = findfirst(x -> kind(x) === K"[", kids)::Int
-    closing_bracket_idx = findnext(x -> kind(x) === K"]", kids, opening_bracket_idx + 1)::Int
-    return indent_listlike(ctx, node, opening_bracket_idx, closing_bracket_idx)
+    return indent_listlike_between(ctx, node, K"[", K"]")
 end
 
 # TODO: can a row be multiline?
-function indent_array_row(ctx::Context, node::Node)
-    # @assert kind(node) === K"row"
-    # return continue_all_newlines(ctx, node)
-end
-
 function indent_comparison(ctx::Context, node::Node)
     @assert kind(node) === K"comparison"
     return continue_all_newlines(ctx, node)
@@ -2478,18 +2393,10 @@ function indent_doc_module(ctx::Context, node::Node; do_indent::Bool)
     @assert kind(node) === K"doc"
     kids = verified_kids(node)
     mod_idx = findfirst(x -> kind(x) === K"module", kids)::Int
-    pos = position(ctx.fmt_io)
-    for i in 1:(mod_idx - 1)
-        accept_node!(ctx, kids[i])
-    end
-    mod′ = indent_module(ctx, kids[mod_idx]; do_indent = do_indent)
-    seek(ctx.fmt_io, pos)
-    if mod′ === nothing
-        return nothing
-    end
-    kids′ = copy(kids)
-    kids′[mod_idx] = mod′
-    return make_node(node, kids′)
+    changed = apply_at_kid!(
+        (ctx, kid) -> indent_module(ctx, kid; do_indent = do_indent), ctx, kids, mod_idx
+    )
+    return changed ? make_node(node, kids) : nothing
 end
 
 # Indent a nested module
@@ -2499,44 +2406,15 @@ function indent_module(ctx::Context, node::Node; do_indent::Bool = true)
         return indent_doc_module(ctx, node; do_indent = do_indent)
     end
     kids = verified_kids(node)
-    any_kid_changed = false
-    pos = position(ctx.fmt_io)
     # First node is the module keyword
     mod_idx = 1
-    mod_node = kids[mod_idx]
-    @assert is_leaf(mod_node) && kind(mod_node) in KSet"module baremodule"
-    if do_indent && !has_tag(mod_node, TAG_INDENT)
-        kids[mod_idx] = add_tag(mod_node, TAG_INDENT)
-        any_kid_changed = true
-    end
-    # Next we expect whitespace + module identifier
+    @assert is_leaf(kids[mod_idx]) && kind(kids[mod_idx]) in KSet"module baremodule"
+    # Next we expect whitespace + module identifier and then the module body block
     modname_idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, mod_idx + 1)::Int
-    # Next node is the module body block.
     block_idx = findnext(x -> kind(x) === K"block", kids, modname_idx + 1)::Int
     @assert block_idx == modname_idx + 1
-    let p = position(ctx.fmt_io)
-        for i in 1:(block_idx - 1)
-            accept_node!(ctx, kids[i])
-        end
-        block_node′ = indent_block(ctx, kids[block_idx]; do_indent = do_indent)
-        if block_node′ !== nothing
-            kids[block_idx] = block_node′
-            any_kid_changed = true
-        end
-        seek(ctx.fmt_io, p)
-    end
-    # Skip until the closing end keyword
-    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)
-    end_node = kids[end_idx]
-    @assert is_leaf(end_node) && kind(end_node) === K"end"
-    if do_indent && !has_tag(end_node, TAG_DEDENT)
-        kids[end_idx] = add_tag(end_node, TAG_DEDENT)
-        any_kid_changed = true
-    end
-    @assert verified_kids(node) === kids
-    # Reset the stream
-    seek(ctx.fmt_io, pos)
-    return any_kid_changed ? make_node(node, kids) : nothing
+    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)::Int
+    return indent_keyword_block_end!(ctx, node, mod_idx, block_idx, end_idx; do_indent = do_indent)
 end
 
 # The only thing at top level that we need to indent are modules which don't occupy the full
@@ -2558,17 +2436,9 @@ function indent_toplevel(ctx::Context, node::Node)
     do_indent = count(!JuliaSyntax.is_whitespace, kids) > 1
     any_kid_changed = false
     while mod_idx !== nothing
-        let p = position(ctx.fmt_io)
-            for i in 1:(mod_idx - 1)
-                accept_node!(ctx, kids[i])
-            end
-            mod_node′ = indent_module(ctx, kids[mod_idx]; do_indent = do_indent)
-            if mod_node′ !== nothing
-                kids[mod_idx] = mod_node′
-                any_kid_changed = true
-            end
-            seek(ctx.fmt_io, p)
-        end
+        any_kid_changed |= apply_at_kid!(
+            (ctx, kid) -> indent_module(ctx, kid; do_indent = do_indent), ctx, kids, mod_idx
+        )
         mod_idx = findnext(is_module_or_doc_module, kids, mod_idx + 1)
     end
     return any_kid_changed ? make_node(node, kids) : nothing
@@ -2585,9 +2455,8 @@ function indent_local_global(ctx::Context, node::Node)
     @assert kind(first_leaf(kids[nonws])) !== K"NewlineWs"
     changed = false
     for i in (kw + 1):(nonws - 1)
-        if kind(kids[i]) === K"NewlineWs" && !has_tag(kids[i], TAG_LINE_CONT)
-            kids[i] = add_tag(kids[i], TAG_LINE_CONT)
-            changed = true
+        if kind(kids[i]) === K"NewlineWs"
+            changed |= tag_kid!(kids, i, TAG_LINE_CONT)
         end
     end
     return changed ? make_node(node, kids) : nothing
@@ -2631,8 +2500,6 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_local_global(ctx, node)
     elseif is_variable_assignment(ctx, node)
         return indent_assignment(ctx, node)
-    elseif kind(node) === K"parameters"
-        return indent_parameters(ctx, node)
     elseif kind(node) === K"?"
         return indent_ternary(ctx, node)
     elseif kind(node) in KSet"generator iteration"
@@ -2647,8 +2514,6 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_paren_block(ctx, node)
     elseif kind(node) in KSet"vect vcat typed_vcat ncat ref comprehension typed_comprehension"
         return indent_array(ctx, node)
-    elseif kind(node) in KSet"row"
-        return indent_array_row(ctx, node)
     elseif kind(node) === K"comparison"
         return indent_comparison(ctx, node)
     elseif kind(node) === K"toplevel"
