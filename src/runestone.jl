@@ -8,7 +8,7 @@ function trim_trailing_whitespace(ctx::Context, node::Node)
     str = String(read_bytes(ctx, node))
     local str′::String
     if kind(node) === K"NewlineWs"
-        # Strip all whitespace up until the newline while normalizing line endings to \njK:w
+        # Strip all whitespace up until the newline while normalizing line endings to \n
         str′ = replace(str, r"\h*(\r\n|\r|\n)" => '\n')
         # If the next sibling is also a NewlineWs we can trim trailing
         # whitespace from this node too
@@ -27,7 +27,7 @@ function trim_trailing_whitespace(ctx::Context, node::Node)
     end
     # Write new bytes and reset the stream
     nb = replace_bytes!(ctx, str′, span(node))
-    @assert nb != span(node)
+    @assert nb == sizeof(str′)
     # Create new node and return it
     return make_node(node, nb)
 end
@@ -126,13 +126,18 @@ function format_float_literals(ctx::Context, node::Node)
         write(io, replace(epm, "E" => "e", "−" => "-")) # \u2212 => \u002D
         @assert m[:exp] !== nothing
         # Strip leading zeros from integral part
-        exp_part = isempty(m[:exp]) ? "0" : m[:exp]
-        exp_part = replace(exp_part, r"^0*((?:[1-9]\d*)|0)$" => s"\1")
+        exp_part = replace(m[:exp]::AbstractString, r"^0*((?:[1-9]\d*)|0)$" => s"\1")
         write(io, exp_part)
     end
-    bytes = take!(io)
-    nb = replace_bytes!(ctx, bytes, span(node))
-    @assert nb == length(bytes)
+    str′ = String(take!(io))
+    # The happy path regex above is an optimization and not a termination guarantee: if the
+    # rebuilt literal is identical to the input the node must be accepted here, otherwise
+    # the driver would re-run this function until its iteration guard trips.
+    if str′ == str
+        return nothing
+    end
+    nb = replace_bytes!(ctx, str′, span(node))
+    @assert nb == sizeof(str′)
     # Create new node and return it
     node′ = Node(head(node), nb)
     return node′
@@ -1879,7 +1884,7 @@ function indent_let(ctx::Context, node::Node)
     vars_node = kids[vars_idx]
     @assert !is_leaf(vars_node) && kind(vars_node) === K"block"
     if span(vars_node) > 0 && length(verified_kids(vars_node)) > 0
-        @assert kind(last_leaf(vars_node)) !== "NewlineWs"
+        @assert kind(last_leaf(vars_node)) !== K"NewlineWs"
     end
     let p = position(ctx.fmt_io)
         for i in 1:(vars_idx - 1)
@@ -1926,12 +1931,12 @@ function indent_begin(ctx::Context, node::Node, block_kind = K"begin")
     @assert kind(node) === K"block"
     pos = position(ctx.fmt_io)
     node′ = indent_block(ctx, node)
+    any_kid_changed = false
     if node′ !== nothing
         node = node′
-        any_kid_changed = false
+        any_kid_changed = true
     end
     kids = verified_kids(node)
-    any_kid_changed = false
     # First node is the begin/quote keyword
     begin_idx = 1
     begin_node = kids[begin_idx]
@@ -2271,7 +2276,7 @@ function indent_if(ctx::Context, node::Node)
         # separate leaf, or hidden in the condition node.
     end
     cond_node = kids[cond_idx]
-    @assert kind(last_leaf(cond_node)) !== "NewlineWs"
+    @assert kind(last_leaf(cond_node)) !== K"NewlineWs"
     # Fourth node is the body block.
     block_idx = findnext(!JuliaSyntax.is_whitespace, kids, cond_idx + 1)::Int
     @assert block_idx == cond_idx + 1
@@ -2468,7 +2473,7 @@ function indent_listlike(
             kid = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), span(kid) + 1)
             replace_bytes!(ctx, "\n", 0)
             if kids′ === kids
-                kids′ = kids[1:(open_idx - 1)]
+                kids′ = kids[1:open_idx]
             end
             any_kid_changed = true
             push!(kids′, kid)
@@ -2497,7 +2502,7 @@ function indent_listlike(
                 grandkids′[next_idx] = grandkid′
                 kid = make_node(kid, grandkids′)
                 if kids′ === kids
-                    kids′ = kids[1:(open_idx - 1)]
+                    kids′ = kids[1:open_idx]
                 end
                 any_kid_changed = true
                 push!(kids′, kid)
@@ -2515,7 +2520,7 @@ function indent_listlike(
                 insert!(grandkids′, next_idx, Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1))
                 kid = make_node(kid, grandkids′)
                 if kids′ === kids
-                    kids′ = kids[1:(open_idx - 1)]
+                    kids′ = kids[1:open_idx]
                 end
                 any_kid_changed = true
                 push!(kids′, kid)
@@ -2526,7 +2531,7 @@ function indent_listlike(
             nlws = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1)
             replace_bytes!(ctx, "\n", 0)
             if kids′ === kids
-                kids′ = kids[1:(open_idx - 1)]
+                kids′ = kids[1:open_idx]
             end
             any_kid_changed = true
             push!(kids′, nlws)
@@ -2581,7 +2586,7 @@ function indent_listlike(
             kid = add_tag(kid, TAG_PRE_DEDENT)
             replace_bytes!(ctx, "\n", 0)
             if kids′ === kids
-                kids′ = kids[1:(open_idx - 1)]
+                kids′ = kids[1:(close_idx - 2)]
             end
             any_kid_changed = true
             push!(kids′, kid)
@@ -2590,7 +2595,7 @@ function indent_listlike(
             @assert kind(last_leaf(kid)) !== K"Whitespace"
             # Note that this is a trailing newline and should be put after this item
             if kids′ === kids
-                kids′ = kids[1:(open_idx - 1)]
+                kids′ = kids[1:(close_idx - 2)]
             end
             any_kid_changed = true
             push!(kids′, kid)
@@ -3075,13 +3080,15 @@ end
 
 # The only thing at top level that we need to indent are modules which don't occupy the full
 # top level expression, for example a file with an inner module followed by some code.
+function is_module_or_doc_module(x::Node)
+    return kind(x) === K"module" ||
+        (kind(x) === K"doc" && findfirst(y -> kind(y) === K"module", verified_kids(x)) !== nothing)
+end
+
 function indent_toplevel(ctx::Context, node::Node)
     @assert kind(node) === K"toplevel"
     kids = verified_kids(node)
-    mod_idx = findfirst(kids) do x
-        kind(x) === K"module" ||
-            (kind(x) === K"doc" && findfirst(y -> kind(y) === K"module", verified_kids(x)) !== nothing)
-    end
+    mod_idx = findfirst(is_module_or_doc_module, kids)
     if mod_idx === nothing
         # No module here
         return nothing
@@ -3101,7 +3108,7 @@ function indent_toplevel(ctx::Context, node::Node)
             end
             seek(ctx.fmt_io, p)
         end
-        mod_idx = findnext(x -> kind(x) === K"module", kids, mod_idx + 1)
+        mod_idx = findnext(is_module_or_doc_module, kids, mod_idx + 1)
     end
     return any_kid_changed ? make_node(node, kids) : nothing
 end

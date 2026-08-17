@@ -141,6 +141,8 @@ end
     # Trailing whitespace just before closing indent token
     @test format_string("begin\n    a = 1 \nend") == "begin\n    a = 1\nend"
     @test format_string("let\n    a = 1 \nend") == "let\n    a = 1\nend"
+    # Carriage returns (and trailing whitespace before them) normalize to \n
+    @test format_string("a = 1 \r\nb = 2\n") == "a = 1\nb = 2\n"
     # Trailing whitespace in comments
     @test format_string("# comment ") == format_string("# comment  ") ==
         format_string("# comment\t") == format_string("# comment\t\t") ==
@@ -850,6 +852,9 @@ end
             # toplevel documented module with more things
             @test format_string("\"doc\"\n$(b)module A\n$(sp)x\nend\nf") ==
                 "\"doc\"\n$(b)module A\n    x\nend\nf"
+            # two documented modules at toplevel (the second used to be skipped)
+            @test format_string("f\n\"doc\"\n$(b)module A\n$(sp)x\n$(sp)end\n\"doc\"\n$(b)module B\n$(sp)x\n$(sp)end") ==
+                "f\n\"doc\"\n$(b)module A\n    x\nend\n\"doc\"\n$(b)module B\n    x\nend"
             # var"" as module name
             @test format_string("$(b)module var\"A\"\n$(sp)x\n$(sp)end\nf") ==
                 "$(b)module var\"A\"\n    x\nend\nf"
