@@ -3132,6 +3132,27 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
     return nothing
 end
 
+# Check whether the kid at `idx` is a whitespace node that is followed by an empty line
+# (an item node of span 1 whose single byte is a newline). Such whitespace should be
+# deleted. The stream must be positioned at the start of the kid and is restored before
+# returning.
+function ws_precedes_empty_line(
+        ctx::Context, kids::Vector{Node}, idx::Int, close_idx::Int, itemkind::JuliaSyntax.Kind
+    )
+    kid = kids[idx]
+    if !(
+            kind(kid) === K"Whitespace" && idx + 1 < close_idx &&
+                kind(kids[idx + 1]) === itemkind && span(kids[idx + 1]) == 1
+        )
+        return false
+    end
+    pos = position(ctx.fmt_io)
+    accept_node!(ctx, kid)
+    byte = peek(ctx.fmt_io)
+    seek(ctx.fmt_io, pos)
+    return byte == UInt8('\n')
+end
+
 function indent_multiline_strings(ctx::Context, node::Node)
     if !is_triple_string(node)
         return nothing
@@ -3144,36 +3165,37 @@ function indent_multiline_strings(ctx::Context, node::Node)
     end
     indented = indent_span > 0
 
-    pos = position(ctx.fmt_io)
     kids = verified_kids(node)
-    kids′ = kids
-    any_changes = false
 
     # Fastpath for the common case of top level multiline strings like e.g. docstrings
     if !indented && findfirst(x -> kind(x) === K"Whitespace", kids) === nothing
         return nothing
     end
 
-    # Opening triple quote
     open_idx = findfirst(x -> kind(x) === triplekind, kids)::Int
     close_idx = findlast(x -> kind(x) === triplekind, kids)::Int
     @assert close_idx == length(kids) # ?
-    open_kid = kids[open_idx]
-    @assert kind(open_kid) === triplekind
-    accept_node!(ctx, open_kid)
 
-    # Loop over the lines/expressions
+    b = NodeBuilder(ctx, node)
+
+    # Opening triple quote
+    for i in 1:open_idx
+        @assert i < open_idx || kind(kids[i]) === triplekind
+        accept!(b, kids[i])
+    end
+
+    # Loop over the lines/expressions. After every item that ends with a newline we
+    # expect the indenting whitespace for the next line (`expect_indent`).
     idx = open_idx + 1
-    state = :expect_something
+    expect_indent = false
     while idx < close_idx
         kid = kids[idx]
-        if state === :expect_something
+        if !expect_indent
             if kind(kid) === itemkind
                 if indented && span(kid) > 0 && read_bytes(ctx, kid)[end] == UInt8('\n')
-                    state = :expect_indent_ws
+                    expect_indent = true
                 end
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             elseif kind(kid) === K"Whitespace"
                 bytes = read_bytes(ctx, kid)
                 # Multiline strings with trailing \ will have non-space characters in the
@@ -3182,8 +3204,7 @@ function indent_multiline_strings(ctx::Context, node::Node)
                 if length(bytes) == 2 + indent_span && bytes[1] === UInt8('\\') && bytes[2] === UInt8('\n')
                     @assert all(x -> x in (UInt8(' '), UInt8('\t')), @view(bytes[3:end]))
                     # This node is correct
-                    accept_node!(ctx, kid)
-                    any_changes && push!(kids′, kid)
+                    accept!(b, kid)
                 elseif length(bytes) >= 2 && bytes[1] === UInt8('\\') && bytes[2] === UInt8('\n')
                     @assert all(x -> x in (UInt8(' '), UInt8('\t')), @view(bytes[3:end]))
                     if length(bytes) < 2 + indent_span
@@ -3196,98 +3217,47 @@ function indent_multiline_strings(ctx::Context, node::Node)
                         # Truncate spaces
                         resize!(bytes, 2 + indent_span)
                     end
-                    replace_bytes!(ctx, bytes, span(kid))
-                    if kids′ === kids
-                        kids′ = kids[1:(idx - 1)]
-                    end
-                    kid′ = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), length(bytes))
-                    accept_node!(ctx, kid′)
-                    push!(kids′, kid′)
-                    any_changes = true
+                    emit!(b, ws_node(length(bytes)), bytes, span(kid))
                 else
                     # Delete this node completely
                     @assert all(x -> x in (UInt8(' '), UInt8('\t')), bytes)
-                    replace_bytes!(ctx, "", span(kid))
-                    if kids′ === kids
-                        kids′ = kids[1:(idx - 1)]
-                    end
-                    any_changes = true
+                    skip_kid!(b, kid)
                 end
             else
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             end
         else
-            @assert state === :expect_indent_ws
-            state = :expect_something
+            expect_indent = false
             if kind(kid) === itemkind && span(kid) == 1 && peek(ctx.fmt_io) == UInt8('\n')
-                # If this line is empty there shouldn't be a whitespace node. Switch the
-                # state and loop around with the same idx.
-                state = :expect_something
+                # If this line is empty there shouldn't be a whitespace node. Loop around
+                # with the same idx.
                 continue # Skip the index increment
-            elseif begin
-                    cond = false
-                    if kind(kid) === K"Whitespace" && idx + 1 < close_idx &&
-                            kind(kids[idx + 1]) === itemkind && span(kids[idx + 1]) == 1
-                        peekpos = position(ctx.fmt_io)
-                        accept_node!(ctx, kid)
-                        accept_node!(ctx, kids[idx + 1])
-                        seek(ctx.fmt_io, position(ctx.fmt_io) - 1)
-                        cond = peek(ctx.fmt_io) == UInt8('\n')
-                        seek(ctx.fmt_io, peekpos)
-                    end
-                    cond
-                end
-                # If this whitespace is followed by an empty string it should be deleted
-                state = :expect_something
+            elseif ws_precedes_empty_line(ctx, kids, idx, close_idx, itemkind)
+                # Whitespace followed by an empty line should be deleted. Loop around with
+                # the same idx; the whitespace branch above takes care of the deletion.
                 continue # Skip the index increment
             elseif kind(kid) === K"Whitespace" && span(kid) == indent_span
                 @assert all(x -> x === UInt8(' '), read_bytes(ctx, kid))
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             elseif kind(kid) === K"Whitespace"
-                replace_bytes!(ctx, repeat(" ", indent_span), span(kid))
-                if kids′ === kids
-                    kids′ = kids[1:(idx - 1)]
-                end
-                kid′ = Node(head(kid), indent_span, tags(kid))
-                any_changes = true
-                push!(kids′, kid′)
-                accept_node!(ctx, kid′)
+                emit!(b, Node(head(kid), indent_span, tags(kid)), repeat(" ", indent_span), span(kid))
             else
-                replace_bytes!(ctx, repeat(" ", indent_span), 0)
-                if kids′ === kids
-                    kids′ = kids[1:(idx - 1)]
-                end
-                kid′ = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), indent_span)
-                any_changes = true
-                push!(kids′, kid′)
-                accept_node!(ctx, kid′)
+                emit!(b, ws_node(indent_span), repeat(" ", indent_span), 0)
                 continue # Skip the index increment
             end
         end
         idx += 1
     end
     # Make sure to add indent before the closing triple quote
-    if state === :expect_indent_ws
-        replace_bytes!(ctx, repeat(" ", indent_span), 0)
-        if kids′ === kids
-            kids′ = kids[1:(idx - 1)]
-        end
-        kid′ = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), indent_span)
-        any_changes = true
-        push!(kids′, kid′)
-        accept_node!(ctx, kid′)
+    if expect_indent
+        emit!(b, ws_node(indent_span), repeat(" ", indent_span), 0)
     end
     @assert idx == close_idx
     # Closing triple quote
     close_kid = kids[close_idx]
     @assert kind(close_kid) === triplekind
-    accept_node!(ctx, close_kid)
-    any_changes && push!(kids′, close_kid)
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    return any_changes ? make_node(node, kids′) : nothing
+    accept!(b, close_kid)
+    return finish!(b, node)
 end
 
 const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|[A-Za-z0-9_-]*)"
