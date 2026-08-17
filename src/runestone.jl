@@ -2,6 +2,97 @@
 
 # This is the runestone where all the formatting transformations are implemented.
 
+###########################################################
+# NodeBuilder: copy-on-write emitter for rebuilding kids  #
+###########################################################
+
+# Builder for rules that rebuild the kids vector of a node while keeping the output
+# stream (`ctx.fmt_io`) in sync. It encapsulates the copy-on-write protocol: the output
+# aliases the original kids until the first change, at which point the already-emitted
+# prefix is copied. The number of emitted kids is tracked internally, which makes it
+# impossible to copy the wrong prefix (a bug class that has occurred when call sites
+# computed the prefix index by hand).
+mutable struct NodeBuilder
+    const ctx::Context
+    const kids::Vector{Node}             # original kids; lookahead (e.g. kmatch) unaffected
+    kids′::Union{Vector{Node}, Nothing}  # output; `nothing` while it aliases kids[1:n_accepted]
+    n_accepted::Int
+    const pos::Int                       # stream position at the start of the parent node
+end
+
+function NodeBuilder(ctx::Context, node::Node)
+    return NodeBuilder(ctx, verified_kids(node), nothing, 0, position(ctx.fmt_io))
+end
+
+# Copy the already-emitted prefix on the first change.
+function materialize!(b::NodeBuilder)
+    if b.kids′ === nothing
+        b.kids′ = b.kids[1:b.n_accepted]
+    end
+    return b.kids′::Vector{Node}
+end
+
+# Pass an original kid through unchanged.
+function accept!(b::NodeBuilder, kid::Node)
+    if b.kids′ === nothing
+        @assert kid === b.kids[b.n_accepted + 1]
+        b.n_accepted += 1
+    else
+        push!(b.kids′::Vector{Node}, kid)
+    end
+    accept_node!(b.ctx, kid)
+    return
+end
+
+# Emit a changed or new node whose bytes in the stream are already correct.
+function emit!(b::NodeBuilder, kid′::Node)
+    push!(materialize!(b), kid′)
+    accept_node!(b.ctx, kid′)
+    return
+end
+
+# Emit a node together with a byte edit: `bytes` replaces the `old_span` bytes at the
+# current stream position (`old_span == 0` means pure insertion).
+function emit!(
+        b::NodeBuilder, kid′::Node, bytes::Union{String, AbstractVector{UInt8}},
+        old_span::Integer
+    )
+    materialize!(b)
+    replace_bytes!(b.ctx, bytes, old_span)
+    push!(b.kids′::Vector{Node}, kid′)
+    accept_node!(b.ctx, kid′)
+    return
+end
+
+# Drop an original kid: delete its bytes and emit nothing.
+function skip_kid!(b::NodeBuilder, kid::Node)
+    materialize!(b)
+    replace_bytes!(b.ctx, "", span(kid))
+    return
+end
+
+# Take back the most recently emitted kid: remove it from the output and rewind the
+# stream over it.
+function unemit!(b::NodeBuilder)
+    local kid
+    if b.kids′ === nothing
+        kid = b.kids[b.n_accepted]
+        b.n_accepted -= 1
+    else
+        kid = pop!(b.kids′::Vector{Node})
+    end
+    seek(b.ctx.fmt_io, position(b.ctx.fmt_io) - span(kid))
+    return kid
+end
+
+# Reset the stream to the parent start and return the replacement node, or `nothing` if
+# no kid changed (the unit-rule contract).
+function finish!(b::NodeBuilder, node::Node)
+    seek(b.ctx.fmt_io, b.pos)
+    kids′ = b.kids′
+    return kids′ === nothing ? nothing : make_node(node, kids′)
+end
+
 function trim_trailing_whitespace(ctx::Context, node::Node)
     kind(node) in KSet"NewlineWs Comment" || return nothing
     @assert is_leaf(node)
@@ -2406,175 +2497,123 @@ end
 
 # Tags opening and closing tokens for indent/dedent and the newline just before the closing
 # token as pre-dedent
-function indent_listlike(
-        ctx::Context, node::Node, open_idx::Int, close_idx::Int;
-        indent_closing_token::Bool = false
-    )
+# Insert a newline after the semicolon of a K"parameters" node. This is used by
+# indent_listlike when the parameters node is the first item after the opening token
+# since we then want the newline after the semicolon instead of before it. The stream
+# must be positioned at the start of `node` and is restored before returning. Return the
+# new node, or `nothing` if there already is a newline after the semicolon. Bytes for
+# the new newline are written to the stream.
+function insert_newline_after_parameters_semi(ctx::Context, node::Node)
+    @assert kind(node) === K"parameters"
+    grandkids = verified_kids(node)
+    semi_idx = findfirst(x -> kind(x) === K";", grandkids)::Int
+    next_idx = semi_idx + 1
+    next = grandkids[next_idx]
+    kind(next) === K"NewlineWs" && return nothing
+    # Write the newline directly after the semicolon
+    let pos = position(ctx.fmt_io)
+        for k in 1:semi_idx
+            accept_node!(ctx, grandkids[k])
+        end
+        replace_bytes!(ctx, "\n", 0)
+        seek(ctx.fmt_io, pos)
+    end
+    grandkids′ = copy(grandkids)
+    if kind(next) === K"Whitespace"
+        # Merge the newline with the whitespace
+        grandkids′[next_idx] = nlws_node(1 + span(next))
+    else
+        # Insert a new newline node after the semicolon
+        insert!(grandkids′, next_idx, nlws_node(1))
+    end
+    return make_node(node, grandkids′)
+end
+
+function indent_listlike(ctx::Context, node::Node, open_idx::Int, close_idx::Int)
     kids = verified_kids(node)
-    kids′ = kids
-    any_kid_changed = false
     # Bail early if there is just a single item
     open_idx == close_idx && return nothing
     # Check whether we expect leading/trailing newlines
-    # multiline = contains_outer_newline(kids, open_idx, close_idx)
-    # multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (open_idx + 1):(close_idx - 1))
     multiline = is_multiline_between_idxs(ctx, node, open_idx, close_idx)
     if !multiline
         # TODO: This should be fine? If there are no newlines it should be safe to just
         # don't indent anything in this node?
-        return
+        return nothing
     end
-    pos = position(ctx.fmt_io)
+
+    b = NodeBuilder(ctx, node)
 
     # Leave all initial kids the same
     for i in 1:(open_idx - 1)
-        accept_node!(ctx, kids[i])
+        accept!(b, kids[i])
     end
 
     # Opening token indents
     kid = kids[open_idx]
     @assert is_leaf(kid)
     @assert kind(kid) !== K"NewlineWs"
-    if !has_tag(kid, TAG_INDENT)
-        kid = add_tag(kid, TAG_INDENT)
-        if kids′ === kids
-            kids′ = kids[1:(open_idx - 1)]
-        end
-        any_kid_changed = true
+    if has_tag(kid, TAG_INDENT)
+        accept!(b, kid)
+    else
+        emit!(b, add_tag(kid, TAG_INDENT))
     end
-    any_kid_changed && push!(kids′, kid)
-    accept_node!(ctx, kid)
+
     # Next we expect the leading newline
-    @assert multiline
     kid = kids[open_idx + 1]
     idx_after_leading_nl = open_idx + 2
     if kind(kid) === K"NewlineWs"
-        # Newline or newlinde hidden in first item
-        any_kid_changed && push!(kids′, kid)
-        accept_node!(ctx, kid)
-    elseif kmatch(kids, KSet"Comment NewlineWs", open_idx + 1)
-        for i in (open_idx + 1):(open_idx + 2)
-            accept_node!(ctx, kids[i])
-            any_kid_changed && push!(kids′, kids[i])
+        # Newline already in place
+        accept!(b, kid)
+    elseif kmatch(kids, KSet"Comment NewlineWs", open_idx + 1) ||
+            kmatch(kids, KSet"Whitespace Comment NewlineWs", open_idx + 1)
+        # Step over (whitespace +) comment up to and including the newline
+        i = open_idx + 1
+        while kind(kids[i]) !== K"NewlineWs"
+            accept!(b, kids[i])
+            i += 1
         end
-        idx_after_leading_nl = idx_after_leading_nl + 1
-    elseif kmatch(kids, KSet"Whitespace Comment NewlineWs", open_idx + 1)
-        for i in (open_idx + 1):(open_idx + 3)
-            accept_node!(ctx, kids[i])
-            any_kid_changed && push!(kids′, kids[i])
-        end
-        idx_after_leading_nl = idx_after_leading_nl + 2
+        accept!(b, kids[i])
+        idx_after_leading_nl = i + 1
     else
         # Need to insert a newline
         if kind(kid) === K"Whitespace"
-            # Merge with the whitespace. It shouldn't matter if the newline is put before or
-            # after the space. If put before the space will be handled by the indent pass
-            # and if put after it will be handled by the trailing spaces pass.
-            kid = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), span(kid) + 1)
-            replace_bytes!(ctx, "\n", 0)
-            if kids′ === kids
-                kids′ = kids[1:open_idx]
-            end
-            any_kid_changed = true
-            push!(kids′, kid)
-            accept_node!(ctx, kid)
+            # Merge with the whitespace. It shouldn't matter if the newline is put before
+            # or after the space. If put before the space will be handled by the indent
+            # pass and if put after it will be handled by the trailing spaces pass.
+            emit!(b, nlws_node(span(kid) + 1), "\n", 0)
         elseif kind(kid) === K"parameters"
-            # For parameters we want the newline after the semi-colon
-            grandkids = verified_kids(kid)
-            semi_idx = findfirst(x -> kind(x) === K";", grandkids)::Int
-            next_idx = semi_idx + 1
-            if kind(grandkids[next_idx]) === K"NewlineWs"
-                # Nothing to do
-                any_kid_changed && push!(kids′, kid)
-                accept_node!(ctx, kid)
-            elseif kind(grandkids[next_idx]) === K"Whitespace"
-                # Merge with the newline
-                let pos = position(ctx.fmt_io)
-                    for k in 1:(next_idx - 1)
-                        accept_node!(ctx, grandkids[k])
-                    end
-                    replace_bytes!(ctx, "\n", 0)
-                    seek(ctx.fmt_io, pos)
-                end
-                grandkid = grandkids[next_idx]
-                grandkid′ = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1 + span(grandkid))
-                grandkids′ = copy(grandkids)
-                grandkids′[next_idx] = grandkid′
-                kid = make_node(kid, grandkids′)
-                if kids′ === kids
-                    kids′ = kids[1:open_idx]
-                end
-                any_kid_changed = true
-                push!(kids′, kid)
-                accept_node!(ctx, kid)
+            # For parameters we want the newline after the semicolon
+            kid′ = insert_newline_after_parameters_semi(ctx, kid)
+            if kid′ === nothing
+                accept!(b, kid)
             else
-                # Insert a newline as the first grandchild
-                let pos = position(ctx.fmt_io)
-                    for k in 1:semi_idx
-                        accept_node!(ctx, grandkids[k])
-                    end
-                    replace_bytes!(ctx, "\n", 0)
-                    seek(ctx.fmt_io, pos)
-                end
-                grandkids′ = copy(grandkids)
-                insert!(grandkids′, next_idx, Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1))
-                kid = make_node(kid, grandkids′)
-                if kids′ === kids
-                    kids′ = kids[1:open_idx]
-                end
-                any_kid_changed = true
-                push!(kids′, kid)
-                accept_node!(ctx, kid)
+                emit!(b, kid′)
             end
         else
             @assert kind(first_leaf(kid)) !== K"Whitespace"
-            nlws = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1)
-            replace_bytes!(ctx, "\n", 0)
-            if kids′ === kids
-                kids′ = kids[1:open_idx]
-            end
-            any_kid_changed = true
-            push!(kids′, nlws)
-            accept_node!(ctx, nlws)
-            push!(kids′, kid)
-            accept_node!(ctx, kid)
+            emit!(b, nlws_node(1), "\n", 0)
+            accept!(b, kid)
         end
     end
     # Bring all kids between the opening and closing token to the new list
     for i in idx_after_leading_nl:(close_idx - 2)
-        kid = kids[i]
-        any_kid_changed && push!(kids′, kid)
-        accept_node!(ctx, kid)
+        accept!(b, kids[i])
     end
     # Kid just before the closing token should be a newline and it should be tagged with
     # pre-dedent.
     if idx_after_leading_nl == close_idx
-        # Just a single kid which should then have both leading and trailing newline
-        if any_kid_changed
-            # Modify this kid again by popping from the list
-            kid = pop!(kids′)
-        else
-            kid = kids[close_idx - 1]
-        end
-        # Backtrack the stream
-        seek(ctx.fmt_io, position(ctx.fmt_io) - span(kid))
+        # Just a single kid which should then have both leading and trailing newline.
+        # Take it back from the builder to modify it again.
+        kid = unemit!(b)
     else
         kid = kids[close_idx - 1]
     end
     if kind(kid) === K"NewlineWs" && has_tag(kid, TAG_PRE_DEDENT)
-        # Newline or newlinde hidden in first item with tag
-        any_kid_changed && push!(kids′, kid)
-        accept_node!(ctx, kid)
+        # Newline with tag already in place
+        accept!(b, kid)
     elseif kind(kid) === K"NewlineWs"
         # Newline without tag
-        @assert !has_tag(kid, TAG_PRE_DEDENT)
-        kid = add_tag(kid, TAG_PRE_DEDENT)
-        if kids′ === kids
-            kids′ = kids[1:(close_idx - 2)]
-        end
-        any_kid_changed = true
-        push!(kids′, kid)
-        accept_node!(ctx, kid)
+        emit!(b, add_tag(kid, TAG_PRE_DEDENT))
     else
         @assert kind(last_leaf(kid)) !== K"NewlineWs"
         # Need to insert a newline. Note that we tag the new newline directly since it
@@ -2582,58 +2621,32 @@ function indent_listlike(
         # repetitive call to add it anyway).
         if kind(kid) === K"Whitespace"
             # Merge with the whitespace
-            kid = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), span(kid) + 1)
-            kid = add_tag(kid, TAG_PRE_DEDENT)
-            replace_bytes!(ctx, "\n", 0)
-            if kids′ === kids
-                kids′ = kids[1:(close_idx - 2)]
-            end
-            any_kid_changed = true
-            push!(kids′, kid)
-            accept_node!(ctx, kid)
+            emit!(b, add_tag(nlws_node(span(kid) + 1), TAG_PRE_DEDENT), "\n", 0)
         else
             @assert kind(last_leaf(kid)) !== K"Whitespace"
             # Note that this is a trailing newline and should be put after this item
-            if kids′ === kids
-                kids′ = kids[1:(close_idx - 2)]
-            end
-            any_kid_changed = true
-            push!(kids′, kid)
-            accept_node!(ctx, kid)
-            nlws = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), 1)
-            nlws = add_tag(nlws, TAG_PRE_DEDENT)
-            replace_bytes!(ctx, "\n", 0)
-            push!(kids′, nlws)
-            accept_node!(ctx, nlws)
+            accept!(b, kid)
+            emit!(b, add_tag(nlws_node(1), TAG_PRE_DEDENT), "\n", 0)
         end
     end
     # Closing token dedents
     kid = kids[close_idx]
     @assert is_leaf(kid)
-    if !has_tag(kid, TAG_DEDENT)
-        kid = add_tag(kid, TAG_DEDENT)
-        if kids′ === kids
-            kids′ = kids[1:(close_idx - 1)]
-        end
-        any_kid_changed = true
+    if has_tag(kid, TAG_DEDENT)
+        accept!(b, kid)
+    else
+        emit!(b, add_tag(kid, TAG_DEDENT))
     end
-    any_kid_changed && push!(kids′, kid)
-    accept_node!(ctx, kid)
     # Keep remaining kids. In JuliaSyntax v1, do-block calls are represented as K"call"
-    # nodes with a trailing K"do" child after the closing paren, so close_idx may not be the
-    # last index.
+    # nodes with a trailing K"do" child after the closing paren, so close_idx may not be
+    # the last index.
     if close_idx < lastindex(kids)
         @assert kind(node) in KSet"call dotcall" && kind(kids[end]) === K"do"
-        if any_kid_changed
-            for i in (close_idx + 1):lastindex(kids)
-                push!(kids′, kids[i])
-            end
+        for i in (close_idx + 1):lastindex(kids)
+            accept!(b, kids[i])
         end
     end
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    # Make a new node and return
-    return any_kid_changed ? make_node(node, kids′) : nothing
+    return finish!(b, node)
 end
 
 # Mark opening and closing parentheses, in a call or a tuple, with indent and dedent tags.

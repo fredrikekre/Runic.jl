@@ -314,6 +314,33 @@ function add_tag(node::Node, tag::TagType)
     return Node(head(node), span(node), node.kids, node.tags | tag)
 end
 
+# Add tag(s) to the kid at index `i` unless already set. Return whether the kid changed
+# so that call sites can accumulate a changed-flag with `|=`. `tag` may be a mask of
+# multiple tags; the kid counts as tagged only if all bits are set.
+function tag_kid!(kids::Vector{Node}, i::Int, tag::TagType)
+    kid = kids[i]
+    (tags(kid) & tag) == tag && return false
+    kids[i] = add_tag(kid, tag)
+    return true
+end
+
+# Whitespace and newline trivia nodes of a given span.
+ws_node(spn::Integer = 1) = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), spn)
+nlws_node(spn::Integer = 1) = Node(JuliaSyntax.SyntaxHead(K"NewlineWs", JuliaSyntax.TRIVIA_FLAG), spn)
+
+# Call `f(ctx, kids[idx])` with the stream positioned at the start of that kid, assuming
+# the stream is currently at the start of the parent node, and restore the stream
+# position before returning. This is the common way to apply a sub-rule to a single kid.
+function apply_at_kid!(f::F, ctx, kids::Vector{Node}, idx::Int) where {F}
+    pos = position(ctx.fmt_io)
+    for i in 1:(idx - 1)
+        accept_node!(ctx, kids[i])
+    end
+    kid′ = f(ctx, kids[idx])
+    seek(ctx.fmt_io, pos)
+    return kid′
+end
+
 # Tags all leading NewlineWs nodes as continuation nodes. Note that comments are skipped
 # over so that cases like `\n#comment\ncode` works as expected.
 function continue_newlines(node::Node; leading::Bool = true, trailing::Bool = true)
