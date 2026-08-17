@@ -349,93 +349,17 @@ end
 # Insert space after comma and semicolon in list-like expressions. Aim for the form
 # `<nospace><item><comma><space><item><comma><space>...<item><nospace>`.
 # TODO: Why did this function become sooo complicated?
-function spaces_in_listlike(ctx::Context, node::Node)
-    if !(
-            kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens" ||
-                (kind(node) in KSet"call dotcall" && !is_any_op_call(node)) ||
-                (kind(node) === K"macrocall" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)) ||
-                is_paren_block(node)
-        )
-        return nothing
-    end
-    if kind(node) === K"parameters"
-        # Note that some of these are not valid Julia syntax but still parse
-        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall macrocall curly vect ref braces"
-    end
+# A kid of a listlike node that is an actual item, i.e. not whitespace or a separator.
+is_list_item(x::Node) = !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;")
 
-    @assert !is_leaf(node)
-    kids = verified_kids(node)
-    kids′ = kids
-
-    peek(i) = i < length(kids) ? kind(kids[i + 1]) : nothing
-
-    ws = Node(JuliaSyntax.SyntaxHead(K"Whitespace", JuliaSyntax.TRIVIA_FLAG), 1)
-    comma = Node(JuliaSyntax.SyntaxHead(K",", JuliaSyntax.TRIVIA_FLAG), 1)
-
-    # Find the opening and closing leafs
-    implicit_tuple = false
-    if kind(node) in KSet"tuple call dotcall parens macrocall" || is_paren_block(node)
-        opening_leaf_idx = findfirst(x -> kind(x) === K"(", kids)
-        if opening_leaf_idx === nothing
-            # Implicit tuple without (), for example arguments in a do-block
-            implicit_tuple = true
-            @assert kind(node) === K"tuple"
-            opening_leaf_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
-            if opening_leaf_idx === nothing
-                # All whitespace... return?
-                return nothing
-            else
-                closing_leaf_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
-                opening_leaf_idx == closing_leaf_idx && return nothing # empty
-                opening_leaf_idx -= 1
-                closing_leaf_idx += 1
-            end
-            @assert findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1) === nothing
-        else
-            closing_leaf_idx = findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1)::Int
-            closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
-        end
-    elseif kind(node) in KSet"curly braces bracescat"
-        opening_leaf_idx = findfirst(x -> kind(x) === K"{", kids)::Int
-        closing_leaf_idx = findnext(x -> kind(x) === K"}", kids, opening_leaf_idx + 1)::Int
-        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
-    elseif kind(node) in KSet"vect ref"
-        opening_leaf_idx = findfirst(x -> kind(x) === K"[", kids)::Int
-        closing_leaf_idx = findnext(x -> kind(x) === K"]", kids, opening_leaf_idx + 1)::Int
-        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
-    else
-        @assert kind(node) === K"parameters"
-        opening_leaf_idx = findfirst(x -> kind(x) === K";", kids)::Int
-        closing_leaf_idx = lastindex(kids) + 1
-    end
-
-    n_items = count(
-        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
-        @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)])
+# Compute the trailing comma/semicolon policy for a listlike node in spaces_in_listlike.
+# Return (require_trailing_comma, allow_trailing_comma, allow_trailing_semi).
+function trailing_comma_policy(
+        ctx::Context, node::Node, kids::Vector{Node}, n_items::Int,
+        first_item_idx::Union{Int, Nothing}, last_item_idx::Union{Int, Nothing},
+        closing_leaf_idx::Int, implicit_tuple::Bool, multiline::Bool,
+        is_named_tuple::Bool, last_item_frozen::Bool,
     )
-    first_item_idx = findnext(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, opening_leaf_idx + 1)
-    if first_item_idx !== nothing && first_item_idx >= closing_leaf_idx
-        first_item_idx = nothing
-    end
-    last_item_idx = findprev(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"), kids, closing_leaf_idx - 1)
-    if last_item_idx !== nothing && last_item_idx <= opening_leaf_idx
-        last_item_idx = nothing
-    end
-
-    # Pre-scan for `# runic: off` / `# runic: on` toggle pairs among the kids. Kids inside
-    # such a region are "frozen": they are accepted verbatim instead of having their
-    # whitespace rewritten. Note that the state machine below still transitions as usual
-    # for frozen kids, only the byte mutations are suppressed.
-    toggle_ranges = find_format_toggle_ranges(ctx, kids)
-    is_frozen(i) = toggle_ranges !== nothing && any(r -> i in r, toggle_ranges)
-
-    # Multiline lists require leading and trailing newline
-    # multiline = contains_outer_newline(kids, opening_leaf_idx, closing_leaf_idx)
-    # multiline = any(y -> any_leaf(x -> kind(x) === K"NewlineWs", kids[y]), (opening_leaf_idx + 1):(closing_leaf_idx - 1))
-    multiline = is_multiline_between_idxs(ctx, node, opening_leaf_idx, closing_leaf_idx)
-
-    is_named_tuple = kind(node) === K"tuple" && n_items == 1 && kind(kids[first_item_idx]) === K"parameters"
-
     # A trailing comma is required if
     #  - node is a single item tuple which is not from an anonymous fn (Julia-requirement)
     #  - the closing token is not on the same line as the last item (Runic-requirement)
@@ -499,14 +423,134 @@ function spaces_in_listlike(ctx::Context, node::Node)
             x -> kind(x) === K"NewlineWs", @view(kids[(last_item_idx + 1):(closing_leaf_idx - 1)])
         )
     end
-
     # If the last item is inside a `# runic: off` region we can't insert the trailing comma
     # after it without touching the region. Trailing commas that are required by the parser
     # (single item tuples etc.) are always already present in the source, so the only thing
     # given up here is the Runic-mandated trailing comma of multiline lists.
-    if require_trailing_comma && last_item_idx !== nothing && is_frozen(last_item_idx)
+    if require_trailing_comma && last_item_frozen
         require_trailing_comma = false
     end
+    return require_trailing_comma, allow_trailing_comma, allow_trailing_semi
+end
+
+# Handle a K"parameters" kid in spaces_in_listlike: apply trailing comma tags and drop
+# the node if it is empty and not needed for a trailing semicolon. Tagging is controlled
+# by `require_tag`/`allow_tag` and dropping by `drop_if_empty`; the caller pre-combines
+# these with the freeze status since a frozen kid is never modified.
+function handle_parameters_kid!(
+        b::NodeBuilder, kid::Node, require_tag::Bool, allow_tag::Bool, drop_if_empty::Bool
+    )
+    changed = false
+    if require_tag && !has_tag(kid, TAG_TRAILING_COMMA)
+        # Tag the node to require a trailing comma
+        kid = add_tag(kid, TAG_TRAILING_COMMA)
+        changed = true
+    end
+    if allow_tag && !has_tag(kid, TAG_TRAILING_COMMA_OPT)
+        # Tag the node to optionally have a trailing comma
+        kid = add_tag(kid, TAG_TRAILING_COMMA_OPT)
+        changed = true
+    end
+    if drop_if_empty && count(is_list_item, verified_kids(kid)) == 0
+        # If kid is K"parameters" without items and we don't want the K"parameters" node
+        # for the trailing semicolon we drop the entire node
+        grandkids = verified_kids(kid)
+        @assert length(grandkids) == 1 && kind(grandkids[1]) === K";"
+        skip_kid!(b, kid)
+    elseif changed
+        emit!(b, kid)
+    else
+        accept!(b, kid)
+    end
+    return
+end
+
+function spaces_in_listlike(ctx::Context, node::Node)
+    if !(
+            kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens" ||
+                (kind(node) in KSet"call dotcall" && !is_any_op_call(node)) ||
+                (kind(node) === K"macrocall" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)) ||
+                is_paren_block(node)
+        )
+        return nothing
+    end
+    if kind(node) === K"parameters"
+        # Note that some of these are not valid Julia syntax but still parse
+        @assert ctx.lineage_kinds[end] in KSet"tuple call dotcall macrocall curly vect ref braces"
+    end
+
+    @assert !is_leaf(node)
+    kids = verified_kids(node)
+
+    peek(i) = i < length(kids) ? kind(kids[i + 1]) : nothing
+
+    ws = ws_node(1)
+    comma = Node(JuliaSyntax.SyntaxHead(K",", JuliaSyntax.TRIVIA_FLAG), 1)
+
+    # Find the opening and closing leafs
+    implicit_tuple = false
+    if kind(node) in KSet"tuple call dotcall parens macrocall" || is_paren_block(node)
+        opening_leaf_idx = findfirst(x -> kind(x) === K"(", kids)
+        if opening_leaf_idx === nothing
+            # Implicit tuple without (), for example arguments in a do-block
+            implicit_tuple = true
+            @assert kind(node) === K"tuple"
+            opening_leaf_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
+            if opening_leaf_idx === nothing
+                # All whitespace... return?
+                return nothing
+            else
+                closing_leaf_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
+                opening_leaf_idx == closing_leaf_idx && return nothing # empty
+                opening_leaf_idx -= 1
+                closing_leaf_idx += 1
+            end
+            @assert findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1) === nothing
+        else
+            closing_leaf_idx = findnext(x -> kind(x) === K")", kids, opening_leaf_idx + 1)::Int
+            closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
+        end
+    elseif kind(node) in KSet"curly braces bracescat"
+        opening_leaf_idx = findfirst(x -> kind(x) === K"{", kids)::Int
+        closing_leaf_idx = findnext(x -> kind(x) === K"}", kids, opening_leaf_idx + 1)::Int
+        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
+    elseif kind(node) in KSet"vect ref"
+        opening_leaf_idx = findfirst(x -> kind(x) === K"[", kids)::Int
+        closing_leaf_idx = findnext(x -> kind(x) === K"]", kids, opening_leaf_idx + 1)::Int
+        closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
+    else
+        @assert kind(node) === K"parameters"
+        opening_leaf_idx = findfirst(x -> kind(x) === K";", kids)::Int
+        closing_leaf_idx = lastindex(kids) + 1
+    end
+
+    n_items = count(is_list_item, @view(kids[(opening_leaf_idx + 1):(closing_leaf_idx - 1)]))
+    first_item_idx = findnext(is_list_item, kids, opening_leaf_idx + 1)
+    if first_item_idx !== nothing && first_item_idx >= closing_leaf_idx
+        first_item_idx = nothing
+    end
+    last_item_idx = findprev(is_list_item, kids, closing_leaf_idx - 1)
+    if last_item_idx !== nothing && last_item_idx <= opening_leaf_idx
+        last_item_idx = nothing
+    end
+
+    # Pre-scan for `# runic: off` / `# runic: on` toggle pairs among the kids. Kids inside
+    # such a region are "frozen": they are accepted verbatim instead of having their
+    # whitespace rewritten. Note that the state machine below still transitions as usual
+    # for frozen kids, only the byte mutations are suppressed.
+    toggle_ranges = find_format_toggle_ranges(ctx, kids)
+    is_frozen(i) = toggle_ranges !== nothing && any(r -> i in r, toggle_ranges)
+
+    # Multiline lists require leading and trailing newline
+    multiline = is_multiline_between_idxs(ctx, node, opening_leaf_idx, closing_leaf_idx)
+
+    is_named_tuple = kind(node) === K"tuple" && n_items == 1 && kind(kids[first_item_idx]) === K"parameters"
+
+    require_trailing_comma, allow_trailing_comma, allow_trailing_semi = trailing_comma_policy(
+        ctx, node, kids, n_items, first_item_idx, last_item_idx, closing_leaf_idx,
+        implicit_tuple, multiline, is_named_tuple,
+        last_item_idx !== nothing && is_frozen(last_item_idx),
+    )
 
     # Helper to compute the new state after a given item
     function state_after_item(i, last_item_idx, require_trailing_comma)
@@ -527,85 +571,50 @@ function spaces_in_listlike(ctx::Context, node::Node)
 
     # Keep track of the state
     state = if kind(node) === K"parameters" && n_items > 0
-        # @assert !multiline # TODO
         :expect_space
     elseif n_items > 0
         :expect_item
     else
         :expect_closing
     end
-    any_kid_changed = false
-    pos = position(ctx.fmt_io)
+
+    b = NodeBuilder(ctx, node)
 
     # Accept kids up until the opening leaf
     for i in 1:opening_leaf_idx
-        accept_node!(ctx, kids[i])
+        accept!(b, kids[i])
     end
 
     # Loop over the kids between the opening/closing tokens.
     for i in (opening_leaf_idx + 1):(closing_leaf_idx - 1)
         kid′ = kids[i]
-        this_kid_changed = false
         # Kids inside a `# runic: off` region are accepted verbatim
         frozen = is_frozen(i)
         if state === :expect_item
             if kind(kid′) === K"Whitespace" && peek(i) !== K"Comment" && !frozen
                 # Delete whitespace unless followed by a comment
-                replace_bytes!(ctx, "", span(kid′))
-                this_kid_changed = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
+                skip_kid!(b, kid′)
             elseif kind(kid′) === K"NewlineWs" || kind(kid′) === K"Whitespace"
                 # Newline here can happen if this kid is just after the opening leaf or if
                 # there is an empty line between items. Whitespace reaching this branch is
                 # either followed by a comment or frozen. No state change.
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
             elseif kind(kid′) === K"Comment"
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
                 state = :expect_space # To ensure space after the comment
             else
                 # This is an item (probably?).
                 @assert !JuliaSyntax.is_whitespace(first_leaf(kid′))
                 @assert !JuliaSyntax.is_whitespace(last_leaf(kid′))
-                if !frozen && kind(kid′) === K"parameters" && require_trailing_comma &&
-                        i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA)
-                    # Tag the node to require a trailing comma
-                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
-                    this_kid_changed = true
-                end
-                if !frozen && kind(kid′) === K"parameters" && allow_trailing_comma &&
-                        i == last_item_idx && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
-                    # Tag the node to optionally have a trailing comma
-                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA_OPT)
-                    this_kid_changed = true
-                end
-                if !frozen && kind(kid′) === K"parameters" && !require_trailing_comma && !is_named_tuple &&
-                        count(
-                        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
-                        verified_kids(kid′)
-                    ) == 0
-                    # If kid is K"parameters" without items and we don't want the
-                    # K"parameters" node for the trailing semicolon we drop the entire node
-                    grandkids = verified_kids(kid′)
-                    @assert length(grandkids) == 1 && kind(grandkids[1]) === K";"
-                    any_kid_changed = true
-                    if kids′ === kids
-                        kids′ = kids[1:(i - 1)]
-                    end
-                    replace_bytes!(ctx, "", span(kid′))
+                if kind(kid′) === K"parameters"
+                    handle_parameters_kid!(
+                        b, kid′,
+                        !frozen && require_trailing_comma && i == last_item_idx,
+                        !frozen && allow_trailing_comma && i == last_item_idx,
+                        !frozen && !require_trailing_comma && !is_named_tuple,
+                    )
                 else
-                    # Kid is now acceptable
-                    any_kid_changed |= this_kid_changed
-                    if any_kid_changed
-                        if kids′ === kids
-                            kids′ = kids[1:(i - 1)]
-                        end
-                        push!(kids′, kid′)
-                    end
-                    accept_node!(ctx, kid′)
+                    accept!(b, kid′)
                 end
                 # Transition to the next state
                 state = state_after_item(i, last_item_idx, require_trailing_comma)
@@ -616,8 +625,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 before_last_item = i < last_item_idx
                 if before_last_item || require_trailing_comma
                     # Nice, just accept it.
-                    accept_node!(ctx, kid′)
-                    any_kid_changed && push!(kids′, kid′)
+                    accept!(b, kid′)
                 else
                     unreachable()
                 end
@@ -626,11 +634,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
             elseif kind(kid′) === K"Whitespace" && peek(i) !== K"Comment" && !frozen
                 # Delete space (unless followed by a comment) and hope next is still comma
                 # (no state change)
-                this_kid_changed = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                replace_bytes!(ctx, "", span(kid′))
+                skip_kid!(b, kid′)
             elseif kind(kid′) === K"NewlineWs" ||
                     kind(kid′) === K"Whitespace" ||
                     kind(kid′) === K"Comment"
@@ -646,67 +650,23 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # the comma would end up inside the `# runic: on` comment)
                 if trailing && next_kind !== K"," && !frozen
                     @assert require_trailing_comma
-                    this_kid_changed = true
-                    if kids′ === kids
-                        kids′ = kids[1:(i - 1)]
-                    end
-                    replace_bytes!(ctx, ",", 0)
-                    push!(kids′, comma)
-                    accept_node!(ctx, comma)
+                    emit!(b, comma, ",", 0)
                     state = :expect_closing
                 end
-                # TODO: Why is this needed?
-                # if kind(kid′) === K"NewlineWs"
-                #     state = :expect_closing
-                # end
-                any_kid_changed |= this_kid_changed
                 # Accept the newline
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
             elseif kind(kid′) === K"parameters"
-                # Note that some of these are not valid Julia syntax still parse
+                # Note that some of these are not valid Julia syntax but still parse
                 @assert kind(node) in KSet"call dotcall macrocall curly tuple vect ref braces"
                 @assert !JuliaSyntax.is_whitespace(first_leaf(kid′))
-                if !frozen && require_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA)
-                    # Tag the parameters node to require a trailing comma
-                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA)
-                    this_kid_changed = true
-                    # if kids′ === kids
-                    #     kids′ = kids[1:i - 1]
-                    # end
-                end
-                if !frozen && allow_trailing_comma && !has_tag(kid′, TAG_TRAILING_COMMA_OPT)
-                    # Tag the parameters node to optionally allow a trailing comma
-                    kid′ = add_tag(kid′, TAG_TRAILING_COMMA_OPT)
-                    this_kid_changed = true
-                end
-                if !frozen && !require_trailing_comma &&
-                        count(
-                        x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet", ;"),
-                        verified_kids(kid′)
-                    ) == 0
-                    # If kid is K"parameters" without items and we don't want the
-                    # K"parameters" node for the trailing semicolon we drop the entire node
-                    grandkids = verified_kids(kid′)
-                    @assert length(grandkids) == 1 && kind(grandkids[1]) === K";"
-                    any_kid_changed = true
-                    replace_bytes!(ctx, "", span(kid′))
-                    if kids′ === kids
-                        kids′ = kids[1:(i - 1)]
-                    end
-                else
-                    # TODO: Tag for requiring trailing comma.
-                    any_kid_changed |= this_kid_changed
-                    accept_node!(ctx, kid′)
-                    if any_kid_changed
-                        if kids′ === kids
-                            kids′ = kids[1:(i - 1)]
-                        end
-                        push!(kids′, kid′)
-                    end
-                end
-                # K"parameter" is always the last item in valid Julia code but we need to
-                # handle all expression that parses and there might be multiple
+                handle_parameters_kid!(
+                    b, kid′,
+                    !frozen && require_trailing_comma,
+                    !frozen && allow_trailing_comma,
+                    !frozen && !require_trailing_comma,
+                )
+                # K"parameters" is always the last item in valid Julia code but we need to
+                # handle all expressions that parse and there might be multiple
                 # K"parameters"...
                 state = i == last_item_idx ? (:expect_closing) : (:expect_item)
             else
@@ -718,44 +678,28 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 # Whitespace with correct span
                 # Whitespace before a comment
                 # Frozen whitespace, kept as is
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
                 state = :expect_item
             elseif kind(kid′) === K"Whitespace"
                 # Wrong span, replace it
-                this_kid_changed = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                replace_bytes!(ctx, " ", span(kid′))
-                accept_node!(ctx, ws)
-                push!(kids′, ws)
+                emit!(b, ws, " ", span(kid′))
                 # Transition to the next state
                 state = :expect_item
             elseif kind(kid′) === K"NewlineWs"
                 # NewlineWs are accepted and accounts for a space
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
                 state = :expect_item
             elseif frozen
                 # Item inside a frozen region: accept it without inserting a space
                 @assert !(kind(kid′) in KSet", ;")
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
                 state = state_after_item(i, last_item_idx, require_trailing_comma)
             else
                 # Probably a list item, insert a space before it
                 @assert !(kind(kid′) in KSet", ;")
                 @assert !JuliaSyntax.is_whitespace(first_leaf(kid′))
-                this_kid_changed = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                replace_bytes!(ctx, " ", 0)
-                push!(kids′, ws)
-                accept_node!(ctx, ws)
-                push!(kids′, kid′)
-                accept_node!(ctx, kid′)
+                emit!(b, ws, " ", 0)
+                accept!(b, kid′)
                 # Here we inserted a space and consumed the next item, moving on to comma
                 state = state_after_item(i, last_item_idx, require_trailing_comma)
             end
@@ -768,11 +712,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 )
                 # Trailing comma (when not wanted) and space not followed by a comment are
                 # removed
-                this_kid_changed = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                replace_bytes!(ctx, "", span(kid′))
+                skip_kid!(b, kid′)
             elseif frozen
                 # Frozen region: accept the kid verbatim, but keep the trailing
                 # comma/semicolon bookkeeping in sync
@@ -781,41 +721,31 @@ function spaces_in_listlike(ctx::Context, node::Node)
                 elseif kind(kid′) === K","
                     allow_trailing_comma = false
                 end
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
             elseif kind(node) === K"block" && kind(kid′) === K";" && allow_trailing_semi ||
                     (kind(kid′) === K"," && allow_trailing_comma) ||
                     (kind(kid′) === K"Whitespace" && peek(i) !== K"Comment")
                 allow_trailing_semi = n_items == 0 # Only one semicolon allowed
                 allow_trailing_comma = false # Just one please
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
             elseif kind(kid′) === K"NewlineWs" ||
                     (kind(kid′) === K"Whitespace" && peek(i) === K"Comment") ||
                     kind(kid′) === K"Comment"
                 # Newlines, whitespace followed by comment, and comments are accepted.
-                accept_node!(ctx, kid′)
-                any_kid_changed && push!(kids′, kid′)
+                accept!(b, kid′)
             else
                 unreachable()
             end
         end # if-state
-        any_kid_changed |= this_kid_changed
     end
     if state !== :expect_closing
         if state === :expect_comma
-            # K"parameters" should aleays handle the trailing comma and got to
+            # K"parameters" should always handle the trailing comma and go to
             # :expect_closing directly
             @assert kind(kids[last_item_idx]) !== K"parameters"
             # Need to add a trailing comma if it is expected
             @assert require_trailing_comma
-            any_kid_changed = true
-            if kids′ === kids
-                kids′ = kids[1:(closing_leaf_idx - 1)]
-            end
-            replace_bytes!(ctx, ",", 0)
-            push!(kids′, comma)
-            accept_node!(ctx, comma)
+            emit!(b, comma, ",", 0)
             state = :expect_closing
         else
             unreachable()
@@ -824,19 +754,9 @@ function spaces_in_listlike(ctx::Context, node::Node)
     @assert state === :expect_closing
     # Accept kids after the closing leaf
     for i in closing_leaf_idx:length(kids)
-        accept_node!(ctx, kids[i])
-        any_kid_changed && push!(kids′, kids[i])
+        accept!(b, kids[i])
     end
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    # Create a new node if any kids changed
-    if any_kid_changed
-        n = make_node(node, kids′)
-        return n
-    else
-        @assert kids === kids′
-        return nothing
-    end
+    return finish!(b, node)
 end
 
 # This pass handles spaces around infix operator calls, comparison chains, and
