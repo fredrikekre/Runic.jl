@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+ - The explicit `return` rule no longer adds `return` when the last expression of a
+   function is an `if`, `let`, `begin`, or ternary (`?:`) expression where all branches
+   terminate with a call to a function whose name is (or contains) `throw` or `error`
+   (for `if` this requires a trailing `else` since otherwise there is a fall-through path
+   that returns normally). This extends the existing exception for when the last expression
+   is a direct call to such a function. Note that already formatted code is not impacted by
+   this change since existing `return`s are kept as is. ([#202], [#217])
+
 ## [v1.9.0] - 2026-08-20
 ### Added
  - Formatting of Julia code in Quarto markdown files. Files with the `.qmd` extension are
@@ -284,9 +294,11 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#196]: https://github.com/fredrikekre/Runic.jl/issues/196
 [#197]: https://github.com/fredrikekre/Runic.jl/issues/197
 [#200]: https://github.com/fredrikekre/Runic.jl/issues/200
+[#202]: https://github.com/fredrikekre/Runic.jl/issues/202
 [#206]: https://github.com/fredrikekre/Runic.jl/issues/206
 [#207]: https://github.com/fredrikekre/Runic.jl/issues/207
 [#210]: https://github.com/fredrikekre/Runic.jl/issues/210
 [#211]: https://github.com/fredrikekre/Runic.jl/issues/211
 [#212]: https://github.com/fredrikekre/Runic.jl/issues/212
 [#213]: https://github.com/fredrikekre/Runic.jl/issues/213
+[#217]: https://github.com/fredrikekre/Runic.jl/issues/217

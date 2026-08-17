@@ -1519,6 +1519,33 @@ end
         for r in ("throw(ArgumentError())", "error(\"foo\")", "rethrow()", "throw_error()")
             @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
         end
+        # If the last expression is an if/let/begin/? where all branches end in a call to
+        # throw/error there should be no return (issue #202)
+        for r in (
+                "if c\n        throw(A())\n    else\n        error(\"foo\")\n    end",
+                "if c\n        throw(A())\n    elseif d\n        rethrow()\n    else\n        error(\"foo\")\n    end",
+                "if c\n        x = 1\n        throw(A(x))\n    else\n        error(\"foo\")\n    end",
+                "c ? throw(A()) : error(\"foo\")",
+                "let x = 1\n        throw(A(x))\n    end",
+                "let\n        throw(A())\n    end",
+                "begin\n        throw(A())\n    end",
+                "if c\n        c ? throw(A()) : error(\"foo\")\n    else\n        let\n            error(\"foo\")\n        end\n    end",
+            )
+            @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
+        end
+        # ... but if there is a fall-through path or a branch that doesn't throw the
+        # return should still be added
+        for r in (
+                "if c\n        throw(A())\n    end",
+                "if c\n        throw(A())\n    elseif d\n        error(\"foo\")\n    end",
+                "if c\n        throw(A())\n    else\n        y\n    end",
+                "if c\n        x\n    else\n        error(\"foo\")\n    end",
+                "if c\n        throw(A())\n    elseif d\n        y\n    else\n        error(\"foo\")\n    end",
+                "c ? throw(A()) : y",
+                "c ? y : error(\"foo\")",
+            )
+            @test format_string("$f\n    $r\nend") == "$f\n    return $r\nend"
+        end
         # If the last expression is a macro call with return inside there should be no
         # return on the outside
         for r in (

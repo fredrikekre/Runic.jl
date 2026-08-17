@@ -726,7 +726,10 @@ Explicit `return` statements are ensured in function and macro definitions by ad
    functions (`(...) -> ...`), and `do`-blocks (`f(...) do ...; ...; end`).
  - If the last expression is a function call, and the function name is (or contains) `throw`
    or `error`, no `return` is added. This is because it is already obvious that these calls
-   terminate the function and don't return any value.
+   terminate the function and don't return any value. The same applies if the last
+   expression is an `if`, `let`, `begin`, or ternary (`?:`) expression where all branches
+   terminate with such a call (for `if` this requires a trailing `else` since otherwise
+   there is a fall-through path that returns normally).
 
 Note that adding `return` changes the expression in a way that is visible to macros.
 Therefore it is, in general, not valid to add `return` to a function defined inside a macro
