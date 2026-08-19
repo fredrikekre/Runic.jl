@@ -275,6 +275,12 @@ function maintests(f::R, real_home::String) where {R}
         end
     end
 
+    # Same-width byte replacements (tab to space) must still count as changes.
+    let (rc, fd1, fd2) = runic(["--check"], "x\t= 1\n")
+        @test rc == 1
+        @test isempty(fd1) && isempty(fd2)
+    end
+
     # runic --check in.jl (good input)
     cdtmp() do
         f_in = "in.jl"
@@ -588,6 +594,22 @@ function maintests(f::R, real_home::String) where {R}
         rc, fd1, fd2 = runic(["--lines=1:2"], src)
         @test rc == 0 && isempty(fd2)
         @test fd1 == "function f(a, b)\n    return a + b\n end\n"
+        # Marker text in ordinary source is not mistaken for an inserted marker.
+        marker_src = "b = $(repr(Runic.RANGE_FORMATTING_BEGIN))\nx=1\n"
+        rc, fd1, fd2 = runic(["--lines=2:2"], marker_src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "b = $(repr(Runic.RANGE_FORMATTING_BEGIN))\nx = 1\n"
+        # Standalone user comments matching the default markers must also be preserved.
+        marker_comment_src = string(
+            Runic.RANGE_FORMATTING_BEGIN, "\nx=1\n",
+            Runic.RANGE_FORMATTING_END, "\ny=2\n",
+        )
+        rc, fd1, fd2 = runic(["--lines=4:4"], marker_comment_src)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == string(
+            Runic.RANGE_FORMATTING_BEGIN, "\nx=1\n",
+            Runic.RANGE_FORMATTING_END, "\ny = 2\n",
+        )
         # Errors
         rc, fd1, fd2 = runic(["--lines=1:2", "--lines=2:3"], src)
         @test rc == 1
@@ -599,6 +621,9 @@ function maintests(f::R, real_home::String) where {R}
         rc, fd1, fd2 = runic(["--lines=3:5"], src)
         @test rc == 1 && isempty(fd1)
         @test occursin("`--lines` range out of bounds", fd2)
+        rc, fd1, fd2 = runic(["--lines=$(typemax(Int))0:$(typemax(Int))0"], src)
+        @test rc == 1 && isempty(fd1)
+        @test occursin("can not parse `--lines` argument as an integer range", fd2)
         rc, fd1, fd2 = runic(["--lines=3:4", "."])
         @test rc == 1 && isempty(fd1)
         @test occursin("option `--lines` can not be used together with multiple input files", fd2)
@@ -612,6 +637,16 @@ function maintests(f::R, real_home::String) where {R}
             @test !occursin(Runic.RANGE_FORMATTING_BEGIN, fd2)
             @test !occursin(Runic.RANGE_FORMATTING_END, fd2)
         end
+    end
+    # An empty input still has the virtual first line accepted by editors/tooling.
+    let (rc, fd1, fd2) = runic(["--lines=1:1"], "")
+        @test rc == 0
+        @test fd1 == "\n" && isempty(fd2)
+    end
+    let (rc, fd1, fd2) = runic(["--lines=2:2"], "")
+        @test rc == 1 && isempty(fd1)
+        @test occursin("`--lines` range out of bounds", fd2)
+        @test !occursin("BoundsError", fd2)
     end
 
     # runic --docstrings
@@ -637,6 +672,11 @@ function maintests(f::R, real_home::String) where {R}
         rc, fd1, fd2 = runic(["--stdin-filename=foo.jl"], src_md)
         @test rc == 0
         @test fd1 == src_md
+    end
+    let src_md = "```julia\r\nx=1\r\n```\r\n"
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md"], src_md)
+        @test rc == 0 && isempty(fd2)
+        @test fd1 == "```julia\r\nx = 1\r\n```\r\n"
     end
 
     # runic Quarto markdown stdin dispatch via --stdin-filename=*.qmd
@@ -712,6 +752,15 @@ function maintests(f::R, real_home::String) where {R}
         rc, fd1, fd2 = runic(["--lines=1:4", "--stdin-filename=foo.md"], src)
         @test rc == 0
         @test fd1 == expected
+    end
+    # Markdown inputs validate ranges just like Julia inputs.
+    let src = "```julia\nx=1\n```\n"
+        for range in ("0:1", "5:5")
+            rc, fd1, fd2 =
+                runic(["--lines=$range", "--stdin-filename=foo.md"], src)
+            @test rc == 1 && isempty(fd1)
+            @test occursin("`--lines` range out of bounds", fd2)
+        end
     end
 
     # --check for Markdown: returns 1 when reformatting would change the file

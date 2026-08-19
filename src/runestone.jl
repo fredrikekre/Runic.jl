@@ -1068,12 +1068,15 @@ function format_importpath(ctx::Context, node::Node)
 end
 
 # Used in `spaces_in_import_using`
-# TODO: This doesn't handle comments and newlines which can be present on either side of the
-#       `as`. However, the asserts don't trigger on any julia package so can be fixed
-#       whenever someone files an issue about this :^)
 function format_as(ctx::Context, node::Node)
     @assert kind(node) === K"as"
     kids = verified_kids(node)
+    # Comments and newlines may occur on either side of `as`. Leave these layouts to the
+    # generic comment, whitespace, and indentation passes instead of assuming the compact
+    # five-node layout below.
+    if any(x -> kind(x) in KSet"Comment NewlineWs", kids)
+        return nothing
+    end
     kids′ = kids
     any_changes = false
     pos = position(ctx.fmt_io)
@@ -3351,8 +3354,11 @@ const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|[A-Za-z0-9_-]*)"
 
 is_julia_lang(lang::AbstractString) = lang in ("julia", "julia-repl", "jldoctest")
 
-# Markdown and Quarto markdown file extensions
-is_markdown_file(path::AbstractString) = endswith(path, ".md") || endswith(path, ".qmd")
+# Markdown and Quarto markdown file extensions (case-insensitive, e.g. `README.MD`)
+function is_markdown_file(path::AbstractString)
+    ext = lowercase(path)
+    return endswith(ext, ".md") || endswith(ext, ".qmd")
+end
 
 function format_julia_block(block_lines::Vector{String})
     isempty(block_lines) && return block_lines
@@ -3437,23 +3443,34 @@ end
 
 # Dispatch to REPL formatter or regular formatter based on the code blocks language
 function format_code_block(block_lines::Vector{String}, lang::String)
-    if lang == "julia-repl"
-        return format_repl_block(block_lines)
+    # `format_string` emits LF. Normalize CRLF input while parsing, then restore CRLF
+    # so formatting a Markdown code block does not introduce mixed line endings. Blocks
+    # with mixed endings count as CRLF so that stray LF lines converge to CRLF instead
+    # of the block flip-flopping to LF.
+    crlf = any(l -> endswith(l, "\r\n"), block_lines)
+    normalized_lines =
+        crlf ? [replace(l, "\r\n" => "\n") for l in block_lines] : block_lines
+    formatted = if lang == "julia-repl"
+        format_repl_block(normalized_lines)
     elseif lang == "jldoctest"
-        if any(l -> startswith(l, JULIA_REPL_PROMPT), block_lines)
-            return format_repl_block(block_lines)
+        if any(l -> startswith(l, JULIA_REPL_PROMPT), normalized_lines)
+            format_repl_block(normalized_lines)
         else
-            return format_julia_block(block_lines)
+            format_julia_block(normalized_lines)
         end
     else
-        return format_julia_block(block_lines)
+        format_julia_block(normalized_lines)
     end
+    return crlf ?
+        [endswith(l, "\n") ? chop(l; tail = 1) * "\r\n" : l for l in formatted] :
+        formatted
 end
 
 # Identify julia source code blocks (``` blocks four-space-indent blocks),
 # collect the lines, format the text and re-insert
 function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[])
     lines = collect(eachline(IOBuffer(s); keep = true))
+    validate_line_ranges(lines, line_ranges)
     isempty(lines) && return s
     # A block at lines `a:b` is formatted iff `line_ranges` is empty (no filter) or at
     # least one range overlaps the block. Block-granular: partial blocks are formatted
@@ -3485,7 +3502,7 @@ function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRa
                 lang = String(chop(lang; head = 1, tail = 1))
             end
             nticks = length(ticks)
-            re_close = Regex("^$(escape_string(indent))`{$(nticks)}\\h*\$")
+            re_close = Regex("^$(escape_string(indent))`{$(nticks),}\\h*\\r?\$")
             close_i = findnext(l -> occursin(re_close, l), lines, i + 1)
             if close_i === nothing
                 # Unclosed fence: everything from here to end of string is inside this
@@ -3563,13 +3580,14 @@ function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRa
                 at_boundary = false
                 continue
             end
-            # Strip the indent; normalize blank lines to "\n" (explicit trailing spaces
-            # on blank lines are not meaningful and chop would swallow the '\n').
+            # Strip the indent; normalize whitespace-only lines while preserving their
+            # newline style (chop would otherwise swallow the newline).
             stripped = String[
-                isempty(strip(l)) ? "\n" : chop(l; head = nbase_indent, tail = 0)
+                isempty(strip(l)) ? (endswith(l, "\r\n") ? "\r\n" : "\n") :
+                    chop(l; head = nbase_indent, tail = 0)
                     for l in lines[i:end_idx]
             ]
-            formatted = format_julia_block(stripped)
+            formatted = format_code_block(stripped, "julia")
             if formatted == stripped
                 # parse failed or already idempotent — pass through unchanged
                 append!(result, @view lines[i:end_idx])
@@ -3722,14 +3740,48 @@ end
 # Pattern matching for "bad" semicolons:
 #  - `\s*;\n` -> `\n`
 #  - `\s*;\s*#\n` -> `\s* \s*#\n`
-function remove_trailing_semicolon_block(ctx::Context, node::Node)
+function is_docstring_literal(node::Node)
+    kind(node) === K"string" && return true
+    kind(node) === K"parens" || return false
+    significant_kids = filter(verified_kids(node)) do kid
+        return !JuliaSyntax.is_whitespace(kid) && kind(kid) !== K"Comment" &&
+            !(is_leaf(kid) && kind(kid) in KSet"( )")
+    end
+    return length(significant_kids) == 1 && is_docstring_literal(only(significant_kids))
+end
+
+function remove_trailing_semicolon_block(ctx::Context, node::Node, struct_body::Bool = false)
     kind(node) === K"block" || return nothing
     @assert !is_leaf(node)
     pos = position(ctx.fmt_io)
     kids = verified_kids(node)
     kids′ = kids
+    # Whether strings in this block can become docstrings of the following expression.
+    # Struct bodies can not be detected from the block node itself so the caller passes
+    # `struct_body` instead.
+    docstring_context = struct_body || is_begin_block(node) || is_begin_block(node, K"quote")
     semi_idx = findfirst(x -> kind(x) === K";", kids′)
     while semi_idx !== nothing
+        if docstring_context
+            prev_expr_idx = findprev(
+                x -> !(JuliaSyntax.is_whitespace(x) || kind(x) === K"Comment"),
+                kids′, semi_idx - 1
+            )
+            next_expr_idx = findnext(
+                x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet"Comment ; end"),
+                kids′, semi_idx + 1
+            )
+            if prev_expr_idx !== nothing && is_docstring_literal(kids′[prev_expr_idx]) &&
+                    next_expr_idx !== nothing
+                # In begin/quote blocks and struct bodies, a string followed by another
+                # expression becomes its docstring unless a semicolon separates them.
+                # Preserve that semicolon to avoid changing the parsed program. If no
+                # expression follows the string no docstring can form and the semicolon
+                # can be removed as usual.
+                semi_idx = findnext(x -> kind(x) === K";", kids′, semi_idx + 1)
+                continue
+            end
+        end
         search_index = semi_idx + 1
         if kmatch(kids′, KSet"; NewlineWs", semi_idx)
             # `\s*;\n` -> `\n`
@@ -3759,13 +3811,34 @@ function remove_trailing_semicolon_block(ctx::Context, node::Node)
             # `\s*;\s*#\n` -> `\s* \s*#\n`
             # The `;` is replaced by ` ` here in case comments are aligned
             kids′ = kids′ === kids ? copy(kids) : kids′
+            space_after = kmatch(kids′, KSet"; Whitespace", semi_idx)
+            if semi_idx > firstindex(kids′) &&
+                    kind(kids′[semi_idx - 1]) === K"NewlineWs"
+                # A semicolon at the start of a comment-only line should be removed
+                # together with the whitespace between it and the comment. Keeping a
+                # replacement space here gives the comment one extra indentation level
+                # until the formatter is run a second time.
+                span_overwrite = span(kids′[semi_idx])
+                space_after && (span_overwrite += span(kids′[semi_idx + 1]))
+                let p = position(ctx.fmt_io)
+                    for i in 1:(semi_idx - 1)
+                        accept_node!(ctx, kids′[i])
+                    end
+                    replace_bytes!(ctx, "", span_overwrite)
+                    seek(ctx.fmt_io, p)
+                end
+                space_after && deleteat!(kids′, semi_idx + 1)
+                deleteat!(kids′, semi_idx)
+                search_index = semi_idx
+                semi_idx = findnext(x -> kind(x) === K";", kids′, search_index)
+                continue
+            end
             ws_span = span(kids′[semi_idx])
             @assert ws_span == 1
             space_before = kmatch(kids′, KSet"Whitespace ;", semi_idx - 1)
             if space_before
                 ws_span += span(kids′[semi_idx - 1])
             end
-            space_after = kmatch(kids′, KSet"; Whitespace", semi_idx)
             if space_after
                 ws_span += span(kids′[semi_idx + 1])
             end
@@ -3821,7 +3894,9 @@ function remove_trailing_semicolon(ctx::Context, node::Node)
             for i in 1:(block_idx - 1)
                 accept_node!(ctx, kids′[i])
             end
-            block′ = remove_trailing_semicolon_block(ctx, kids′[block_idx])
+            block′ = remove_trailing_semicolon_block(
+                ctx, kids′[block_idx], kind(node) === K"struct"
+            )
             if block′ !== nothing
                 any_changed = true
                 if kids′ === kids

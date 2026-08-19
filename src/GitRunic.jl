@@ -9,6 +9,7 @@
 module GitRunic
 
 import ..Context, ..format_tree!, ..format_markdown, ..is_markdown_file, ..MainError
+import ..JuliaSyntax
 
 const USAGE = "git runic [OPTIONS] [<commit>] [<commit>|--staged] [--] [<file>...]"
 
@@ -151,6 +152,21 @@ function compute_diff(commits, files, staged::Bool, diff_common_commit::Bool)
     elseif staged
         push!(extra_args, "--cached")
     end
+    # `HEAD` (or any other spelling of it, e.g. `@`) does not resolve in a repository
+    # without commits. Treat an unresolvable commit in an unborn repository as the
+    # empty tree so that staged additions in a new repository can still be formatted.
+    if length(commits_arg) == 1 && get_object_type("HEAD") === nothing &&
+            get_object_type(commits_arg[1]) === nothing
+        out = IOBuffer()
+        proc = run(
+            pipeline(
+                ignorestatus(Cmd(["git", "mktree"]));
+                stdin = devnull, stdout = out, stderr = stderr
+            )
+        )
+        proc.exitcode == 0 || die("`git mktree` returned $(proc.exitcode)")
+        commits_arg = [rstrip(String(take!(out)), ('\r', '\n'))]
+    end
     cmd_args = String["git", git_tool, "-p", "-U0"]
     append!(cmd_args, extra_args)
     append!(cmd_args, commits_arg)
@@ -168,17 +184,38 @@ function compute_diff_and_extract_lines(commits, files, staged::Bool, diff_commo
     return extract_lines(output)
 end
 
+# Decode the filename from a `+++` diff header. Git C-quotes paths containing
+# non-ASCII bytes or control characters when `core.quotePath` is enabled.
+function extract_filename(line::AbstractString)
+    startswith(line, "+++ ") || return nothing
+    path = String(SubString(line, 5))
+    if startswith(path, '"')
+        m = match(r"^\"(.*)\"(?:\t.*)?$", path)
+        m === nothing && return nothing
+        path = Base.unescape_string(String(m.captures[1]::SubString))
+    else
+        path = rstrip(path, ('\r', '\n', '\t'))
+    end
+    path == "/dev/null" && return nothing
+    startswith(path, "b/") || return nothing
+    return String(SubString(path, 3))
+end
+
 # Parse a -U0 unified diff, returning Dict{filename => Vector{UnitRange{Int}}}.
 function extract_lines(patch::AbstractString)
     changed = Dict{String, Vector{UnitRange{Int}}}()
-    filename = ""
+    filename = nothing
+    in_hunk = false
     for line in eachline(IOBuffer(patch))
-        m = match(r"^\+\+\+ [^/]+/(.*)", line)
-        if m !== nothing
-            filename = rstrip(m.captures[1]::SubString, ('\r', '\n', '\t'))
+        if startswith(line, "diff --git ")
+            filename = nothing
+            in_hunk = false
+        elseif !in_hunk && startswith(line, "+++ ")
+            filename = extract_filename(line)
         end
         m = match(r"^@@ -[0-9,]+ \+(\d+)(,(\d+))?", line)
-        if m !== nothing
+        if m !== nothing && filename !== nothing
+            in_hunk = true
             start_line = parse(Int, m.captures[1]::SubString)
             line_count = m.captures[3] !== nothing ? parse(Int, m.captures[3]::SubString) : 1
             line_count == 0 && (line_count = 1)
@@ -206,10 +243,35 @@ function filter_by_extension!(dict, allowed_extensions)
     return
 end
 
-# Remove symlink entries from dict.
-function filter_symlinks!(dict)
-    for filename in collect(keys(dict))
-        islink(filename) && delete!(dict, filename)
+# Prefix pathspecs with the literal magic so that filenames containing glob
+# metacharacters (`*`, `?`, `[`, ...) match exactly instead of as patterns.
+literal_pathspecs(filenames) = String[":(literal)" * f for f in filenames]
+
+# Remove symlink entries from dict. `revision` is nothing for the worktree,
+# "" for the index, or a commit/tree containing the files being formatted.
+function filter_symlinks!(dict, revision = nothing)
+    if revision === nothing
+        for filename in collect(keys(dict))
+            islink(filename) && delete!(dict, filename)
+        end
+        return
+    end
+    isempty(dict) && return
+    # Single batched call for all files. `-z` so that paths round-trip unquoted.
+    # `ls-files --stage` entries are `<mode> <sha> <stage>\t<path>` and `ls-tree -r`
+    # entries are `<mode> <type> <sha>\t<path>`: the mode is the first field and the
+    # path follows the tab in both.
+    pathspecs = literal_pathspecs(keys(dict))
+    output = if isempty(revision)
+        git(["ls-files", "--stage", "-z", "--", pathspecs...]; strip_output = false)
+    else
+        git(["ls-tree", "-r", "-z", revision, "--", pathspecs...]; strip_output = false)
+    end
+    for entry in split(rstrip(output, '\0'), '\0')
+        isempty(entry) && continue
+        meta, filename = split(entry, '\t'; limit = 2)
+        mode = first(split(meta))
+        mode == "120000" && delete!(dict, filename)
     end
     return
 end
@@ -231,13 +293,45 @@ end
 
 # Create a git tree object from files in the index.
 function create_tree_from_index(filenames)
-    lines = String[]
-    for filename in filenames
-        output = git(["ls-files", "--stage", "-z", "--", filename]; strip_output = false)
-        parts = split(output, '\0')
-        !isempty(parts) && !isempty(parts[1]) && push!(lines, parts[1])
+    lines = SubString{String}[]
+    if !isempty(filenames)
+        output = git(
+            ["ls-files", "--stage", "-z", "--", literal_pathspecs(filenames)...];
+            strip_output = false
+        )
+        append!(lines, filter(!isempty, split(rstrip(output, '\0'), '\0')))
     end
     return create_tree(lines, "--index-info")
+end
+
+# Map filename => entry mode (as a string) for the given files. `revision` is nothing
+# for the worktree, "" for the index, or a commit/tree containing the files.
+function file_modes(filenames, revision)
+    modes = Dict{String, String}()
+    if revision === nothing
+        for filename in filenames
+            modes[filename] = format_mode(stat(filename).mode)
+        end
+        return modes
+    end
+    isempty(filenames) && return modes
+    output = if isempty(revision)
+        git(
+            ["ls-files", "--stage", "-z", "--", literal_pathspecs(filenames)...];
+            strip_output = false
+        )
+    else
+        git(
+            ["ls-tree", "-r", "-z", revision, "--", literal_pathspecs(filenames)...];
+            strip_output = false
+        )
+    end
+    for entry in split(rstrip(output, '\0'), '\0')
+        isempty(entry) && continue
+        meta, filename = split(entry, '\t'; limit = 2)
+        modes[filename] = format_mode(parse(Int, first(split(meta)); base = 8))
+    end
+    return modes
 end
 
 # Format a file using Runic in-process and store the result as a git blob.
@@ -259,12 +353,17 @@ function runic_to_blob(filename, line_ranges::Vector{UnitRange{Int}}; revision =
     # formatter, everything else through the Julia formatter. Mirrors the
     # extension dispatch in `Runic.main` / `Runic.format_file`.
     local fmt_io::IO
-    if is_markdown_file(filename)
-        fmt_io = IOBuffer(format_markdown(src_str; line_ranges = line_ranges))
-    else
-        ctx = Context(src_str; line_ranges = line_ranges, filename = filename)
-        format_tree!(ctx)
-        fmt_io = seekstart(ctx.fmt_io)
+    try
+        if is_markdown_file(filename)
+            fmt_io = IOBuffer(format_markdown(src_str; line_ranges = line_ranges))
+        else
+            ctx = Context(src_str; line_ranges = line_ranges, filename = filename)
+            format_tree!(ctx)
+            fmt_io = seekstart(ctx.fmt_io)
+        end
+    catch err
+        err isa JuliaSyntax.ParseError || rethrow()
+        die("failed to parse input from $filename: $(sprint(showerror, err))")
     end
 
     # Store formatted output as a git blob and return its SHA
@@ -283,22 +382,9 @@ end
 # Format all changed files in-process and save results to a new git tree.
 function run_runic_and_save_to_tree(changed_lines, revision)
     index_info_lines = String[]
+    modes = file_modes(keys(changed_lines), revision)
     for (filename, line_ranges) in changed_lines
-        if revision !== nothing
-            if !isempty(revision)
-                output = git(
-                    [
-                        "ls-tree", "$(revision):$(dirname(filename))",
-                        basename(filename),
-                    ]
-                )
-            else
-                output = git(["ls-files", "--stage", "--", filename])
-            end
-            mode = format_mode(parse(Int, split(output)[1]; base = 8))
-        else
-            mode = format_mode(stat(filename).mode)
-        end
+        mode = modes[filename]
         blob_id = runic_to_blob(filename, line_ranges; revision = revision)
         push!(index_info_lines, "$(mode) $(blob_id)\t$(filename)")
     end
@@ -308,24 +394,28 @@ end
 # Set GIT_INDEX_FILE to a temporary index, call f(), then restore and delete the index.
 # If tree is given, seed the index from that tree; otherwise start with an empty index.
 function with_temporary_index(f, tree = nothing)
-    gitdir = git(["rev-parse", "--git-dir"])
-    path = joinpath(gitdir, TEMP_INDEX_BASENAME)
-    if tree === nothing
-        git(["read-tree", "--index-output=$(path)", "--empty"])
-    else
-        git(["read-tree", "--index-output=$(path)", tree])
-    end
-    old_index = get(ENV, "GIT_INDEX_FILE", nothing)
-    ENV["GIT_INDEX_FILE"] = path
-    try
-        return f()
-    finally
-        if old_index === nothing
-            delete!(ENV, "GIT_INDEX_FILE")
+    gitdir = abspath(git(["rev-parse", "--git-dir"]))
+    tempdir = mktempdir(gitdir; prefix = "$(TEMP_INDEX_BASENAME)-")
+    path = joinpath(tempdir, "index")
+    return try
+        if tree === nothing
+            git(["read-tree", "--index-output=$(path)", "--empty"])
         else
-            ENV["GIT_INDEX_FILE"] = old_index
+            git(["read-tree", "--index-output=$(path)", tree])
         end
-        rm(path; force = true)
+        old_index = get(ENV, "GIT_INDEX_FILE", nothing)
+        ENV["GIT_INDEX_FILE"] = path
+        try
+            return f()
+        finally
+            if old_index === nothing
+                delete!(ENV, "GIT_INDEX_FILE")
+            else
+                ENV["GIT_INDEX_FILE"] = old_index
+            end
+        end
+    finally
+        rm(tempdir; force = true, recursive = true)
     end
 end
 
@@ -363,18 +453,26 @@ function print_diffstat(old_tree, new_tree)
     return run(pipeline(ignorestatus(cmd); stdout = stdout, stderr = stderr)).exitcode
 end
 
-# Apply changes from new_tree to the working directory.
-function apply_changes(old_tree, new_tree; force::Bool = false, patch_mode::Bool = false)
+# Return the files that differ between the two trees (i.e. the files the formatter
+# modified).
+function modified_files(old_tree, new_tree)
     result = git(
         [
             "diff-tree", "--diff-filter=M", "-r", "-z", "--name-only",
             old_tree, new_tree,
         ]; strip_output = false
     )
-    changed_files = filter(!isempty, split(rstrip(result, '\0'), '\0'))
+    return filter(!isempty, split(rstrip(result, '\0'), '\0'))
+end
+
+# Apply changes from new_tree to the working directory.
+function apply_changes(old_tree, new_tree; force::Bool = false, patch_mode::Bool = false)
+    changed_files = modified_files(old_tree, new_tree)
 
     if !force
-        unstaged = git(["diff-files", "--name-status", changed_files...])
+        unstaged = git(
+            ["diff-files", "--name-status", "--", literal_pathspecs(changed_files)...]
+        )
         if !isempty(unstaged)
             die(
                 "the following files would be modified but have unstaged changes:\n" *
@@ -398,6 +496,29 @@ function apply_changes(old_tree, new_tree; force::Bool = false, patch_mode::Bool
         end
     end
 
+    return changed_files
+end
+
+# Apply formatted blobs to the real index without touching the working tree.
+function apply_changes_to_index(old_tree, new_tree)
+    changed_files = modified_files(old_tree, new_tree)
+    isempty(changed_files) && return changed_files
+
+    # Limit the index update to the files the formatter modified so that entries for
+    # unmodified files keep their flags (e.g. skip-worktree) and stat cache.
+    index_info = git(
+        [
+            "ls-tree", "-r", "-z", new_tree, "--",
+            literal_pathspecs(changed_files)...,
+        ]; strip_output = false
+    )
+    proc = run(
+        pipeline(
+            ignorestatus(Cmd(["git", "update-index", "-z", "--index-info"]));
+            stdin = IOBuffer(index_info), stdout = devnull, stderr = stderr
+        )
+    )
+    proc.exitcode == 0 || die("`git update-index -z --index-info` failed")
     return changed_files
 end
 
@@ -488,6 +609,8 @@ function _main(argv)
         elseif arg == "--extensions"
             i += 1; i > length(argv) && die("expected argument after --extensions")
             extensions = argv[i]
+        elseif startswith(arg, '-')
+            die("unknown option: $arg")
         else
             push!(positional, arg)
         end
@@ -499,6 +622,7 @@ function _main(argv)
     if length(commits) > 2
         die("at most two commits allowed; $(length(commits)) given")
     end
+    staged && patch_mode && die("--patch is not allowed with --staged")
     if length(commits) == 2
         staged && die("--staged is not allowed when two commits are given")
         diff_mode || die("--diff is required when two commits are given")
@@ -515,7 +639,8 @@ function _main(argv)
 
     filter_by_extension!(changed_lines, split(lowercase(extensions), ','))
     cd_to_toplevel()
-    filter_symlinks!(changed_lines)
+    source_revision = length(commits) > 1 ? commits[2] : staged ? "" : nothing
+    filter_symlinks!(changed_lines, source_revision)
 
     if verbose >= 1
         setdiff!(ignored_files, keys(changed_lines))
@@ -567,7 +692,11 @@ function _main(argv)
     diff_mode && return print_diff(old_tree, new_tree)
     diffstat_mode && return print_diffstat(old_tree, new_tree)
 
-    changed_files = apply_changes(old_tree, new_tree; force = force, patch_mode = patch_mode)
+    changed_files = if staged
+        apply_changes_to_index(old_tree, new_tree)
+    else
+        apply_changes(old_tree, new_tree; force = force, patch_mode = patch_mode)
+    end
     if (verbose >= 0 && !patch_mode) || verbose >= 1
         println("changed files:")
         for f in changed_files
