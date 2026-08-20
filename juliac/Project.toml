@@ -1,5 +1,10 @@
 [deps]
+JuliaC = "acedd4c2-ced6-4a15-accc-2607eb759ba2"
 Runic = "62bfec6d-59d7-401d-8490-b29ee721c001"
+
+[compat]
+JuliaC = "0.3"
+julia = "1.12"
 
 [sources]
 Runic = {path = ".."}

@@ -2218,14 +2218,9 @@ module RunicMain2
     if VERSION > v"1.12-"
         include("../juliac/runicc.jl")
         include("maintests.jl")
-        function juliac_main(argv)
-            pushfirst!(argv, "runic")
-            juliac_main = @cfunction(RunicC.main, Cint, (Cint, Ptr{Ptr{UInt8}}))
-            return @ccall $juliac_main(length(argv)::Cint, argv::Ptr{Ptr{UInt8}})::Cint
-        end
-        @testset "RunicC.main (JIT compiled, prefs: juliac = false)" begin
+        @testset "runicc main (JIT compiled, prefs: juliac = false)" begin
             @test !Runic.juliac
-            maintests(juliac_main)
+            maintests(main)
         end
     end
 end
@@ -2248,14 +2243,9 @@ module RunicMain3
         using Test: @testset, @test
         include("runicc.jl")
         include("../test/maintests.jl")
-        function juliac_main(argv)
-            pushfirst!(argv, "runic")
-            juliac_main = @cfunction(RunicC.main, Cint, (Cint, Ptr{Ptr{UInt8}}))
-            @ccall \$juliac_main(length(argv)::Cint, argv::Ptr{Ptr{UInt8}})::Cint
-        end
-        @testset "RunicC.main (JIT compiled, prefs: juliac = true)" begin
+        @testset "runicc main (JIT compiled, prefs: juliac = true)" begin
             @test Runic.juliac
-            maintests(juliac_main)
+            maintests(main)
         end
         """
         run(setenv(`$(julia_cmd) --project -e $(code)`; dir = juliac_dir))
