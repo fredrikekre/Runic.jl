@@ -3278,6 +3278,78 @@ function has_return(node::Node)
     end
 end
 
+# Check whether the expression always terminates by throwing an exception, based on the
+# heuristic that a call to a function whose name contains "throw" or "error" throws. In
+# addition to direct calls this also detects e.g. `if`s where all branches throw, see
+# https://github.com/fredrikekre/Runic.jl/issues/202. `pos` is the byte position of `node`
+# in `ctx.fmt_io` (the stream position is restored before returning).
+function always_throws(ctx::Context, node::Node, pos::Integer)
+    is_leaf(node) && return false
+    kids = verified_kids(node)
+    # Byte position of kids[i] in ctx.fmt_io
+    kidpos = function (i)
+        p = pos
+        for j in 1:(i - 1)
+            p += span(kids[j])
+        end
+        return p
+    end
+    if kind(node) === K"call"
+        fname_idx = findfirst(!JuliaSyntax.is_whitespace, kids)
+        fname_idx === nothing && return false
+        local fname
+        let p = position(ctx.fmt_io)
+            seek(ctx.fmt_io, kidpos(fname_idx))
+            fname = String(read_bytes(ctx, kids[fname_idx]))
+            seek(ctx.fmt_io, p)
+        end
+        return contains(fname, "throw") || contains(fname, "error")
+    elseif kind(node) === K"block"
+        # Check the trailing expression (skip the `begin`/`end` keywords of begin-blocks)
+        idx = findlast(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet"begin end"), kids)
+        idx === nothing && return false
+        return always_throws(ctx, kids[idx], kidpos(idx))
+    elseif kind(node) in KSet"if elseif"
+        # All branch blocks (and nested elseifs) must throw and there must be a final
+        # `else` since otherwise there is a fall-through path that returns normally.
+        has_else = false
+        for i in eachindex(kids)
+            kid = kids[i]
+            if is_leaf(kid) && kind(kid) === K"else"
+                has_else = true
+            elseif !is_leaf(kid) && kind(kid) === K"elseif"
+                # The recursive call is responsible for requiring the trailing `else`
+                has_else = true
+                always_throws(ctx, kid, kidpos(i)) || return false
+            elseif kind(kid) === K"block" && !is_paren_block(kid)
+                always_throws(ctx, kid, kidpos(i)) || return false
+            end
+        end
+        return has_else
+    elseif kind(node) === K"let"
+        # The body is the second block kid (the first block holds the bindings)
+        idx = findfirst(x -> kind(x) === K"block", kids)
+        idx === nothing && return false
+        idx = findnext(x -> kind(x) === K"block", kids, idx + 1)
+        idx === nothing && return false
+        return always_throws(ctx, kids[idx], kidpos(idx))
+    elseif kind(node) === K"?"
+        # Both branches (the expressions after `?` and `:`) must throw
+        qidx = findfirst(x -> is_leaf(x) && kind(x) === K"?", kids)
+        qidx === nothing && return false
+        bidx1 = findnext(!JuliaSyntax.is_whitespace, kids, qidx + 1)
+        bidx1 === nothing && return false
+        cidx = findnext(x -> is_leaf(x) && kind(x) === K":", kids, bidx1 + 1)
+        cidx === nothing && return false
+        bidx2 = findnext(!JuliaSyntax.is_whitespace, kids, cidx + 1)
+        bidx2 === nothing && return false
+        return always_throws(ctx, kids[bidx1], kidpos(bidx1)) &&
+            always_throws(ctx, kids[bidx2], kidpos(bidx2))
+    else
+        return false
+    end
+end
+
 function explicit_return_block(ctx, node)
     @assert kind(node) === K"block"
     if has_return(node)
@@ -3306,20 +3378,11 @@ function explicit_return_block(ctx, node)
         for i in 1:(rexpr_idx - 1)
             accept_node!(ctx, kids′[i])
         end
-        # If this is a call node, and the call the function name contains `throw` or `error` we
-        # bail because `return throw(...)` looks kinda stupid.
-        if kind(rexpr) === K"call"
-            call_kids = verified_kids(rexpr)
-            fname_idx = findfirst(!JuliaSyntax.is_whitespace, call_kids)::Int
-            @assert fname_idx == firstindex(call_kids)
-            local fname
-            let p = position(ctx.fmt_io)
-                fname = String(read_bytes(ctx, call_kids[fname_idx]))
-                seek(ctx.fmt_io, p)
-            end
-            if contains(fname, "throw") || contains(fname, "error")
-                return nothing
-            end
+        # If the expression always throws, e.g. a call where the function name contains
+        # `throw` or `error`, or an `if` where all branches throw, we bail because e.g.
+        # `return throw(...)` looks kinda stupid.
+        if always_throws(ctx, rexpr, position(ctx.fmt_io))
+            return nothing
         end
         # We will make changes so copy
         kids′ = kids′ === kids ? copy(kids) : kids′
