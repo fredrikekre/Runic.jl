@@ -303,6 +303,39 @@ function maintests(f::R, real_home::String) where {R}
         end
     end
 
+    # runic --check in.jl (CRLF line endings)
+    cdtmp() do
+        f_in = "in.jl"
+        # Input with CRLF line endings can never pass --check since Runic normalizes all
+        # line endings to LF. A note explaining the (otherwise invisible) diff is printed.
+        write(f_in, "1 + 1\r\n")
+        let (rc, fd1, fd2) = runic(["--check", f_in])
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("note:", fd2)
+            @test occursin("only in line endings", fd2)
+            @test occursin("*.jl text eol=lf", fd2)
+        end
+        # CRLF input with other formatting errors prints the other note variant
+        write(f_in, "1+1\r\n")
+        let (rc, fd1, fd2) = runic(["--check", f_in])
+            @test rc == 1
+            @test occursin("contains CRLF or CR line endings", fd2)
+        end
+        # LF input failing check does not print the note
+        write(f_in, bad)
+        let (rc, fd1, fd2) = runic(["--check", f_in])
+            @test rc == 1
+            @test !occursin("note:", fd2)
+        end
+        # --inplace normalizes the line endings
+        write(f_in, "1 + 1\r\n")
+        let (rc, fd1, fd2) = runic(["--inplace", f_in])
+            @test rc == 0
+            @test read(f_in, String) == good
+        end
+    end
+
     # runic --check in/
     cdtmp() do
         fgood = "good.jl"

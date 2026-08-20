@@ -194,6 +194,34 @@ function errln()
     return
 end
 
+# Note printed (for `--check` and `--diff`) when the input contains CRLF/CR line endings.
+# Runic normalizes all line endings to LF which means that e.g. `--check` can never pass
+# for such input even if the formatting is otherwise correct. This typically happens on
+# Windows with git's `core.autocrlf = true` setting where the working tree ends up with
+# CRLF line endings. Since the diff between the input and the output is invisible in
+# these cases (the carriage return is the only difference on otherwise identical lines)
+# this note tries to explain the failure and point to the fix.
+function line_endings_note(file::String, sourcetext::String, fmt_str::String)
+    printstyled(stderr, "note: "; color = :cyan, bold = true)
+    if normalize_line_endings(sourcetext) == fmt_str
+        print(
+            stderr, "input `", file, "` differs from the formatted output ",
+            "only in line endings: "
+        )
+    else
+        print(stderr, "input `", file, "` contains CRLF or CR line endings: ")
+    end
+    println(
+        stderr,
+        "Runic normalizes all line endings to LF (\"\\n\"). If this file is tracked by ",
+        "git the CRLF line endings likely come from git's line ending conversion (e.g. ",
+        "`core.autocrlf = true`, the Git for Windows default). Adding a `.gitattributes` ",
+        "file with the line `*.jl text eol=lf` ensures that git checks out Julia files ",
+        "with LF line endings on all platforms."
+    )
+    return
+end
+
 
 # Print a typical cli program help message
 function print_help()
@@ -712,6 +740,12 @@ function main(argv)
                 run_cmd(cmd)
                 return
             end
+        end
+        # If a check or diff flagged a file that contains CRLF/CR line endings, print a
+        # note since the cause of the failure may otherwise be invisible in the diff.
+        if changed && (check || diff) && !is_md && occursin('\r', sourcetext)
+            fmt_str = String(read(seekstart(fmt_iob)))
+            line_endings_note(inputfile_pretty, sourcetext, fmt_str)
         end
 
     end # inputfile loop

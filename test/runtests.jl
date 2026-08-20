@@ -149,6 +149,28 @@ end
         format_string("# comment \t ") == format_string("# comment\t \t") == "# comment"
 end
 
+@testset "line ending normalization" begin
+    # All line endings (CRLF, CR) are normalized to LF
+    @test format_string("x = 1\r\ny = 2\r\n") == "x = 1\ny = 2\n"
+    @test format_string("x = 1\ry = 2\r") == "x = 1\ny = 2\n"
+    @test format_string("x = 1\r\ny = 2\n") == "x = 1\ny = 2\n"
+    # Also inside string literals and docstrings (this is what Julia's parser does when
+    # computing the string values so the transformation is semantics preserving)
+    @test format_string("x = \"a\r\nb\"") == "x = \"a\nb\""
+    @test format_string("x = raw\"a\r\nb\"") == "x = raw\"a\nb\""
+    @test format_string("\"\"\"\r\n    f()\r\n\r\nDocs.\r\n\"\"\"\r\nf() = 1\r\n") ==
+        "\"\"\"\n    f()\n\nDocs.\n\"\"\"\nf() = 1\n"
+    # Blank lines of indented docstrings must not pick up (trailing) indentation
+    # (https://github.com/fredrikekre/Runic.jl/issues/183)
+    let str = format_string(
+            "struct S\r\n    \"\"\"\r\n        f()\r\n\r\n    Docs.\r\n    \"\"\"\r\n    x::Int\r\nend\r\n"
+        )
+        @test str == "struct S\n    \"\"\"\n        f()\n\n    Docs.\n    \"\"\"\n    x::Int\nend\n"
+        @test !occursin(r"[ \t]+\n", str)
+        @test format_string(str) == str
+    end
+end
+
 @testset "space before comment" begin
     for sp in ("", " ", "  ")
         csp = sp == "" ? " " : sp

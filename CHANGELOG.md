@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+ - All line endings (CRLF `"\r\n"` and CR `"\r"`) in Julia source files are now normalized
+   to LF (`"\n"`), including inside string literals and docstrings. This matches the
+   normalization Julia's parser performs when computing string values, so the change is
+   semantics preserving. Previously line endings were normalized only in code (not in
+   strings and docstrings), which could result in output with mixed line endings, and, for
+   docstrings in indented contexts, insertion of trailing whitespace on blank lines
+   ([#159], [#183]).
+ - `--check` and `--diff` now print a note when the input contains CRLF/CR line endings,
+   since the line ending difference is otherwise invisible in the diff. The note explains
+   that CRLF typically comes from git's line ending conversion on Windows (e.g.
+   `core.autocrlf = true`) and suggests adding `*.jl text eol=lf` to `.gitattributes`
+   ([#159], [#183]).
+
 ## [v1.9.0] - 2026-08-20
 ### Added
  - Formatting of Julia code in Quarto markdown files. Files with the `.qmd` extension are
@@ -271,11 +286,13 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#152]: https://github.com/fredrikekre/Runic.jl/issues/152
 [#154]: https://github.com/fredrikekre/Runic.jl/issues/154
 [#157]: https://github.com/fredrikekre/Runic.jl/issues/157
+[#159]: https://github.com/fredrikekre/Runic.jl/issues/159
 [#169]: https://github.com/fredrikekre/Runic.jl/issues/169
 [#170]: https://github.com/fredrikekre/Runic.jl/issues/170
 [#171]: https://github.com/fredrikekre/Runic.jl/issues/171
 [#174]: https://github.com/fredrikekre/Runic.jl/issues/174
 [#175]: https://github.com/fredrikekre/Runic.jl/issues/175
+[#183]: https://github.com/fredrikekre/Runic.jl/issues/183
 [#186]: https://github.com/fredrikekre/Runic.jl/issues/186
 [#187]: https://github.com/fredrikekre/Runic.jl/issues/187
 [#191]: https://github.com/fredrikekre/Runic.jl/issues/191
