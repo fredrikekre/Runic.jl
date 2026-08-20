@@ -2286,6 +2286,30 @@ function indent_iterator(ctx::Context, node::Node)
         # indentation via indent_op_call, so nothing to do here.
         return nothing
     end
+    if kind(node) === K"generator"
+        # Skip the element expression (the first kid): it starts the generator so its
+        # first line is not a continuation line and any newlines inside of it (e.g. a
+        # multiline call or tuple) are the responsibility of the expression itself,
+        # see https://github.com/fredrikekre/Runic.jl/issues/173.
+        kids = verified_kids(node)
+        elem_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
+        b = NodeBuilder(ctx, node)
+        for i in 1:elem_idx
+            accept!(b, kids[i])
+        end
+        for i in (elem_idx + 1):lastindex(kids)
+            kid = kids[i]
+            kid′ = continue_all_newlines(
+                ctx, kid; is_last = i == lastindex(kids), is_first = false
+            )
+            if kid′ === nothing
+                accept!(b, kid)
+            else
+                emit!(b, kid′)
+            end
+        end
+        return finish!(b, node)
+    end
     return continue_all_newlines(ctx, node)
 end
 
