@@ -194,6 +194,33 @@ function errln()
     return
 end
 
+# Note printed once, after all input files have been processed, when `--check` or `--diff`
+# flagged files with CRLF/CR line endings, since the line ending difference is otherwise
+# invisible in the diff. `ending_only` should be true if the line endings are the *only*
+# difference from the formatted output for every flagged file.
+function line_endings_note(ending_only::Bool)
+    # The message is wrapped at 80 columns (same cap as the verbose progress output).
+    # All lines are marked with a `│` gutter in the first column to make it clear that
+    # they belong together.
+    printstyled(stderr, "│ Note:"; color = :cyan, bold = true)
+    if ending_only
+        println(stderr, " Some file(s) differ from the formatted output only in line endings:")
+    else
+        println(stderr, " Some file(s) contain CRLF or CR line endings:")
+    end
+    for line in (
+            "Runic normalizes all line endings to LF (`\\n`). If the file(s) are tracked by",
+            "git the CRLF line endings likely come from git's line ending conversion (e.g.",
+            "`core.autocrlf=true`, the Git for Windows default). Adding a `.gitattributes`",
+            "file with the line `*.jl text eol=lf` ensures that git checks out Julia files",
+            "with LF line endings on all platforms.",
+        )
+        printstyled(stderr, "│ "; color = :cyan, bold = true)
+        println(stderr, line)
+    end
+    return
+end
+
 
 # Print a typical cli program help message
 function print_help()
@@ -534,6 +561,11 @@ function main(argv)
     output_is_stdout = !inplace && !check && (outputfile == "" || outputfile == "-")
     print_progress = verbose && !(input_is_stdin || output_is_stdout)
 
+    # Whether a check or diff flagged file(s) with CRLF/CR line endings, and whether the
+    # line endings were the only difference for all of them (see line_endings_note)
+    crlf_flagged = false
+    crlf_ending_only = true
+
     # Loop over the input files
     nfiles_str = string(length(inputfiles))
     for (file_counter, inputfile) in enumerate(inputfiles)
@@ -713,8 +745,22 @@ function main(argv)
                 return
             end
         end
+        # If a check or diff flagged a file that contains CRLF/CR line endings, record it
+        # for the note printed after the loop, since the cause of the failure may
+        # otherwise be invisible in the diff.
+        if changed && (check || diff) && !is_md && occursin('\r', sourcetext)
+            crlf_flagged = true
+            fmt_str = String(read(seekstart(fmt_iob)))
+            if normalize_line_endings(sourcetext) != fmt_str
+                crlf_ending_only = false
+            end
+        end
 
     end # inputfile loop
+
+    if crlf_flagged
+        line_endings_note(crlf_ending_only)
+    end
 
     return errno
 end

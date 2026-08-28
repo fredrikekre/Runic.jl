@@ -303,6 +303,62 @@ function maintests(f::R, real_home::String) where {R}
         end
     end
 
+    # runic --check in.jl (CRLF line endings)
+    cdtmp() do
+        f_in = "in.jl"
+        # The note is wrapped at 80 columns with a `│` gutter on continuation lines;
+        # unwrap before matching phrases so that the tests are insensitive to where the
+        # line breaks end up.
+        unwrap = s -> replace(s, r"\n│ " => " ")
+        # Input with CRLF line endings can never pass --check since Runic normalizes all
+        # line endings to LF. A note explaining the (otherwise invisible) diff is printed.
+        write(f_in, "1 + 1\r\n")
+        let (rc, fd1, fd2) = runic(["--check", f_in])
+            @test rc == 1
+            @test isempty(fd1)
+            @test occursin("Note:", fd2)
+            @test all(l -> textwidth(l) <= 80, eachsplit(fd2, '\n'))
+            @test occursin(
+                "Some file(s) differ from the formatted output only in line endings",
+                unwrap(fd2)
+            )
+            @test occursin("*.jl text eol=lf", unwrap(fd2))
+        end
+        # CRLF input with other formatting errors prints the other note variant
+        write(f_in, "1+1\r\n")
+        let (rc, fd1, fd2) = runic(["--check", f_in])
+            @test rc == 1
+            @test occursin("Some file(s) contain CRLF or CR line endings", unwrap(fd2))
+        end
+        # LF input failing check does not print the note
+        write(f_in, bad)
+        let (rc, fd1, fd2) = runic(["--check", f_in])
+            @test rc == 1
+            @test !occursin("Note:", fd2)
+        end
+        # Multiple flagged files result in a single note
+        write("a.jl", "1 + 1\r\n")
+        write("b.jl", "1 + 1\r\n")
+        let (rc, fd1, fd2) = runic(["--check", "a.jl", "b.jl"])
+            @test rc == 1
+            @test count("Note:", fd2) == 1
+            @test occursin("only in line endings", unwrap(fd2))
+        end
+        # If any flagged file has other changes too the generic variant is printed
+        write("b.jl", "1+1\r\n")
+        let (rc, fd1, fd2) = runic(["--check", "a.jl", "b.jl"])
+            @test rc == 1
+            @test count("Note:", fd2) == 1
+            @test occursin("Some file(s) contain CRLF or CR line endings", unwrap(fd2))
+        end
+        # --inplace normalizes the line endings
+        write(f_in, "1 + 1\r\n")
+        let (rc, fd1, fd2) = runic(["--inplace", f_in])
+            @test rc == 0
+            @test read(f_in, String) == good
+        end
+    end
+
     # runic --check in/
     cdtmp() do
         fgood = "good.jl"

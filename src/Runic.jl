@@ -312,12 +312,20 @@ function remove_line_range_markers(src_io, fmt_io, begin_marker, end_marker)
     return
 end
 
+# Normalize all line endings (CRLF \r\n and lone CR \r) to LF (\n)
+function normalize_line_endings(str::String)
+    occursin('\r', str) || return str
+    str = replace(str, "\r\n" => "\n")
+    return replace(str, "\r" => "\n")
+end
+
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
         diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
         docstrings::Bool = false,
         line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[], filename::String = "-",
     )
+    src_str = normalize_line_endings(src_str)
     # The markers are only used when formatting is limited to certain line ranges so
     # the (comparatively expensive) collision scan is skipped on the common path.
     range_formatting_begin, range_formatting_end =
