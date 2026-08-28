@@ -1177,9 +1177,8 @@ end
         "function (::A)()\n    return 1\nend"
     # A `function` signature with newlines inside the callee parentheses parses as an
     # anonymous function with a tuple as the first expression of the body instead of
-    # as a call. Fixed upstream in JuliaSyntax#580; flip these to `@test` when a
-    # release including that fix is available.
-    @test_broken format_string("function (\n        ::A\n    )()\n    return 1\nend") ==
+    # as a call. Fixed upstream in JuliaSyntax#580
+    @test format_string("function (\n        ::A\n    )()\n    return 1\nend") ==
         "function (\n        ::A\n    )()\n    return 1\nend"
     str = """
     function (
@@ -1198,7 +1197,7 @@ end
         return nothing
     end
     """
-    @test_broken format_string(str) == str
+    @test format_string(str) == str
 end
 
 @testset "indent of multiline strings" begin
