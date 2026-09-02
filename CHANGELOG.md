@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    +Mod.Sub.@mac(x)
    ```
    ([#223], [#228])
+ - New rule: single space between the macro name and the arguments, and between the
+   arguments, in unparenthesized macro calls, e.g. `@enum  Foo   Bar  Baz` is formatted as
+   `@enum Foo Bar Baz` ([#172], [#222]).
 
 ### Changed
  - Semicolons separating statements are now formatted without space before and with a
@@ -389,6 +392,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#169]: https://github.com/fredrikekre/Runic.jl/issues/169
 [#170]: https://github.com/fredrikekre/Runic.jl/issues/170
 [#171]: https://github.com/fredrikekre/Runic.jl/issues/171
+[#172]: https://github.com/fredrikekre/Runic.jl/issues/172
 [#173]: https://github.com/fredrikekre/Runic.jl/issues/173
 [#174]: https://github.com/fredrikekre/Runic.jl/issues/174
 [#175]: https://github.com/fredrikekre/Runic.jl/issues/175
@@ -410,6 +414,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#213]: https://github.com/fredrikekre/Runic.jl/issues/213
 [#217]: https://github.com/fredrikekre/Runic.jl/issues/217
 [#219]: https://github.com/fredrikekre/Runic.jl/issues/219
+[#222]: https://github.com/fredrikekre/Runic.jl/issues/222
 [#223]: https://github.com/fredrikekre/Runic.jl/issues/223
 [#226]: https://github.com/fredrikekre/Runic.jl/issues/226
 [#227]: https://github.com/fredrikekre/Runic.jl/issues/227
