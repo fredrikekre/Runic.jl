@@ -1202,6 +1202,29 @@ end
     @test format_string("export (a) ,  (^)") == "export (a), (^)"
 end
 
+@testset "spaces in macrocall" begin
+    # https://github.com/fredrikekre/Runic.jl/issues/172
+    @test format_string("@enum    Type        begin\n    ENABLED\n    DISABLED\nend") ==
+        "@enum Type begin\n    ENABLED\n    DISABLED\nend"
+    for sp in ("  ", "\t", "   ")
+        @test format_string("@foo$(sp)a") == "@foo a"
+        @test format_string("@foo$(sp)a$(sp)b$(sp)c") == "@foo a b c"
+        @test format_string("Base.@foo$(sp)a$(sp)b") == "Base.@foo a b"
+        @test format_string("@assert x$(sp)\"message\"") == "@assert x \"message\""
+        @test format_string("@foo$(sp)(a, b)") == "@foo (a, b)"
+        # Whitespace hidden inside the first argument node
+        @test format_string("@test$(sp)a == b") == "@test a == b"
+        @test format_string("x = @test$(sp)a == b") == "x = @test a == b"
+        @test format_string("@foo$(sp)a...") == "@foo a..."
+    end
+    # Inline block comments between arguments
+    @test format_string("@foo a #= b =#  c") == "@foo a #= b =# c"
+    # Already formatted code is not modified
+    for str in ("@foo a b c", "@foo", "@doc \"docs\"\nf", "r\"foo\"", "@foo(a, b)")
+        @test format_string(str) == str
+    end
+end
+
 @testset "parsing new syntax" begin
     @test format_string("public a, b") == "public a, b" # Julia 1.11
 end

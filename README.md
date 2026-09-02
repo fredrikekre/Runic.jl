@@ -937,6 +937,17 @@ function/macro calls/definitions. Leading/trailing spaces are removed. Examples:
 +(a, b)
 ```
 
+Macro calls without parentheses use a single space between the macro name and the
+arguments, and between the arguments. Examples:
+
+```diff
+-@enum  Fruit   Apple  Banana
++@enum Fruit Apple Banana
+
+-@test  a == b
++@test a == b
+```
+
 #### Potential changes
  - Perhaps the rule for some of these should be "at least one space" instead. This could
    help with alignment issues. Discussed in issue
