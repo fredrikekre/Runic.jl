@@ -885,15 +885,21 @@ function spaces_in_let(ctx::Context, node::Node)
     b = NodeBuilder(ctx, vars_node)
     # First node *must* be a space (?)
     @assert kind(kids[1]) === K"Whitespace"
+    # Normalize the space between `let` and its first binding here too.
+    space = ws_node(1)
+    if span(kids[1]) == 1
+        accept!(b, kids[1])
+    else
+        emit!(b, space, " ", span(kids[1]))
+    end
     # Second node must be a variable or assignment (at least non-whitespace)
     idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, 2)
-    for i in 1:idx
+    for i in 2:idx
         accept!(b, kids[i])
     end
     # Now we expect comma -> space -> variable -> comma
     state = :expect_comma
     idx += 1
-    space = ws_node(1)
     while idx <= length(kids)
         kid′ = kids[idx]
         if state === :expect_comma
@@ -1199,42 +1205,6 @@ function space_after_for(ctx::Context, node::Node)
     return make_node(node, kids′)
 end
 
-function space_after_let(ctx, node)
-    @assert kind(node) === K"let" && !is_leaf(node)
-    p = position(ctx.fmt_io)
-    kids = verified_kids(node)
-    let_node = kids[1]
-    @assert kind(let_node) === K"let"
-    accept_node!(ctx, let_node)
-    vars_idx = 2
-    vars_node = kids[vars_idx]
-    @assert kind(vars_node) === K"block"
-    vars_kids = verified_kids(vars_node)
-    if length(vars_kids) == 0
-        @assert span(vars_node) == 0
-        seek(ctx.fmt_io, p)
-        # Empty block, but where are spaces and comments?
-        return nothing
-    end
-    # First node *must* be a space (?)
-    vars_kid = vars_kids[1]
-    @assert kind(vars_kid) === K"Whitespace"
-    if span(vars_kid) == 1
-        seek(ctx.fmt_io, p)
-        return nothing
-    else
-        replace_bytes!(ctx, " ", span(vars_kid))
-        ws = ws_node(1)
-        vars_kids′ = copy(vars_kids)
-        vars_kids′[1] = ws
-        vars_node′ = make_node(vars_node, vars_kids′)
-        kids′ = copy(kids)
-        kids′[vars_idx] = vars_node′
-        seek(ctx.fmt_io, p)
-        return make_node(node, kids′)
-    end
-end
-
 # Single space around keywords:
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
@@ -1244,9 +1214,6 @@ function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     if kind(node) === K"for"
         return space_after_for(ctx, node)
-    end
-    if kind(node) === K"let"
-        return space_after_let(ctx, node)
     end
     if kind(node) in KSet"call dotcall"
         return space_before_do(ctx, node)
