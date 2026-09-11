@@ -1259,13 +1259,10 @@ function spaces_around_keywords(ctx::Context, node::Node)
         return nothing
     end
     kids = verified_kids(node)
-    kids′ = kids
-    any_changes = false
-    pos = position(ctx.fmt_io)
+    b = NodeBuilder(ctx, node)
     ws = ws_node(1)
 
-    peek_kinds = KSet"where"
-    state = kind(node) in peek_kinds ? (:peeking_for_keyword) : (:looking_for_keyword)
+    state = kind(node) === K"where" ? (:peeking_for_keyword) : (:looking_for_keyword)
     keep_looking_for_keywords = false
     space_after = true
 
@@ -1273,20 +1270,18 @@ function spaces_around_keywords(ctx::Context, node::Node)
         kid = kids[i]
         if state === :peeking_for_keyword
             nkid = kids[i + 1]
-            if kind(nkid) in peek_kinds
+            if kind(nkid) === K"where"
                 state = :looking_for_space
                 keep_looking_for_keywords = true
                 space_after = false
             else
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
                 continue
             end
         end
         if state === :looking_for_keyword
             if kind(kid) in keyword_set
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
                 if kind(kid) in KSet"mutable abstract primitive"
                     # These keywords are always followed by another keyword
                     keep_looking_for_keywords = true
@@ -1308,8 +1303,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                     end
                 end
             else
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             end
         elseif state === :looking_for_space
             if (kind(kid) === K"Whitespace" && span(kid) == 1) ||
@@ -1318,37 +1312,22 @@ function spaces_around_keywords(ctx::Context, node::Node)
                     # Is a newline instead of a space accepted for any other case?
                     @assert kind(node) in KSet"where local global const"
                 end
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             elseif kind(kid) === K"Whitespace"
                 # Replace with single space.
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                replace_bytes!(ctx, " ", span(kid))
-                push!(kids′, ws)
-                accept_node!(ctx, ws)
+                emit!(b, ws, " ", span(kid))
             else
                 @assert kind(first_leaf(kid)) !== K"Whitespace"
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
                 @assert kind(node) in KSet"where if elseif while do function return local global module baremodule"
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
                 # Insert the space before/after the kid depending on whether we are looking
                 # for a space before or after a keyword
                 if !space_after
-                    push!(kids′, kid)
-                    accept_node!(ctx, kid)
+                    accept!(b, kid)
                 end
-                replace_bytes!(ctx, " ", 0)
-                push!(kids′, ws)
-                accept_node!(ctx, ws)
+                emit!(b, ws, " ", 0)
                 if space_after
-                    push!(kids′, kid)
-                    accept_node!(ctx, kid)
+                    accept!(b, kid)
                 end
             end
             state = keep_looking_for_keywords ? (:looking_for_keyword) : (:closing)
@@ -1356,21 +1335,11 @@ function spaces_around_keywords(ctx::Context, node::Node)
             space_after = true
         else
             @assert state === :closing
-            accept_node!(ctx, kid)
-            any_changes && push!(kids′, kid)
+            accept!(b, kid)
         end
     end
 
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    # Return
-    if any_changes
-        # Construct the new node
-        node′ = make_node(node, kids′)
-        return node′
-    else
-        return nothing
-    end
+    return finish!(b, node)
 end
 
 # Replace `=` and `∈` with `in` in for-loops and generators
