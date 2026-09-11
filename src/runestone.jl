@@ -1900,55 +1900,6 @@ function indent_call(ctx::Context, node::Node)
 end
 
 
-# TODO: I feel like this function can be removed. It is only used in `indent_op_call`
-function indent_newlines_between_indices(
-        ctx::Context, node::Node, open_idx::Int, close_idx::Int;
-        indent_closing_token::Bool = false
-    )
-    kids = verified_kids(node)
-    any_kid_changed = false
-    for i in open_idx:close_idx
-        kid = kids[i]
-        this_kid_changed = false
-        # Skip the newline just before the closing token for e.g. (...\n)
-        # (indent_closing_token = false) but not in e.g. `a+\nb` (indent_closing_token =
-        # true) where the closing token is part of the expression itself.
-        if !indent_closing_token && i == close_idx - 1 && kind(kid) === K"NewlineWs"
-            continue
-        end
-        if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
-            # Tag all direct NewlineWs kids
-            kid = add_tag(kid, TAG_LINE_CONT)
-            this_kid_changed = true
-        elseif is_triple_thing(kid) && (i != open_idx || has_tag(node, TAG_LINE_CONT))
-            # TODO: Might be too course to use the tag on the node here...
-            # Tag triple strings and triple string macros
-            kid′ = indent_triple_thing(ctx, kid)
-            if kid′ !== nothing
-                kid = kid′
-                this_kid_changed = true
-            end
-        end
-        # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
-        # Skip leading newline if this kid is the first one
-        leading = i != open_idx
-        # Skip trailing newline of this kid if the next token is the closing one and the
-        # closing token should not be indented.
-        trailing = !(i == close_idx - 1 && !indent_closing_token)
-        kid′ = continue_newlines(kid; leading = leading, trailing = trailing)
-        if kid′ !== nothing
-            kid = kid′
-            this_kid_changed = true
-        end
-        if this_kid_changed
-            kids[i] = kid
-        end
-        any_kid_changed |= this_kid_changed
-    end
-    @assert verified_kids(node) === kids
-    return any_kid_changed ? make_node(node, kids) : nothing
-end
-
 # Tags opening and closing tokens for indent/dedent and the newline just before the closing
 # token as pre-dedent
 # Insert a newline after the semicolon of a K"parameters" node. This is used by
@@ -2119,9 +2070,38 @@ function indent_op_call(ctx::Context, node::Node)
     kids = verified_kids(node)
     first_operand_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     last_operand_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
-    return indent_newlines_between_indices(
-        ctx, node, first_operand_idx, last_operand_idx; indent_closing_token = true
-    )
+    any_kid_changed = false
+    for i in first_operand_idx:last_operand_idx
+        kid = kids[i]
+        this_kid_changed = false
+        if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
+            # Tag all direct NewlineWs kids
+            kid = add_tag(kid, TAG_LINE_CONT)
+            this_kid_changed = true
+        elseif is_triple_thing(kid) && (i != first_operand_idx || has_tag(node, TAG_LINE_CONT))
+            # TODO: Might be too course to use the tag on the node here...
+            # Tag triple strings and triple string macros
+            kid′ = indent_triple_thing(ctx, kid)
+            if kid′ !== nothing
+                kid = kid′
+                this_kid_changed = true
+            end
+        end
+        # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
+        # Skip leading newline if this kid is the first one
+        leading = i != first_operand_idx
+        kid′ = continue_newlines(kid; leading = leading)
+        if kid′ !== nothing
+            kid = kid′
+            this_kid_changed = true
+        end
+        if this_kid_changed
+            kids[i] = kid
+        end
+        any_kid_changed |= this_kid_changed
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? make_node(node, kids) : nothing
 end
 
 function indent_loop(ctx::Context, node::Node)
