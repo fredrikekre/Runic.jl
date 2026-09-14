@@ -3325,7 +3325,7 @@ function explicit_return_block(ctx, node)
             return nothing
         end
         # We will make changes so copy
-        kids′ = kids′ === kids ? copy(kids) : kids′
+        kids′ = copy(kids)
         # Make sure the previous node is a K"NewlineWs"
         if !kmatch(kids′, KSet"NewlineWs", rexpr_idx - 1)
             spn = 0
@@ -3362,7 +3362,7 @@ function explicit_return_block(ctx, node)
         @assert kind(kids′[end]) === K"NewlineWs"
         @assert kind(last_leaf(rexpr)) === K"end"
         insert_idx = lastindex(kids)
-        kids′ = kids′ === kids ? copy(kids) : kids′
+        kids′ = copy(kids)
         for i in 1:(insert_idx - 1)
             accept_node!(ctx, kids′[i])
         end
@@ -3395,16 +3395,8 @@ function explicit_return(ctx::Context, node::Node)
         return nothing
     end
     kids = verified_kids(node)
-    pos = position(ctx.fmt_io)
-    block_idx = findlast(x -> kind(x) === K"block", verified_kids(node))
+    block_idx = findlast(x -> kind(x) === K"block", kids)
     block_idx === nothing && return nothing
-    for i in 1:(block_idx - 1)
-        accept_node!(ctx, kids[i])
-    end
-    block′ = explicit_return_block(ctx, kids[block_idx])
-    seek(ctx.fmt_io, pos)
-    block′ === nothing && return nothing
-    kids′ = copy(kids)
-    kids′[block_idx] = block′
-    return make_node(node, kids′)
+    changed = apply_at_kid!(explicit_return_block, ctx, kids, block_idx)
+    return changed ? make_node(node, kids) : nothing
 end
