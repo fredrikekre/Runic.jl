@@ -131,16 +131,9 @@ function replace_tabs_with_four_spaces(ctx::Context, node::Node)
     kind(node) in KSet"Whitespace NewlineWs" || return nothing
     @assert is_leaf(node)
     bytes = read_bytes(ctx, node)
-    tabidx = findfirst(x -> x == UInt8('\t'), bytes)
-    tabidx === nothing && return nothing
-    while tabidx !== nothing
-        bytes[tabidx] = UInt8(' ')
-        for _ in 1:3
-            insert!(bytes, tabidx, UInt8(' '))
-        end
-        tabidx = findnext(x -> x == UInt8('\t'), bytes, tabidx + 4)
-    end
-    nb = replace_bytes!(ctx, bytes, span(node))
+    UInt8('\t') in bytes || return nothing
+    str = replace(String(bytes), '\t' => "    ")
+    nb = replace_bytes!(ctx, str, span(node))
     return make_node(node, nb)
 end
 
