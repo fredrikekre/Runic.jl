@@ -131,16 +131,9 @@ function replace_tabs_with_four_spaces(ctx::Context, node::Node)
     kind(node) in KSet"Whitespace NewlineWs" || return nothing
     @assert is_leaf(node)
     bytes = read_bytes(ctx, node)
-    tabidx = findfirst(x -> x == UInt8('\t'), bytes)
-    tabidx === nothing && return nothing
-    while tabidx !== nothing
-        bytes[tabidx] = UInt8(' ')
-        for _ in 1:3
-            insert!(bytes, tabidx, UInt8(' '))
-        end
-        tabidx = findnext(x -> x == UInt8('\t'), bytes, tabidx + 4)
-    end
-    nb = replace_bytes!(ctx, bytes, span(node))
+    UInt8('\t') in bytes || return nothing
+    str = replace(String(bytes), '\t' => "    ")
+    nb = replace_bytes!(ctx, str, span(node))
     return make_node(node, nb)
 end
 
@@ -885,15 +878,21 @@ function spaces_in_let(ctx::Context, node::Node)
     b = NodeBuilder(ctx, vars_node)
     # First node *must* be a space (?)
     @assert kind(kids[1]) === K"Whitespace"
+    # Normalize the space between `let` and its first binding here too.
+    space = ws_node(1)
+    if span(kids[1]) == 1
+        accept!(b, kids[1])
+    else
+        emit!(b, space, " ", span(kids[1]))
+    end
     # Second node must be a variable or assignment (at least non-whitespace)
     idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, 2)
-    for i in 1:idx
+    for i in 2:idx
         accept!(b, kids[i])
     end
     # Now we expect comma -> space -> variable -> comma
     state = :expect_comma
     idx += 1
-    space = ws_node(1)
     while idx <= length(kids)
         kid′ = kids[idx]
         if state === :expect_comma
@@ -1199,42 +1198,6 @@ function space_after_for(ctx::Context, node::Node)
     return make_node(node, kids′)
 end
 
-function space_after_let(ctx, node)
-    @assert kind(node) === K"let" && !is_leaf(node)
-    p = position(ctx.fmt_io)
-    kids = verified_kids(node)
-    let_node = kids[1]
-    @assert kind(let_node) === K"let"
-    accept_node!(ctx, let_node)
-    vars_idx = 2
-    vars_node = kids[vars_idx]
-    @assert kind(vars_node) === K"block"
-    vars_kids = verified_kids(vars_node)
-    if length(vars_kids) == 0
-        @assert span(vars_node) == 0
-        seek(ctx.fmt_io, p)
-        # Empty block, but where are spaces and comments?
-        return nothing
-    end
-    # First node *must* be a space (?)
-    vars_kid = vars_kids[1]
-    @assert kind(vars_kid) === K"Whitespace"
-    if span(vars_kid) == 1
-        seek(ctx.fmt_io, p)
-        return nothing
-    else
-        replace_bytes!(ctx, " ", span(vars_kid))
-        ws = ws_node(1)
-        vars_kids′ = copy(vars_kids)
-        vars_kids′[1] = ws
-        vars_node′ = make_node(vars_node, vars_kids′)
-        kids′ = copy(kids)
-        kids′[vars_idx] = vars_node′
-        seek(ctx.fmt_io, p)
-        return make_node(node, kids′)
-    end
-end
-
 # Single space around keywords:
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
@@ -1244,9 +1207,6 @@ function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     if kind(node) === K"for"
         return space_after_for(ctx, node)
-    end
-    if kind(node) === K"let"
-        return space_after_let(ctx, node)
     end
     if kind(node) in KSet"call dotcall"
         return space_before_do(ctx, node)
@@ -1259,13 +1219,10 @@ function spaces_around_keywords(ctx::Context, node::Node)
         return nothing
     end
     kids = verified_kids(node)
-    kids′ = kids
-    any_changes = false
-    pos = position(ctx.fmt_io)
+    b = NodeBuilder(ctx, node)
     ws = ws_node(1)
 
-    peek_kinds = KSet"where"
-    state = kind(node) in peek_kinds ? (:peeking_for_keyword) : (:looking_for_keyword)
+    state = kind(node) === K"where" ? (:peeking_for_keyword) : (:looking_for_keyword)
     keep_looking_for_keywords = false
     space_after = true
 
@@ -1273,20 +1230,18 @@ function spaces_around_keywords(ctx::Context, node::Node)
         kid = kids[i]
         if state === :peeking_for_keyword
             nkid = kids[i + 1]
-            if kind(nkid) in peek_kinds
+            if kind(nkid) === K"where"
                 state = :looking_for_space
                 keep_looking_for_keywords = true
                 space_after = false
             else
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
                 continue
             end
         end
         if state === :looking_for_keyword
             if kind(kid) in keyword_set
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
                 if kind(kid) in KSet"mutable abstract primitive"
                     # These keywords are always followed by another keyword
                     keep_looking_for_keywords = true
@@ -1308,8 +1263,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
                     end
                 end
             else
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             end
         elseif state === :looking_for_space
             if (kind(kid) === K"Whitespace" && span(kid) == 1) ||
@@ -1318,37 +1272,22 @@ function spaces_around_keywords(ctx::Context, node::Node)
                     # Is a newline instead of a space accepted for any other case?
                     @assert kind(node) in KSet"where local global const"
                 end
-                accept_node!(ctx, kid)
-                any_changes && push!(kids′, kid)
+                accept!(b, kid)
             elseif kind(kid) === K"Whitespace"
                 # Replace with single space.
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
-                replace_bytes!(ctx, " ", span(kid))
-                push!(kids′, ws)
-                accept_node!(ctx, ws)
+                emit!(b, ws, " ", span(kid))
             else
                 @assert kind(first_leaf(kid)) !== K"Whitespace"
                 # Reachable in e.g. `T where{T}`, `if(`, ... insert space
                 @assert kind(node) in KSet"where if elseif while do function return local global module baremodule"
-                any_changes = true
-                if kids′ === kids
-                    kids′ = kids[1:(i - 1)]
-                end
                 # Insert the space before/after the kid depending on whether we are looking
                 # for a space before or after a keyword
                 if !space_after
-                    push!(kids′, kid)
-                    accept_node!(ctx, kid)
+                    accept!(b, kid)
                 end
-                replace_bytes!(ctx, " ", 0)
-                push!(kids′, ws)
-                accept_node!(ctx, ws)
+                emit!(b, ws, " ", 0)
                 if space_after
-                    push!(kids′, kid)
-                    accept_node!(ctx, kid)
+                    accept!(b, kid)
                 end
             end
             state = keep_looking_for_keywords ? (:looking_for_keyword) : (:closing)
@@ -1356,21 +1295,11 @@ function spaces_around_keywords(ctx::Context, node::Node)
             space_after = true
         else
             @assert state === :closing
-            accept_node!(ctx, kid)
-            any_changes && push!(kids′, kid)
+            accept!(b, kid)
         end
     end
 
-    # Reset stream
-    seek(ctx.fmt_io, pos)
-    # Return
-    if any_changes
-        # Construct the new node
-        node′ = make_node(node, kids′)
-        return node′
-    else
-        return nothing
-    end
+    return finish!(b, node)
 end
 
 # Replace `=` and `∈` with `in` in for-loops and generators
@@ -1931,55 +1860,6 @@ function indent_call(ctx::Context, node::Node)
 end
 
 
-# TODO: I feel like this function can be removed. It is only used in `indent_op_call`
-function indent_newlines_between_indices(
-        ctx::Context, node::Node, open_idx::Int, close_idx::Int;
-        indent_closing_token::Bool = false
-    )
-    kids = verified_kids(node)
-    any_kid_changed = false
-    for i in open_idx:close_idx
-        kid = kids[i]
-        this_kid_changed = false
-        # Skip the newline just before the closing token for e.g. (...\n)
-        # (indent_closing_token = false) but not in e.g. `a+\nb` (indent_closing_token =
-        # true) where the closing token is part of the expression itself.
-        if !indent_closing_token && i == close_idx - 1 && kind(kid) === K"NewlineWs"
-            continue
-        end
-        if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
-            # Tag all direct NewlineWs kids
-            kid = add_tag(kid, TAG_LINE_CONT)
-            this_kid_changed = true
-        elseif is_triple_thing(kid) && (i != open_idx || has_tag(node, TAG_LINE_CONT))
-            # TODO: Might be too course to use the tag on the node here...
-            # Tag triple strings and triple string macros
-            kid′ = indent_triple_thing(ctx, kid)
-            if kid′ !== nothing
-                kid = kid′
-                this_kid_changed = true
-            end
-        end
-        # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
-        # Skip leading newline if this kid is the first one
-        leading = i != open_idx
-        # Skip trailing newline of this kid if the next token is the closing one and the
-        # closing token should not be indented.
-        trailing = !(i == close_idx - 1 && !indent_closing_token)
-        kid′ = continue_newlines(kid; leading = leading, trailing = trailing)
-        if kid′ !== nothing
-            kid = kid′
-            this_kid_changed = true
-        end
-        if this_kid_changed
-            kids[i] = kid
-        end
-        any_kid_changed |= this_kid_changed
-    end
-    @assert verified_kids(node) === kids
-    return any_kid_changed ? make_node(node, kids) : nothing
-end
-
 # Tags opening and closing tokens for indent/dedent and the newline just before the closing
 # token as pre-dedent
 # Insert a newline after the semicolon of a K"parameters" node. This is used by
@@ -2150,9 +2030,38 @@ function indent_op_call(ctx::Context, node::Node)
     kids = verified_kids(node)
     first_operand_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
     last_operand_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int
-    return indent_newlines_between_indices(
-        ctx, node, first_operand_idx, last_operand_idx; indent_closing_token = true
-    )
+    any_kid_changed = false
+    for i in first_operand_idx:last_operand_idx
+        kid = kids[i]
+        this_kid_changed = false
+        if kind(kid) === K"NewlineWs" && !has_tag(kid, TAG_LINE_CONT)
+            # Tag all direct NewlineWs kids
+            kid = add_tag(kid, TAG_LINE_CONT)
+            this_kid_changed = true
+        elseif is_triple_thing(kid) && (i != first_operand_idx || has_tag(node, TAG_LINE_CONT))
+            # TODO: Might be too course to use the tag on the node here...
+            # Tag triple strings and triple string macros
+            kid′ = indent_triple_thing(ctx, kid)
+            if kid′ !== nothing
+                kid = kid′
+                this_kid_changed = true
+            end
+        end
+        # NewlineWs nodes can also hide as the first or last leaf of a node, tag'em.
+        # Skip leading newline if this kid is the first one
+        leading = i != first_operand_idx
+        kid′ = continue_newlines(kid; leading = leading)
+        if kid′ !== nothing
+            kid = kid′
+            this_kid_changed = true
+        end
+        if this_kid_changed
+            kids[i] = kid
+        end
+        any_kid_changed |= this_kid_changed
+    end
+    @assert verified_kids(node) === kids
+    return any_kid_changed ? make_node(node, kids) : nothing
 end
 
 function indent_loop(ctx::Context, node::Node)
@@ -3409,7 +3318,7 @@ function explicit_return_block(ctx, node)
             return nothing
         end
         # We will make changes so copy
-        kids′ = kids′ === kids ? copy(kids) : kids′
+        kids′ = copy(kids)
         # Make sure the previous node is a K"NewlineWs"
         if !kmatch(kids′, KSet"NewlineWs", rexpr_idx - 1)
             spn = 0
@@ -3446,7 +3355,7 @@ function explicit_return_block(ctx, node)
         @assert kind(kids′[end]) === K"NewlineWs"
         @assert kind(last_leaf(rexpr)) === K"end"
         insert_idx = lastindex(kids)
-        kids′ = kids′ === kids ? copy(kids) : kids′
+        kids′ = copy(kids)
         for i in 1:(insert_idx - 1)
             accept_node!(ctx, kids′[i])
         end
@@ -3479,16 +3388,8 @@ function explicit_return(ctx::Context, node::Node)
         return nothing
     end
     kids = verified_kids(node)
-    pos = position(ctx.fmt_io)
-    block_idx = findlast(x -> kind(x) === K"block", verified_kids(node))
+    block_idx = findlast(x -> kind(x) === K"block", kids)
     block_idx === nothing && return nothing
-    for i in 1:(block_idx - 1)
-        accept_node!(ctx, kids[i])
-    end
-    block′ = explicit_return_block(ctx, kids[block_idx])
-    seek(ctx.fmt_io, pos)
-    block′ === nothing && return nothing
-    kids′ = copy(kids)
-    kids′[block_idx] = block′
-    return make_node(node, kids′)
+    changed = apply_at_kid!(explicit_return_block, ctx, kids, block_idx)
+    return changed ? make_node(node, kids) : nothing
 end
