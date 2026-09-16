@@ -39,8 +39,14 @@ that is appreciated by most Go programmers, see for example the following
 In Julia v1.12 and later, Runic can be installed as a
 [Pkg app](https://pkgdocs.julialang.org/dev/apps/):
 
+For Linux and macOS:
 ```sh
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'
+```
+
+For Windows:
+```cmd
+julia -e 'using Pkg; Pkg.Apps.add(\"Runic\")'
 ```
 
 Assuming `~/.julia/bin` is in your `PATH` you can now invoke `runic` from your shell, e.g.:
