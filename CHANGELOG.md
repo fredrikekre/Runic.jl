@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+### Added
+ - New rule: single space between the macro name and the arguments, and between the
+   arguments, in unparenthesized macro calls, e.g. `@enum  Foo   Bar  Baz` is formatted as
+   `@enum Foo Bar Baz` ([#172], [#222]).
+
 ## [v1.10.0] - 2026-08-28
 ### Changed
  - The explicit `return` rule no longer adds `return` when the last expression of a
@@ -299,6 +305,8 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#169]: https://github.com/fredrikekre/Runic.jl/issues/169
 [#170]: https://github.com/fredrikekre/Runic.jl/issues/170
 [#171]: https://github.com/fredrikekre/Runic.jl/issues/171
+[#172]: https://github.com/fredrikekre/Runic.jl/issues/172
+[#222]: https://github.com/fredrikekre/Runic.jl/issues/222
 [#173]: https://github.com/fredrikekre/Runic.jl/issues/173
 [#174]: https://github.com/fredrikekre/Runic.jl/issues/174
 [#175]: https://github.com/fredrikekre/Runic.jl/issues/175

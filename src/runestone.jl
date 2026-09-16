@@ -857,6 +857,38 @@ function spaces_in_export_public(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
+# Single space between the macro name and the arguments, and between the arguments, in
+# unparenthesized macro calls, e.g. `@enum  Foo   Bar  Baz` -> `@enum Foo Bar Baz`
+# (parenthesized macro calls are handled by `spaces_in_listlike`). Note that the whitespace
+# before an argument sometimes end up inside the argument node (e.g. inside the `call` node
+# in `@test  a == b`) so this pass also looks at the first leaf of the arguments.
+function spaces_in_macrocall(ctx::Context, node::Node)
+    if !(
+            kind(node) === K"macrocall" && !is_leaf(node) &&
+                !JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG) && !is_string_macro(node)
+        )
+        return nothing
+    end
+    kids = verified_kids(node)
+    ws = ws_node(1)
+    b = NodeBuilder(ctx, node)
+    for (i, kid) in pairs(kids)
+        if kind(kid) === K"Whitespace" && span(kid) > 1
+            # Replace with a single space
+            emit!(b, ws, " ", span(kid))
+        elseif i > 1 && !is_leaf(kid) &&
+                (fl = first_leaf(kid); fl !== nothing && kind(fl) === K"Whitespace" && span(fl) > 1)
+            # Whitespace hidden as the first leaf of the argument
+            kid′ = replace_first_leaf(kid, ws)
+            @assert span(kid′) == span(kid) - span(fl) + 1
+            emit!(b, kid′, " ", span(fl))
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 function spaces_in_let(ctx::Context, node::Node)
     if kind(node) !== K"let" || is_leaf(node)
         return nothing
