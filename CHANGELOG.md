@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+ - Macro calls with a module path are now normalized to have the `@` after the module
+   path, directly in front of the macro name, i.e. `@Mod.mac x` is formatted as
+   `Mod.@mac x` ([#223]).
+
 ## [v1.11.0] - 2026-09-23
 ### Fixed
  - Function stubs without a body where the `end` keyword is on a separate line (e.g.
@@ -327,5 +333,6 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#213]: https://github.com/fredrikekre/Runic.jl/issues/213
 [#217]: https://github.com/fredrikekre/Runic.jl/issues/217
 [#219]: https://github.com/fredrikekre/Runic.jl/issues/219
+[#223]: https://github.com/fredrikekre/Runic.jl/issues/223
 [#226]: https://github.com/fredrikekre/Runic.jl/issues/226
 [#227]: https://github.com/fredrikekre/Runic.jl/issues/227

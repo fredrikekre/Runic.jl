@@ -1341,6 +1341,53 @@ function for_loop_use_in(ctx::Context, node::Node)
     return make_node(node, kids′)
 end
 
+# Rebuild a macro module path node (e.g. `@Mod.Sub` from `@Mod.Sub.mac`) without the
+# leading `@` leaf. The stream is not touched here, the caller deletes the byte.
+function drop_leading_at(node::Node)
+    @assert !is_leaf(node) && kind(node) === K"."
+    kids = verified_kids(node)
+    kids′ = copy(kids)
+    if is_leaf(kids[1])
+        @assert kind(kids[1]) === K"@"
+        popfirst!(kids′)
+    else
+        kids′[1] = drop_leading_at(kids[1])
+    end
+    return make_node(node, kids′)
+end
+
+# Normalize `@Mod.mac` to `Mod.@mac` by moving the `@` from the front of the module path
+# to just before the macro name.
+function at_after_macro_module_path(ctx::Context, node::Node)
+    if !(kind(node) === K"." && !is_leaf(node) && kind(first_leaf(node)) === K"@")
+        return nothing
+    end
+    kids = verified_kids(node)
+    # Only the outermost `.` node (the one ending with the macro name) is rewritten.
+    # Nested `.` nodes of the module path are rebuilt as part of the outer one.
+    kind(kids[end]) === K"MacroName" || return nothing
+    @assert length(kids) in (3, 4) # ([@,] module path, `.`, MacroName)
+    @assert kind(kids[end - 1]) === K"."
+    b = NodeBuilder(ctx, node)
+    kid = kids[1]
+    if is_leaf(kid)
+        # `@Mod.mac`: drop the `@` leaf
+        @assert kind(kid) === K"@"
+        skip_kid!(b, kid)
+        accept!(b, kids[2])
+    else
+        # `@Mod.Sub.mac`: delete the `@` byte and rebuild the module path node
+        @assert kind(kid) === K"."
+        emit!(b, drop_leading_at(kid), "", 1)
+    end
+    # The `.` before the macro name
+    accept!(b, kids[end - 1])
+    # Insert the `@` before the macro name
+    emit!(b, Node(JuliaSyntax.SyntaxHead(K"@", JuliaSyntax.TRIVIA_FLAG), 1), "@", 0)
+    accept!(b, kids[end])
+    return finish!(b, node)
+end
+
 function braces_around_where_rhs(ctx::Context, node::Node)
     if !(kind(node) === K"where" && !is_leaf(node))
         return nothing

@@ -704,6 +704,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something for_loop_use_in(ctx, node)
     @return_something explicit_return(ctx, node)
     @return_something braces_around_where_rhs(ctx, node)
+    @return_something at_after_macro_module_path(ctx, node)
     @return_something indent_multiline_strings(ctx, node)
     @return_something format_docstring(ctx, node)
     @return_something four_space_indent(ctx, node)
