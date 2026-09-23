@@ -1508,18 +1508,24 @@ function indent_function_or_macro(ctx::Context, node::Node)
     # First node is the function/macro keyword
     func_idx = 1
     @assert is_leaf(kids[func_idx]) && kind(kids[func_idx]) in KSet"function macro"
-    any_kid_changed = tag_kid!(kids, func_idx, TAG_INDENT)
     # The signature is the next non-whitespace node. It is a (call/where/::) for standard
     # method definitions but just an Identifier for cases like `function f end`.
     sig_idx = findnext(x -> !JuliaSyntax.is_whitespace(x), kids, func_idx + 1)::Int
     sig_node = kids[sig_idx]
+    # Last node is the closing end keyword
+    end_idx = findnext(x -> kind(x) === K"end", kids, sig_idx + 1)::Int
+    @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
     # Identifier for regular names but "not function call" for empty functions with Unicode
     # symbols??
     if kind(sig_node) === K"Identifier" || !(kind(sig_node) in KSet"call where :: tuple parens macrocall")
-        # Empty function definition like `function f end`.
+        # Empty function definition like `function f end` or `function f\nend`. There is
+        # no body block so the keywords are tagged directly.
         # TODO: Make sure the spaces around are correct
-        end_idx = findnext(x -> kind(x) === K"end", kids, sig_idx + 1)::Int
-        @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
+        any_kid_changed = tag_kid!(kids, func_idx, TAG_INDENT)
+        # Tag the newline just before the end keyword as pre-dedent
+        if kind(kids[end_idx - 1]) === K"NewlineWs"
+            any_kid_changed |= tag_kid!(kids, end_idx - 1, TAG_PRE_DEDENT)
+        end
         any_kid_changed |= tag_kid!(kids, end_idx, TAG_DEDENT)
         return any_kid_changed ? make_node(node, kids) : nothing
     end
@@ -1528,13 +1534,7 @@ function indent_function_or_macro(ctx::Context, node::Node)
     @assert !is_leaf(sig_node) && kind(sig_node) in KSet"call where :: tuple parens macrocall"
     # Next node is the function/macro body block.
     block_idx = sig_idx + 1
-    any_kid_changed |= apply_at_kid!(indent_block, ctx, kids, block_idx)
-    # Last node is the closing end keyword
-    end_idx = findnext(x -> kind(x) === K"end", kids, block_idx + 1)::Int
-    @assert is_leaf(kids[end_idx]) && kind(kids[end_idx]) === K"end"
-    any_kid_changed |= tag_kid!(kids, end_idx, TAG_DEDENT)
-    @assert verified_kids(node) === kids
-    return any_kid_changed ? make_node(node, kids) : nothing
+    return indent_keyword_block_end!(ctx, node, func_idx, block_idx, end_idx)
 end
 
 # Soft-indentation between the variables

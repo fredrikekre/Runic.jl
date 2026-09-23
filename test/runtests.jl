@@ -735,7 +735,12 @@ end
         @test format_string("function f()\n$(sp)x\n$(sp)end") ==
             "function f()\n    return x\nend"
         @test format_string("function f end") == "function f end"
-        @test_broken format_string("function f\nend") == "function f\nend" # TODO
+        # Function stubs with the `end` on a separate line
+        @test format_string("function f\n$(sp)end") == "function f\nend"
+        @test format_string("function f\n\n$(sp)end") == "function f\n\nend"
+        @test format_string("function f # c\n$(sp)end") == "function f # c\nend"
+        @test format_string("begin\nfunction f\n\n$(sp)end\nend") ==
+            "begin\n    function f\n\n    end\nend"
         @test format_string("function ∉ end") == "function ∉ end"
         # `function @main(args)` syntax (Julia 1.12+)
         @test format_string("function @main(ARGS)\n$(sp)return 0\n$(sp)end") ==
