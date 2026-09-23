@@ -122,7 +122,7 @@ function maintests(f::R, real_home::String) where {R}
                 ["--output=$f_out"], ["-o", f_out],
                 ["--output=$f_out", "-"], ["-o", f_out, "-"],
             ]
-            rm(f_out, force = true)
+            rm(f_out; force = true)
             rc, fd1, fd2 = runic(argv, bad)
             @test rc == 0
             @test isempty(fd1)
@@ -150,7 +150,7 @@ function maintests(f::R, real_home::String) where {R}
         write(f_in, bad)
         f_out = "out.jl"
         for argv in [["--output=$f_out", f_in], ["-o", f_out, f_in]]
-            rm(f_out, force = true)
+            rm(f_out; force = true)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
             @test isempty(fd1) && isempty(fd2)
@@ -159,7 +159,7 @@ function maintests(f::R, real_home::String) where {R}
         end
         # --verbose
         let argv = ["--verbose", "--output=$f_out", f_in]
-            rm(f_out, force = true)
+            rm(f_out; force = true)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
             @test isempty(fd1)
@@ -907,7 +907,7 @@ function maintests(f::R, real_home::String) where {R}
         @test read(rootgitfile, String) == "this is not a Julia file"
         @test read(subgitfile, String) == "this is not a Julia file"
         # A `.git` file (submodule, linked worktree) also marks a nested repository
-        rm(joinpath("sub", ".git"), recursive = true)
+        rm(joinpath("sub", ".git"); recursive = true)
         write(joinpath("sub", ".git"), "gitdir: ../.git/modules/sub\n")
         write(f_sub, bad)
         rc, fd1, fd2 = runic(["-i", "."])

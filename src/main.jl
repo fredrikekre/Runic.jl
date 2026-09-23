@@ -225,15 +225,15 @@ end
 # Print a typical cli program help message
 function print_help()
     io = stdout
-    printstyled(io, "NAME", bold = true)
+    printstyled(io, "NAME"; bold = true)
     println(io)
     println(io, "       Runic.main - format Julia source code")
     println(io)
-    printstyled(io, "SYNOPSIS", bold = true)
+    printstyled(io, "SYNOPSIS"; bold = true)
     println(io)
     println(io, "       julia -m Runic [<options>] <path>...")
     println(io)
-    printstyled(io, "DESCRIPTION", bold = true)
+    printstyled(io, "DESCRIPTION"; bold = true)
     println(io)
     println(
         io, """
@@ -241,7 +241,7 @@ function print_help()
                code using the Runic.jl formatter.
         """
     )
-    printstyled(io, "OPTIONS", bold = true)
+    printstyled(io, "OPTIONS"; bold = true)
     println(io)
     println(
         io, """
@@ -740,7 +740,7 @@ function main(argv)
                 cmd = Cmd(git_argv)
                 # `ignorestatus` because --no-index implies --exit-code
                 cmd = setenv(ignorestatus(cmd); dir = dir)
-                cmd = pipeline(cmd, stdout = stderr, stderr = stderr)
+                cmd = pipeline(cmd; stdout = stderr, stderr = stderr)
                 run_cmd(cmd)
                 return
             end
