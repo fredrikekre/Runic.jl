@@ -229,7 +229,7 @@ function add_line_range_markers(str, line_ranges, begin_marker, end_marker)
         empty!(line_ranges)
         return str
     end
-    sort!(line_ranges, rev = true)
+    sort!(line_ranges; rev = true)
     for r in line_ranges
         a, b = first(r), last(r)
         # Some tooling considers a trailing \n to start a new line (as opposed to just
@@ -687,6 +687,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something no_leading_and_single_trailing_newline(ctx, node)
     @return_something max_three_consecutive_newlines(ctx, node)
     @return_something insert_delete_mark_newlines(ctx, node)
+    @return_something tag_function_signature(ctx, node)
     @return_something remove_trailing_semicolon(ctx, node)
     @return_something trim_trailing_whitespace(ctx, node)
     @return_something format_hex_literals(ctx, node)
@@ -711,6 +712,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something explicit_return(ctx, node)
     @return_something braces_around_where_rhs(ctx, node)
     @return_something at_after_macro_module_path(ctx, node)
+    @return_something kwargs_after_semicolon(ctx, node)
     @return_something indent_multiline_strings(ctx, node)
     @return_something format_docstring(ctx, node)
     @return_something four_space_indent(ctx, node)

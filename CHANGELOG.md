@@ -22,6 +22,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - New rule: single space between the macro name and the arguments, and between the
    arguments, in unparenthesized macro calls, e.g. `@enum  Foo   Bar  Baz` is formatted as
    `@enum Foo Bar Baz` ([#172], [#222]).
+ - Keyword arguments in function calls are now separated from the positional arguments
+   with `;` instead of `,`, i.e. `f(x, a = 1)` is formatted as `f(x; a = 1)`. Arguments are
+   never reordered so this only applies when all keyword arguments come after all
+   positional arguments (e.g. `f(a = 1, x)` is left as is). Function definitions, macro
+   calls, tuples, etc. are not affected. This is a new formatting rule (not a [spec-bug]
+   fix) and will result in diffs like the following in essentially every call with
+   comma-separated keyword arguments in already formatted code:
+   ```diff
+   -f(a = 1)
+   -f(x, a = 1)
+   -f(x, a = 1; b = 2)
+   +f(; a = 1)
+   +f(x; a = 1)
+   +f(x; a = 1, b = 2)
+   ```
+   ([#33], [#231])
 
 ### Changed
  - Semicolons separating statements are now formatted without space before and with a
@@ -361,6 +377,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.11.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.1
 [v1.12.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.12.0
 [v1.13.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.13.0
+[#33]: https://github.com/fredrikekre/Runic.jl/issues/33
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -421,6 +438,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#228]: https://github.com/fredrikekre/Runic.jl/issues/228
 [#229]: https://github.com/fredrikekre/Runic.jl/issues/229
 [#230]: https://github.com/fredrikekre/Runic.jl/issues/230
+[#231]: https://github.com/fredrikekre/Runic.jl/issues/231
 [#235]: https://github.com/fredrikekre/Runic.jl/issues/235
 [#236]: https://github.com/fredrikekre/Runic.jl/issues/236
 [#237]: https://github.com/fredrikekre/Runic.jl/issues/237
