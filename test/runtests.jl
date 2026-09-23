@@ -649,6 +649,8 @@ end
         @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
         @test format_string("f()$(sp)do\ny\nend") == "f() do\n    y\nend"
         @test format_string("f()$(sp)do; y end") == "f() do;\n    y\nend"
+        @test format_string("@f()$(sp)do$(sp)x\ny\nend") == "@f() do x\n    y\nend"
+        @test format_string("@f()$(sp)do\ny\nend") == "@f() do\n    y\nend"
         @test format_string("function f()\n    return$(sp)1\nend") == "function f()\n    return 1\nend"
         @test format_string("function f()\n    return$(sp)\nend") == "function f()\n    return\nend"
         @test format_string("module$(sp)A\nend") == "module A\nend"
@@ -852,6 +854,14 @@ end
         # do-end with multiline argument list
         @test format_string("f(\n$(sp)a,\n$(sp)b,\n) do x\n$(sp)y\n$(sp)end") ==
             "f(\n    a,\n    b,\n) do x\n    y\nend"
+        # do-end after a parenthesized macro call (#229)
+        @test format_string("@f() do\n$(sp)a\n$(sp)end") == "@f() do\n    a\nend"
+        @test format_string("@f(a, b) do x\n$(sp)y\n$(sp)end") == "@f(a, b) do x\n    y\nend"
+        @test format_string("@f(\n$(sp)a,\n$(sp)b\n) do x\n$(sp)y\n$(sp)end") ==
+            "@f(\n    a,\n    b\n) do x\n    y\nend"
+        @test format_string(
+            "function f()\n$(sp)@g(\n$(sp)a = 1,\n$(sp)b = 2\n$(sp)) do x\n$(sp)y = x\n$(sp)@h y\n$(sp)end\nend"
+        ) == "function f()\n    return @g(\n        a = 1,\n        b = 2\n    ) do x\n        y = x\n        @h y\n    end\nend"
         # module-end, baremodule-end
         for b in ("", "bare")
             # Just a module

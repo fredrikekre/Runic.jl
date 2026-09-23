@@ -1119,7 +1119,7 @@ function no_spaces_around_colon_etc(ctx::Context, node::Node)
 end
 
 function space_before_do(ctx::Context, node::Node)
-    @assert kind(node) in KSet"call dotcall" && !is_leaf(node)
+    @assert kind(node) in KSet"call dotcall macrocall" && !is_leaf(node)
     kids = verified_kids(node)
     last_idx = length(kids)
     if !(last_idx >= 2 && kind(kids[last_idx]) === K"do")
@@ -1208,7 +1208,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
     if kind(node) === K"for"
         return space_after_for(ctx, node)
     end
-    if kind(node) in KSet"call dotcall"
+    if kind(node) in KSet"call dotcall macrocall"
         return space_before_do(ctx, node)
     end
     keyword_set = KSet"""
@@ -2002,11 +2002,11 @@ function indent_listlike(ctx::Context, node::Node, open_idx::Int, close_idx::Int
     else
         emit!(b, add_tag(kid, TAG_DEDENT))
     end
-    # Keep remaining kids. In JuliaSyntax v1, do-block calls are represented as K"call"
-    # nodes with a trailing K"do" child after the closing paren, so close_idx may not be
-    # the last index.
+    # Keep remaining kids. In JuliaSyntax v1, do-block calls are represented as K"call" (or
+    # K"macrocall") nodes with a trailing K"do" child after the closing paren, so close_idx
+    # may not be the last index.
     if close_idx < lastindex(kids)
-        @assert kind(node) in KSet"call dotcall" && kind(kids[end]) === K"do"
+        @assert kind(node) in KSet"call dotcall macrocall" && kind(kids[end]) === K"do"
         for i in (close_idx + 1):lastindex(kids)
             accept!(b, kids[i])
         end
