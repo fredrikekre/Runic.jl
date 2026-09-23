@@ -333,8 +333,10 @@ end
                 "$(o)$(a), #==# $(b)$(c)"
             @test format_string("$(o)$(sp)$(a) #==#,$(sp)$(b)$(sp)$(c)") ==
                 "$(o)$(a) #==#, $(b)$(c)"
+            # `a = 1` is a keyword argument in calls and is moved after a `;`
+            kw = o in ("f(", "f.(") && a == "a" ? "; " : ""
             @test format_string("$(o)$(sp)$(a)#==# = 1$(sp)$(c)") ==
-                "$(o)$(a) #==# = 1$(c)"
+                "$(o)$(kw)$(a) #==# = 1$(c)"
             # line break in between items
             @test format_string("$(o)$(sp)$(a)$(sp),\n$(sp)$(b)$(sp)$(c)") ==
                 "$(o)\n    $(a),\n    $(b)$(tr)\n$(c)"
@@ -729,6 +731,144 @@ end
     @test format_string("A where B <: C") == "A where {B <: C}"
     @test format_string("A where B >: C") == "A where {B >: C}"
     @test format_string("A where B where C") == "A where {B} where {C}"
+end
+
+@testset "keyword arguments after semicolon" begin
+    # Single line, comma to semicolon
+    @test format_string("f(a = 1)") == "f(; a = 1)"
+    @test format_string("f(x, a = 1)") == "f(x; a = 1)"
+    @test format_string("f(x, y, a = 1, b = 2)") == "f(x, y; a = 1, b = 2)"
+    @test format_string("f(a = 1, b = 2)") == "f(; a = 1, b = 2)"
+    @test format_string("f(x..., a = 1)") == "f(x...; a = 1)"
+    @test format_string("f(x, a = g(y, b = 2))") == "f(x; a = g(y; b = 2))"
+    @test format_string("f(g(a = 1))") == "f(g(; a = 1))"
+    @test format_string("f.(x, a = 1)") == "f.(x; a = 1)"
+    @test format_string("f(x)(y, a = 1)") == "f(x)(y; a = 1)"
+    @test format_string("f(x, a = 1)[1]") == "f(x; a = 1)[1]"
+    @test format_string("f(x, a = 1)::Int") == "f(x; a = 1)::Int"
+    @test format_string("f(x, a = 1).b") == "f(x; a = 1).b"
+    @test format_string("f(x, a = 1)'") == "f(x; a = 1)'"
+    @test format_string("x = f(y, a = 1)") == "x = f(y; a = 1)"
+    @test format_string("+(x, a = 1)") == "+(x; a = 1)"
+    @test format_string("(+)(x, a = 1)") == "(+)(x; a = 1)"
+    @test format_string("f(x, a = 1) && g(y, b = 2)") == "f(x; a = 1) && g(y; b = 2)"
+    @test format_string("[f(x, a = 1) for i in 1:3]") == "[f(x; a = 1) for i in 1:3]"
+    @test format_string("f(x, a = (1, 2))") == "f(x; a = (1, 2))"
+    @test format_string("f(x, a = b = 1)") == "f(x; a = b = 1)"
+    @test format_string("f(x, a = 1,)") == "f(x; a = 1)"
+    @test format_string("f(a = 1,)") == "f(; a = 1)"
+    # Merge with an existing `;` group (comma-kwargs go first)
+    @test format_string("f(x, a = 1; b = 2)") == "f(x; a = 1, b = 2)"
+    @test format_string("f(x, a = 1;)") == "f(x; a = 1)"
+    @test format_string("f(x, a = 1; )") == "f(x; a = 1)"
+    @test format_string("f(x, a = 1; kw...)") == "f(x; a = 1, kw...)"
+    @test format_string("f(x, a = 1; b)") == "f(x; a = 1, b)"
+    @test format_string("f(a = 1; b = 2)") == "f(; a = 1, b = 2)"
+    @test format_string("f(x, a = 1;b = 2)") == "f(x; a = 1, b = 2)"
+    @test format_string("f(x, a = 1 ;  b = 2)") == "f(x; a = 1, b = 2)"
+    @test format_string("f(x, a = 1, b = 2; c = 3, d...)") == "f(x; a = 1, b = 2, c = 3, d...)"
+    # Inside macros and quotes
+    @test format_string("@test f(x, a = 1)") == "@test f(x; a = 1)"
+    @test format_string("@f(x, a = 1)") == "@f(x, a = 1)"
+    @test format_string("@f x a = 1") == "@f x a = 1"
+    @test format_string("x = @f(a = 1)") == "x = @f(a = 1)"
+    @test format_string(":(f(x, a = 1))") == ":(f(x; a = 1))"
+    @test format_string(":(f(x, \$a = 1))") == ":(f(x; \$a = 1))"
+    # do blocks
+    @test format_string("f(x, a = 1) do y\n    g(y, b = 2)\nend") ==
+        "f(x; a = 1) do y\n    g(y; b = 2)\nend"
+    @test format_string("f(x, a = 1;) do y\n    g(y)\nend") == "f(x; a = 1) do y\n    g(y)\nend"
+    @test format_string("f(x, a = 1; b = 2) do y\n    g(y)\nend") ==
+        "f(x; a = 1, b = 2) do y\n    g(y)\nend"
+    @test format_string("f(\n    x,\n    a = 1,\n) do y\n    g(y)\nend") ==
+        "f(\n    x;\n    a = 1,\n) do y\n    g(y)\nend"
+    # Multiline
+    @test format_string("f(\n    x,\n    a = 1,\n)") == "f(\n    x;\n    a = 1,\n)"
+    @test format_string("f(\n    x,\n    a = 1\n)") == "f(\n    x;\n    a = 1\n)"
+    @test format_string("f(\n    a = 1,\n    b = 2,\n)") == "f(;\n    a = 1,\n    b = 2,\n)"
+    @test format_string("f(\n    x, a = 1,\n    b = 2,\n)") == "f(\n    x; a = 1,\n    b = 2,\n)"
+    @test format_string("f(x,\n    a = 1)") == "f(\n    x;\n    a = 1\n)"
+    @test format_string("f(x, a = 1,\n    b = 2)") == "f(\n    x; a = 1,\n    b = 2\n)"
+    @test format_string("f(\n    x, a = 1;\n    b = 2,\n)") == "f(\n    x; a = 1,\n    b = 2,\n)"
+    @test format_string("f(x, a = 1;\n    b = 2)") == "f(\n    x; a = 1,\n    b = 2\n)"
+    @test format_string("f(x,\n    a = 1;\n    b = 2)") == "f(\n    x;\n    a = 1,\n    b = 2\n)"
+    @test format_string("f(x, a = 1\n    ; b = 2)") == "f(\n    x; a = 1,\n    b = 2\n)"
+    @test format_string("f(\n    a = 1;\n    b = 2,\n)") == "f(;\n    a = 1,\n    b = 2,\n)"
+    @test format_string("f(a = 1;\n    b = 2)") == "f(;\n    a = 1,\n    b = 2\n)"
+    # Comments (never move)
+    @test format_string("f(\n    x, # cx\n    a = 1, # ca\n)") ==
+        "f(\n    x; # cx\n    a = 1, # ca\n)"
+    @test format_string("f(\n    x,\n    # about a\n    a = 1,\n)") ==
+        "f(\n    x;\n    # about a\n    a = 1,\n)"
+    @test format_string("f(\n    # leading\n    a = 1,\n)") == "f(;\n    # leading\n    a = 1,\n)"
+    @test format_string("f(x, a = 1 #= c =#)") == "f(x; a = 1 #= c =#)"
+    @test format_string("f(x, a = 1 #= c =#,)") == "f(x; a = 1 #= c =#)"
+    @test format_string("f(\n    x,\n    a = 1 #= c =#,\n)") == "f(\n    x;\n    a = 1 #= c =#,\n)"
+    @test format_string("f(x, #= c =# a = 1)") == "f(x; #= c =# a = 1)"
+    @test format_string("f(x, a #==# = 1)") == "f(x; a #==# = 1)"
+    @test format_string("f(x, a = 1, #= c =# b = 2)") == "f(x; a = 1, #= c =# b = 2)"
+    @test format_string("f(\n    x, # cx\n    a = 1; # ca\n    b = 2,\n)") ==
+        "f(\n    x; # cx\n    a = 1, # ca\n    b = 2,\n)"
+    @test format_string("f(\n    x,\n    a = 1;\n    # cb\n    b = 2,\n)") ==
+        "f(\n    x;\n    a = 1,\n    # cb\n    b = 2,\n)"
+    @test format_string("f(\n    x,\n    a = 1, # ca\n    ; b = 2,\n)") ==
+        "f(\n    x;\n    a = 1, # ca\n    b = 2,\n)"
+    # Untouched: reordering would be needed
+    @test format_string("f(a = 1, x)") == "f(a = 1, x)"
+    @test format_string("f(x, a = 1, y)") == "f(x, a = 1, y)"
+    @test format_string("f(x, a = 1, kw...)") == "f(x, a = 1, kw...)"
+    @test format_string("f(x, a = 1 #= c =#, y)") == "f(x, a = 1 #= c =#, y)"
+    # Untouched: definitions (long, short, wrapped, callable objects, macros)
+    @test format_string("function f(x, a = 1)\n    return x\nend") ==
+        "function f(x, a = 1)\n    return x\nend"
+    @test format_string("f(x, a = 1) = x") == "f(x, a = 1) = x"
+    @test format_string("Base.f(x, a = 1) = x") == "Base.f(x, a = 1) = x"
+    @test format_string("f(x, a = 1)::Int = x") == "f(x, a = 1)::Int = x"
+    @test format_string("f(x, a = 1) where {T} = x") == "f(x, a = 1) where {T} = x"
+    @test format_string("f(x, a = 1) where T = x") == "f(x, a = 1) where {T} = x"
+    @test format_string("function f(x, a = 1)::Int where {T}\n    return x\nend") ==
+        "function f(x, a = 1)::Int where {T}\n    return x\nend"
+    @test format_string("(obj::T)(x, a = 1) = x") == "(obj::T)(x, a = 1) = x"
+    @test format_string("f(x)(y, a = 1) = 1") == "f(x)(y, a = 1) = 1"
+    @test format_string("macro m(x, a = 1)\n    return x\nend") ==
+        "macro m(x, a = 1)\n    return x\nend"
+    @test format_string("@inline f(x, a = 1) = x") == "@inline f(x, a = 1) = x"
+    @test format_string("struct S\n    S(x, a = 1) = new(x, a)\nend") ==
+        "struct S\n    S(x, a = 1) = new(x, a)\nend"
+    @test format_string("g(f(x, a = 1) = 2)") == "g(f(x, a = 1) = 2)"
+    # ... but calls in the body, or nested in the signature, are still converted
+    @test format_string("function f(x, a = 1)\n    return g(y, b = 2)\nend") ==
+        "function f(x, a = 1)\n    return g(y; b = 2)\nend"
+    @test format_string("@inline function f(x, a = 1)\n    return g(y, b = 2)\nend") ==
+        "@inline function f(x, a = 1)\n    return g(y; b = 2)\nend"
+    @test format_string("f(x, a = 1) = g(y, b = 2)") == "f(x, a = 1) = g(y; b = 2)"
+    @test format_string("function (x, a = 1)\n    return g(y, b = 2)\nend") ==
+        "function (x, a = 1)\n    return g(y; b = 2)\nend"
+    @test format_string("f(x::typeof(g(y, a = 1))) = x") == "f(x::typeof(g(y; a = 1))) = x"
+    # Untouched: not calls
+    @test format_string("(x, a = 1)") == "(x, a = 1)"
+    @test format_string("(a = 1,)") == "(a = 1,)"
+    @test format_string("[x, a = 1]") == "[x, a = 1]"
+    @test format_string("A[x, a = 1]") == "A[x, a = 1]"
+    @test format_string("T{x, a = 1}") == "T{x, a = 1}"
+    # Other assignment-like kids
+    @test format_string("f(x, a .= 1)") == "f(x, a .= 1)"
+    @test format_string("f(a .= 1, b = 2)") == "f(a .= 1; b = 2)"
+    @test format_string("f(x, a += 1)") == "f(x, a += 1)"
+    @test format_string("f(x, var\"a b\" = 1)") == "f(x; var\"a b\" = 1)"
+    # Untouched: lowering errors and odd shapes
+    @test format_string("f(x, a::Int = 1)") == "f(x, a::Int = 1)"
+    @test format_string("f(x, a.b = 1)") == "f(x, a.b = 1)"
+    @test format_string("f(x, a[1] = 1)") == "f(x, a[1] = 1)"
+    @test format_string("f(x; a = 1; b = 2)") == "f(x; a = 1; b = 2)"
+    @test format_string("f(x, a = 1; b = 2; c = 3)") == "f(x, a = 1; b = 2; c = 3)"
+    @test format_string("f(\n    # runic: off\n    x,   a = 1,\n    # runic: on\n)") ==
+        "f(\n    # runic: off\n    x,   a = 1,\n    # runic: on\n)"
+    # Already normalized
+    @test format_string("f(x; a = 1)") == "f(x; a = 1)"
+    @test format_string("f(; a = 1)") == "f(; a = 1)"
+    @test format_string("f(;\n    a = 1,\n)") == "f(;\n    a = 1,\n)"
+    @test format_string("f(x; a = 1, b = 2)") == "f(x; a = 1, b = 2)"
 end
 
 @testset "block/hard indentation" begin
@@ -1948,6 +2088,14 @@ end
         """
     @test format_lines(str, [4:4]) == str
     @test_throws Runic.MainError format_lines("1+1", [1:2])
+    # Keyword arguments are only moved after `;` when the whole call is in the range
+    str = "f(\n    x,\n    a = 1,\n)\n"
+    @test format_lines(str, 3:3) == str
+    @test format_lines(str, 2:2) == str
+    @test format_lines(str, 1:1) == str
+    @test format_lines(str, 1:4) == "f(\n    x;\n    a = 1,\n)\n"
+    str = "g(\n    f(x, a = 1),\n    f(y, b = 2),\n)\n"
+    @test format_lines(str, 2:2) == "g(\n    f(x; a = 1),\n    f(y, b = 2),\n)\n"
 end
 
 @testset "docstrings" begin

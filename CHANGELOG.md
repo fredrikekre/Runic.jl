@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+ - Keyword arguments in function calls are now separated from the positional arguments
+   with `;` instead of `,`, i.e. `f(x, a = 1)` is formatted as `f(x; a = 1)`. Arguments are
+   never reordered so this only applies when all keyword arguments come after all
+   positional arguments (e.g. `f(a = 1, x)` is left as is). Function definitions, macro
+   calls, tuples, etc. are not affected. This is a new formatting rule (not a [spec-bug]
+   fix) and will result in diffs like the following in essentially every call with
+   comma-separated keyword arguments in already formatted code:
+   ```diff
+   -f(a = 1)
+   -f(x, a = 1)
+   -f(x, a = 1; b = 2)
+   +f(; a = 1)
+   +f(x; a = 1)
+   +f(x; a = 1, b = 2)
+   ```
+   ([#33])
+
 ## [v1.11.1] - 2026-09-23
 ### Fixed
  - Formatting a parenthesized macro call followed by a `do` block (e.g.
@@ -281,6 +300,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.10.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.10.0
 [v1.11.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.1
 [v1.11.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.0
+[#33]: https://github.com/fredrikekre/Runic.jl/issues/33
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109

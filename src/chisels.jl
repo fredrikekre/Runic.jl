@@ -309,6 +309,8 @@ const TAG_LINE_CONT = UInt32(1) << 31
 const TAG_TRAILING_COMMA = TagType(1) << 4
 # Parameters that should optinally have a trailing comma after last item
 const TAG_TRAILING_COMMA_OPT = TagType(1) << 5
+# Call node that is the signature of a function/macro definition (not a real call)
+const TAG_FUNCTION_SIGNATURE = TagType(1) << 6
 
 function add_tag(node::Node, tag::TagType)
     return Node(head(node), span(node), node.kids, node.tags | tag)
@@ -437,6 +439,12 @@ function stringify_tags(node::Node)
     end
     if has_tag(node, TAG_TRAILING_COMMA)
         write(io, "trail-comma.,")
+    end
+    if has_tag(node, TAG_TRAILING_COMMA_OPT)
+        write(io, "trail-comma-opt.,")
+    end
+    if has_tag(node, TAG_FUNCTION_SIGNATURE)
+        write(io, "fn-signature,")
     end
     truncate(io, max(0, position(io) - 1)) # Remove trailing comma
     return String(take!(io))

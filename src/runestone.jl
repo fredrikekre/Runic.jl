@@ -1375,6 +1375,229 @@ function braces_around_where_rhs(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
+# Tag the call node in the signature of a function/macro definition with
+# TAG_FUNCTION_SIGNATURE so that rules operating on real calls (kwargs_after_semicolon)
+# can tell `f(x, a = 1) = g(y, b = 2)`'s signature call from its body call. The lineage
+# alone can't distinguish them: both have a K"function" parent and (for long form
+# signatures and short form bodies) a K"Whitespace" previous sibling.
+function tag_function_signature(ctx::Context, node::Node)
+    if !(kind(node) in KSet"function macro" && !is_leaf(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    local sig_idx::Int
+    if is_short_form_function_definition(node)
+        # The signature is the first kid: `f(x) = x`
+        sig_idx = 1
+    else
+        # The signature is the first non-whitespace kid after the keyword:
+        # `function f(x) ... end`
+        kw_idx = findfirst(x -> is_leaf(x) && kind(x) in KSet"function macro", kids)::Int
+        i = findnext(!JuliaSyntax.is_whitespace, kids, kw_idx + 1)
+        i === nothing && return nothing
+        sig_idx = i
+    end
+    sig′ = tag_signature_call(kids[sig_idx])
+    sig′ === nothing && return nothing
+    kids′ = copy(kids)
+    kids′[sig_idx] = sig′
+    return make_node(node, kids′)
+end
+
+# Walk down through K"::"/K"where"/K"parens" wrappers (`f(x)::T where {T}`) to the call
+# and tag it. Return the rebuilt node, or `nothing` if there is no call (e.g. `function f
+# end` or an anonymous function argument tuple) or if the call is already tagged.
+function tag_signature_call(node::Node)
+    if kind(node) in KSet"call dotcall"
+        has_tag(node, TAG_FUNCTION_SIGNATURE) && return nothing
+        return add_tag(node, TAG_FUNCTION_SIGNATURE)
+    elseif kind(node) in KSet":: where parens" && !is_leaf(node)
+        kids = verified_kids(node)
+        idx = findfirst(!JuliaSyntax.is_whitespace, kids)
+        idx === nothing && return nothing
+        kid′ = tag_signature_call(kids[idx])
+        kid′ === nothing && return nothing
+        kids′ = copy(kids)
+        kids′[idx] = kid′
+        return make_node(node, kids′)
+    else
+        return nothing
+    end
+end
+
+# A keyword argument written with a comma in a call, i.e. a K"=" kid of the call.
+# `a .= 1` is also K"=" (with the DOTOP_FLAG) but is a positional argument, and `a += 1`
+# is K"op=".
+function is_comma_kwarg(node::Node)
+    return kind(node) === K"=" && !JuliaSyntax.has_flags(node, JuliaSyntax.DOTOP_FLAG)
+end
+
+# Keyword arguments in calls are put after a `;`: `f(x, a = 1)` -> `f(x; a = 1)`. Only the
+# separator is changed, arguments are never reordered (Julia evaluates arguments in source
+# order) so calls where a positional argument comes after a keyword argument, e.g.
+# `f(a = 1, x)`, are left alone. Comma-kwargs are merged into an existing `;` group:
+# `f(x, a = 1; b = 2)` -> `f(x; a = 1, b = 2)`. Function definition signatures (tagged by
+# tag_function_signature), macro calls, tuples etc. are not calls and are not touched.
+function kwargs_after_semicolon(ctx::Context, node::Node)
+    if !(kind(node) in KSet"call dotcall" && !is_leaf(node) && !is_any_op_call(node)) ||
+            has_tag(node, TAG_FUNCTION_SIGNATURE)
+        return nothing
+    end
+    kids = verified_kids(node)
+    open_idx = findfirst(x -> kind(x) === K"(", kids)
+    open_idx === nothing && return nothing
+    close_idx = findnext(x -> kind(x) === K")", kids, open_idx + 1)::Int
+    # Find the first comma-kwarg, bail if there are none
+    first_kw_idx = findnext(is_comma_kwarg, kids, open_idx + 1)
+    (first_kw_idx === nothing || first_kw_idx > close_idx) && return nothing
+    # Check that all comma-kwargs come after all positional arguments: the only items
+    # after the first kwarg must be other kwargs or the K"parameters" node. In addition,
+    # there can be at most one K"parameters" node and it must be the last item. Note
+    # that the kids are already normalized so that trivia (whitespace, newlines, and
+    # comments) are direct siblings of the items.
+    params_idx = nothing
+    last_kw_idx = first_kw_idx
+    for i in first_kw_idx:(close_idx - 1)
+        kid = kids[i]
+        if is_comma_kwarg(kid)
+            params_idx === nothing || return nothing
+            last_kw_idx = i
+            # The keyword must be an identifier (or `var"..."`, or `$x` inside a quote).
+            # Anything else, e.g. `a::Int = 1`, is a lowering error so leave it alone.
+            lhs_idx = findfirst(!JuliaSyntax.is_whitespace, verified_kids(kid))::Int
+            kind(verified_kids(kid)[lhs_idx]) in KSet"Identifier var $" || return nothing
+        elseif kind(kid) === K"parameters"
+            params_idx === nothing || return nothing
+            params_idx = i
+        elseif is_list_item(kid)
+            # Positional argument after a keyword argument: reordering would be needed
+            return nothing
+        end
+    end
+    # Bail if there are `# runic: off/on` toggles among the kids
+    find_format_toggle_ranges(ctx, kids) === nothing || return nothing
+    # Bail if there are range formatting markers among the kids since the edits below
+    # can then not be guaranteed to be inside the requested range
+    if !isempty(ctx.line_ranges) &&
+            has_range_formatting_marker(ctx, kids, open_idx, close_idx)
+        return nothing
+    end
+    # Find the separator: the `,` before the first kwarg (which is replaced by `;`) or,
+    # when there are no positional arguments, the `(` (after which a `;` is inserted).
+    sep_idx = findprev(x -> kind(x) === K",", kids, first_kw_idx - 1)
+    has_positionals = sep_idx !== nothing && sep_idx > open_idx
+    if !has_positionals
+        sep_idx = open_idx
+    end
+    sep_idx = sep_idx::Int
+    # The new K"parameters" node contains the kids from after the separator up to and
+    # including the last kwarg and its trailing comma (skipping over any same-line
+    # trivia, matching what the parser does for `f(x; a = 1 #= c =#,)`).
+    params_end_idx = last_kw_idx
+    let i = last_kw_idx + 1
+        while i < close_idx && kind(kids[i]) in KSet"Whitespace Comment"
+            i += 1
+        end
+        if i < close_idx && kind(kids[i]) === K","
+            params_end_idx = i
+        end
+    end
+    has_trailing_comma = kind(kids[params_end_idx]) === K","
+    # Kids of an existing `;` group to merge in (excluding the `;` itself), if any
+    old_params_kids = params_idx === nothing ? nothing : verified_kids(kids[params_idx])
+    merge_old_params = old_params_kids !== nothing &&
+        count(is_list_item, old_params_kids) > 0
+
+    b = NodeBuilder(ctx, node)
+    # Accept everything before the separator
+    for i in 1:(sep_idx - 1)
+        accept!(b, kids[i])
+    end
+    semi = Node(JuliaSyntax.SyntaxHead(K";", JuliaSyntax.TRIVIA_FLAG), 1)
+    params_kids = Node[semi]
+    pos = position(ctx.fmt_io)
+    if has_positionals
+        # Replace the `,` with `;`
+        @assert kind(kids[sep_idx]) === K","
+        replace_bytes!(ctx, ";", span(kids[sep_idx]))
+    else
+        # Insert `;` after the `(`
+        @assert kind(kids[sep_idx]) === K"("
+        accept!(b, kids[sep_idx])
+        pos = position(ctx.fmt_io)
+        replace_bytes!(ctx, ";", 0)
+    end
+    accept_node!(ctx, semi)
+    # Move the comma-kwargs (and the trivia between them) into the parameters node. The
+    # bytes are already in place.
+    for i in (sep_idx + 1):params_end_idx
+        push!(params_kids, kids[i])
+        accept_node!(ctx, kids[i])
+    end
+    next_idx = params_end_idx + 1
+    if merge_old_params
+        # Merge with the existing `;` group: insert a `,` after the last kwarg (unless
+        # there already is one), keep the trivia between them, delete the old `;`, and
+        # append the old kids.
+        if !has_trailing_comma
+            comma = Node(JuliaSyntax.SyntaxHead(K",", JuliaSyntax.TRIVIA_FLAG), 1)
+            replace_bytes!(ctx, ",", 0)
+            push!(params_kids, comma)
+            accept_node!(ctx, comma)
+        end
+        for i in next_idx:(params_idx::Int - 1)
+            push!(params_kids, kids[i])
+            accept_node!(ctx, kids[i])
+        end
+        old_semi = old_params_kids[1]
+        @assert kind(old_semi) === K";"
+        replace_bytes!(ctx, "", span(old_semi))
+        for i in 2:length(old_params_kids)
+            push!(params_kids, old_params_kids[i])
+            accept_node!(ctx, old_params_kids[i])
+        end
+        next_idx = params_idx::Int + 1
+    end
+    # Emit the parameters node from the separator position
+    seek(ctx.fmt_io, pos)
+    emit!(b, Node(JuliaSyntax.SyntaxHead(K"parameters", 0), params_kids))
+    # Accept the remaining kids. An existing empty `;` group (`f(x, a = 1;)`) is dropped.
+    for i in next_idx:lastindex(kids)
+        if params_idx !== nothing && i == params_idx && !merge_old_params
+            skip_kid!(b, kids[i])
+        else
+            accept!(b, kids[i])
+        end
+    end
+    return finish!(b, node)
+end
+
+# Check whether any of the comment kids between the opening and closing indices is a
+# range formatting marker (see add_line_range_markers).
+function has_range_formatting_marker(
+        ctx::Context, kids::Vector{Node}, open_idx::Int, close_idx::Int
+    )
+    pos = position(ctx.fmt_io)
+    for i in 1:open_idx
+        accept_node!(ctx, kids[i])
+    end
+    found = false
+    for i in (open_idx + 1):(close_idx - 1)
+        kid = kids[i]
+        if kind(kid) === K"Comment"
+            str = String(read_bytes(ctx, kid))
+            if is_range_formatting_begin(str, ctx.range_formatting_begin) ||
+                    is_range_formatting_end(str, ctx.range_formatting_end)
+                found = true
+                break
+            end
+        end
+        accept_node!(ctx, kid)
+    end
+    seek(ctx.fmt_io, pos)
+    return found
+end
+
 function parens_around_op_calls_in_colon(ctx::Context, node::Node)
     if !(is_infix_op_call(node) && infix_op_call_op(ctx, node) === K":")
         return nothing
