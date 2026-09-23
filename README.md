@@ -561,6 +561,7 @@ This is a list of things that Runic currently is doing:
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
  - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
+ - [`@` after module path in macro calls](#-after-module-path-in-macro-calls)
  - [Whitespace miscellaneous](#whitespace-miscellaneous)
 
 ### Toggle formatting
@@ -1044,6 +1045,23 @@ Braces are consistently used around the right hand side of `where` expressions. 
 +T where {T}
 +T where {T <: S} where {S <: Any}
 ```
+
+### `@` after module path in macro calls
+
+Macro calls with a module path are written with the `@` placed after the module path, i.e.
+directly in front of the macro name. Examples:
+```diff
+-@Mod.mac x
++Mod.@mac x
+
+-@Mod.Sub.mac(x)
++Mod.Sub.@mac(x)
+```
+
+Both forms are valid Julia and parse to the same AST but the `@`-first form is an
+"unnecessary variation in syntax" according to the [JuliaSyntax design
+notes](https://julialang.github.io/JuliaSyntax.jl/dev/design/#Other-oddities).
+See [#223](https://github.com/fredrikekre/Runic.jl/issues/223) for more details.
 
 ### Whitespace miscellaneous
 

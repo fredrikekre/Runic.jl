@@ -729,6 +729,30 @@ end
     @test format_string("A where B where C") == "A where {B} where {C}"
 end
 
+@testset "@ after module path in macro calls" begin
+    # Already normalized
+    @test format_string("@mac") == "@mac"
+    @test format_string("@mac x") == "@mac x"
+    @test format_string("Mod.@mac") == "Mod.@mac"
+    @test format_string("Mod.Sub.@mac x") == "Mod.Sub.@mac x"
+    # Move the `@`
+    @test format_string("@Mod.mac") == "Mod.@mac"
+    @test format_string("@Mod.mac x") == "Mod.@mac x"
+    @test format_string("@Mod.mac(x)") == "Mod.@mac(x)"
+    @test format_string("@Mod.Sub.mac x") == "Mod.Sub.@mac x"
+    @test format_string("@a.b.c.d x") == "a.b.c.@d x"
+    @test format_string("@Mod.mac_str") == "Mod.@mac_str"
+    @test format_string("@Mod.mac\"str\"") == "Mod.@mac\"str\""
+    # Nested inside other expressions and other macro calls
+    @test format_string("f(@Mod.mac x)") == "f(Mod.@mac x)"
+    @test format_string("@Mod.mac @Sub.inner x") == "Mod.@mac Sub.@inner x"
+    @test format_string("x = @Mod.mac(y)") == "x = Mod.@mac(y)"
+    @test format_string("function f()\n    @Mod.mac x\nend") ==
+        "function f()\n    return Mod.@mac x\nend"
+    # Indentation is preserved when the `@` moves
+    @test format_string("@Mod.mac begin\n    x\nend") == "Mod.@mac begin\n    x\nend"
+end
+
 @testset "block/hard indentation" begin
     for sp in ("", "  ", "    ", "      ")
         # function-end
