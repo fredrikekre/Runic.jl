@@ -581,6 +581,7 @@ This is a list of things that Runic currently is doing:
  - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [`@` after module path in macro calls](#-after-module-path-in-macro-calls)
+ - [Keyword arguments after `;`](#keyword-arguments-after-)
  - [Whitespace miscellaneous](#whitespace-miscellaneous)
 
 ### Toggle formatting
@@ -1148,6 +1149,35 @@ Both forms are valid Julia and parse to the same AST but the `@`-first form is a
 "unnecessary variation in syntax" according to the [JuliaSyntax design
 notes](https://julialang.github.io/JuliaSyntax.jl/dev/design/#Other-oddities).
 See [#223](https://github.com/fredrikekre/Runic.jl/issues/223) for more details.
+
+### Keyword arguments after `;`
+
+Keyword arguments in function calls are separated from the positional arguments with a `;`
+instead of a `,`. Keyword arguments written with a `,` are moved after a `;` (or merged into
+the existing `;` group) when they come after all positional arguments. Arguments are never
+reordered so calls where a positional argument follows a keyword argument, e.g.
+`f(b = 2, a)`, are left as is. This applies to function calls only, and not to e.g.
+function definitions, macro calls, tuples or indexing expressions where `a = 1` is not a
+keyword argument. Examples:
+
+```diff
+-f(a = 1)
+-f(x, a = 1)
+-f(x, a = 1; b = 2)
++f(; a = 1)
++f(x; a = 1)
++f(x; a = 1, b = 2)
+
+ f(
+-    x,
++    x;
+     a = 1,
+ )
+
+ f(b = 2, a)         # positional argument after keyword argument: unchanged
+ f(x, a = 1) = x     # function definition: unchanged
+ @f(x, a = 1)        # macro call: unchanged
+```
 
 ### Whitespace miscellaneous
 
