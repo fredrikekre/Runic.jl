@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+ - Macro calls with a module path are now normalized to have the `@` after the module
+   path, directly in front of the macro name. This is a new formatting rule (not a
+   [spec-bug] fix) and will result in diffs like the following in already formatted code
+   that uses the `@`-first form:
+   ```diff
+   -@Mod.mac x
+   +Mod.@mac x
+
+   -@Mod.Sub.mac(x)
+   +Mod.Sub.@mac(x)
+   ```
+   ([#223], [#228])
+
 ### Changed
  - Semicolons separating statements are now formatted without space before and with a
    single space after, e.g. `a = 1;b = 2` and `a = 1  ;  b = 2` are formatted as
@@ -388,8 +402,10 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#213]: https://github.com/fredrikekre/Runic.jl/issues/213
 [#217]: https://github.com/fredrikekre/Runic.jl/issues/217
 [#219]: https://github.com/fredrikekre/Runic.jl/issues/219
+[#223]: https://github.com/fredrikekre/Runic.jl/issues/223
 [#226]: https://github.com/fredrikekre/Runic.jl/issues/226
 [#227]: https://github.com/fredrikekre/Runic.jl/issues/227
+[#228]: https://github.com/fredrikekre/Runic.jl/issues/228
 [#229]: https://github.com/fredrikekre/Runic.jl/issues/229
 [#230]: https://github.com/fredrikekre/Runic.jl/issues/230
 [#236]: https://github.com/fredrikekre/Runic.jl/issues/236
