@@ -119,6 +119,60 @@ end
         end
     end
 
+    @testset "--docstrings option and runic.docstrings config" begin
+        src = "\"\"\"\n```julia\nx=1\n```\n\"\"\"\nf(x) = x\n"
+        fmt = "\"\"\"\n```julia\nx = 1\n```\n\"\"\"\nf(x) = x"
+        with_repository() do
+            write("doc.jl", src)
+            GitRunic.git(["add", "doc.jl"])
+            # Docstrings are not formatted by default
+            @test GitRunic._main(["--staged", "--quiet"]) == 0
+            @test GitRunic._main(["--staged", "--quiet", "--docstrings"]) == 1
+            @test GitRunic.git(["show", ":doc.jl"]) == fmt
+        end
+        with_repository() do
+            write("doc.jl", src)
+            GitRunic.git(["add", "doc.jl"])
+            GitRunic.git(["config", "runic.docstrings", "yes"])
+            @test GitRunic._main(["--staged", "--quiet"]) == 1
+            @test GitRunic.git(["show", ":doc.jl"]) == fmt
+            GitRunic.git(["config", "runic.docstrings", "maybe"])
+            @test_throws Runic.MainError GitRunic._main(["--staged", "--quiet"])
+        end
+    end
+
+    @testset "--languages option and runic.languages config" begin
+        src = "```@example\nx=1\n```\n\n```julia\ny=2\n```\n"
+        with_repository() do
+            write("doc.md", src)
+            GitRunic.git(["add", "doc.md"])
+            # Only the default languages are formatted
+            @test GitRunic._main(["--staged", "--quiet", "--extensions=md"]) == 1
+            @test GitRunic.git(["show", ":doc.md"]) == "```@example\nx=1\n```\n\n```julia\ny = 2\n```"
+            write("doc.md", src)
+            GitRunic.git(["add", "doc.md"])
+            @test GitRunic._main(
+                ["--staged", "--quiet", "--extensions=md", "--languages", "julia, @example"]
+            ) == 1
+            @test GitRunic.git(["show", ":doc.md"]) == "```@example\nx = 1\n```\n\n```julia\ny = 2\n```"
+            # The list replaces the default
+            write("doc.md", src)
+            GitRunic.git(["add", "doc.md"])
+            @test GitRunic._main(["--staged", "--quiet", "--extensions=md", "--languages=@example"]) == 1
+            @test GitRunic.git(["show", ":doc.md"]) == "```@example\nx = 1\n```\n\n```julia\ny=2\n```"
+            @test_throws Runic.MainError GitRunic._main(["--staged", "--quiet", "--languages="])
+            @test_throws Runic.MainError GitRunic._main(["--staged", "--quiet", "--languages"])
+        end
+        with_repository() do
+            write("doc.md", src)
+            GitRunic.git(["add", "doc.md"])
+            GitRunic.git(["config", "runic.extensions", "md"])
+            GitRunic.git(["config", "runic.languages", "julia,@example"])
+            @test GitRunic._main(["--staged", "--quiet"]) == 1
+            @test GitRunic.git(["show", ":doc.md"]) == "```@example\nx = 1\n```\n\n```julia\ny = 2\n```"
+        end
+    end
+
     @testset "staged formatting uses index file types" begin
         if Sys.isunix()
             with_repository() do

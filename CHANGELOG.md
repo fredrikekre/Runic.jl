@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `--languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`. The corresponding
    `languages` keyword argument is also accepted by `Runic.format_string` and
    `Runic.format_file`.
+ - `git-runic` now accepts the `--docstrings` and `--languages` options, with the same
+   meaning as for `runic`. The defaults can be configured with the `runic.docstrings` and
+   `runic.languages` git-config settings, analogous to the existing `runic.extensions`.
 
 ## [v1.11.1] - 2026-09-23
 ### Fixed
