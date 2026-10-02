@@ -841,9 +841,12 @@ function maintests(f::R, real_home::String) where {R}
         @test rc != 0
     end
 
-    # --languages: opt in to formatting Documenter blocks
+    # --languages: Documenter blocks are formatted by default and can be opted out of
     let src = "```@example\nx=1\n```\n\n```julia\ny=2\n```\n"
         rc, fd1, fd2 = runic(["--stdin-filename=foo.md"], src)
+        @test rc == 0
+        @test fd1 == "```@example\nx = 1\n```\n\n```julia\ny = 2\n```\n"
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md", "--languages=julia"], src)
         @test rc == 0
         @test fd1 == "```@example\nx=1\n```\n\n```julia\ny = 2\n```\n"
         rc, fd1, fd2 = runic(["--stdin-filename=foo.md", "--languages=julia,@example"], src)
@@ -860,9 +863,12 @@ function maintests(f::R, real_home::String) where {R}
     end
     # --languages also applies to docstrings
     let src = "\"\"\"\n```@example\nx=1\n```\n\"\"\"\nf(x) = x\n"
-        rc, fd1, fd2 = runic(["--docstrings", "--languages=@example"], src)
+        rc, fd1, fd2 = runic(["--docstrings"], src)
         @test rc == 0
         @test fd1 == "\"\"\"\n```@example\nx = 1\n```\n\"\"\"\nf(x) = x\n"
+        rc, fd1, fd2 = runic(["--docstrings", "--languages=julia"], src)
+        @test rc == 0
+        @test fd1 == src
     end
     # --languages with invalid (empty) input
     let (rc, fd1, fd2) = runic(["--languages=", "--stdin-filename=foo.md"], "")
