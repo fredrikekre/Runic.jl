@@ -2216,6 +2216,30 @@ end
     @test fm("```{julia\nx=1\n```\n") == "```{julia\nx=1\n```\n"
     @test fm("```{julia, echo=FALSE}\nx=1\n```\n") == "```{julia, echo=FALSE}\nx=1\n```\n"
 
+    # Documenter blocks (```@example etc.) are not formatted by default but can be opted
+    # in to with the `languages` keyword. Block names and options after the language are
+    # ignored. Trailing semicolons and `# hide` comments are preserved.
+    src_doc = "```@example name; continued = true\nx=1\n```\n\n```@repl\ny=2; # hide\n```\n" *
+        "\n```@meta\nCurrentModule=Foo\n```\n\n```julia\nz=3\n```\n"
+    out_doc = "```@example name; continued = true\nx = 1\n```\n\n```@repl\ny = 2; # hide\n```\n" *
+        "\n```@meta\nCurrentModule=Foo\n```\n\n```julia\nz = 3\n```\n"
+    @test fm(src_doc) == replace(src_doc, "z=3" => "z = 3")
+    @test fm(src_doc; languages = ["julia", "@example", "@repl"]) == out_doc
+    @test fm(out_doc; languages = ["julia", "@example", "@repl"]) == out_doc
+    # Custom language list replaces the default: `julia` is no longer formatted
+    @test fm(src_doc; languages = ["@example"]) == replace(src_doc, "x=1" => "x = 1")
+    # The `languages` keyword is also honored for docstrings
+    src_ds_doc = "\"\"\"\n```@example\nx=1\n```\n\"\"\"\nf(x)=x\n"
+    @test format_string(src_ds_doc; docstrings = true) == replace(src_ds_doc, "f(x)=x" => "f(x) = x")
+    @test format_string(src_ds_doc; docstrings = true, languages = ["@example"]) ==
+        "\"\"\"\n```@example\nx = 1\n```\n\"\"\"\nf(x) = x\n"
+    mktempdir() do dir
+        path = joinpath(dir, "doc.md")
+        write(path, src_doc)
+        Runic.format_file(path; inplace = true, languages = ["julia", "@example", "@repl"])
+        @test read(path, String) == out_doc
+    end
+
     # Idempotency: an already-formatted file is unchanged
     @test fm(out) == out
     @test fm(out_jld) == out_jld

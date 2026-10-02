@@ -126,6 +126,15 @@ echo '```julia' > foo.md && echo '1+1' >> foo.md && echo '```' >> foo.md
 cat foo.md | runic --stdin-filename=foo.md   # stdin dispatch via virtual filename
 ```
 
+The set of fence languages that are treated as Julia code can be customized with
+`--languages`. For example, to also format
+[Documenter](https://github.com/JuliaDocs/Documenter.jl) code blocks
+(```` ```@example ````, ```` ```@repl ````, ```` ```@setup ````, and ```` ```@eval ````;
+block names and options such as ```` ```@example name; continued = true ```` are ignored):
+```sh
+runic --languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval --inplace docs/src/
+```
+
 Output of `runic --help` for a complete list of options:
 
 ```
@@ -173,6 +182,13 @@ OPTIONS
 
        -i, --inplace
            Format files in place.
+
+       --languages=<lang>[,<lang>...]
+           Comma-separated list of fenced code block languages that are treated
+           as Julia code when formatting Markdown files and docstrings. Defaults
+           to `julia,julia-repl,jldoctest`. Use e.g.
+           `--languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`
+           to also format Documenter code blocks.
 
        --lines=<start line>:<end line>
            Limit formatting to the line range <start line> to <end line>. Multiple

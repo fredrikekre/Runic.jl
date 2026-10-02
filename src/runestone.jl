@@ -2586,9 +2586,15 @@ function indent_multiline_strings(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
-const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|[A-Za-z0-9_-]*)"
+# The language is the first word of the info string. A leading `@` is allowed so that
+# Documenter blocks (```@example, ```@repl, etc.) can be matched by name; any trailing
+# block name or options (```@example name; continued = true) are ignored.
+const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|@?[A-Za-z0-9_-]*)"
 
-is_julia_lang(lang::AbstractString) = lang in ("julia", "julia-repl", "jldoctest")
+# Fence languages (info string first word) that are treated as Julia code by default.
+const DEFAULT_MARKDOWN_LANGUAGES = ["julia", "julia-repl", "jldoctest"]
+
+is_julia_lang(lang::AbstractString, languages::Vector{String}) = lang in languages
 
 # Markdown and Quarto markdown file extensions (case-insensitive, e.g. `README.MD`)
 function is_markdown_file(path::AbstractString)
@@ -2693,7 +2699,10 @@ end
 
 # Identify julia source code blocks (``` blocks four-space-indent blocks),
 # collect the lines, format the text and re-insert
-function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[])
+function format_markdown(
+        s::String; line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[],
+        languages::Vector{String} = DEFAULT_MARKDOWN_LANGUAGES,
+    )
     lines = collect_lines(IOBuffer(s); keep = true)
     validate_line_ranges(lines, line_ranges)
     isempty(lines) && return s
@@ -2744,7 +2753,7 @@ function format_markdown(s::String; line_ranges::Vector{UnitRange{Int}} = UnitRa
                 continue
             end
             # Non-Julia fence: copy through unchanged
-            if !is_julia_lang(lang)
+            if !is_julia_lang(lang, languages)
                 append!(result, @view lines[i:close_i])
                 i = close_i + 1
                 at_boundary = false
@@ -2879,7 +2888,7 @@ function format_docstring_string(ctx::Context, node::Node)
 
     # Pass the extracted string to the markdown formatter
     content = String(content_bytes)
-    formatted = format_markdown(content)
+    formatted = format_markdown(content; languages = ctx.languages)
     seek(ctx.fmt_io, pos)
     content == formatted && return nothing
 

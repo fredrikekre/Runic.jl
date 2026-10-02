@@ -278,6 +278,13 @@ function print_help()
                -i, --inplace
                    Format files in place.
 
+               --languages=<lang>[,<lang>...]
+                   Comma-separated list of fenced code block languages that are treated
+                   as Julia code when formatting Markdown files and docstrings. Defaults
+                   to `julia,julia-repl,jldoctest`. Use e.g.
+                   `--languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`
+                   to also format Documenter code blocks.
+
                --lines=<start line>:<end line>
                    Limit formatting to the line range <start line> to <end line>. Multiple
                    ranges can be formatted by specifying multiple --lines arguments.
@@ -363,8 +370,10 @@ function insert_line_range(line_ranges, lines)
 end
 
 # Format a Markdown input string. Returns `(changed, fmt_iob, src_str_for_diff)`.
-function format_markdown_input(sourcetext::String; line_ranges::Vector{UnitRange{Int}})
-    fmt_str = format_markdown(sourcetext; line_ranges = line_ranges)
+function format_markdown_input(
+        sourcetext::String; line_ranges::Vector{UnitRange{Int}}, languages::Vector{String},
+    )
+    fmt_str = format_markdown(sourcetext; line_ranges = line_ranges, languages = languages)
     return (fmt_str != sourcetext, IOBuffer(fmt_str), sourcetext)
 end
 
@@ -373,10 +382,10 @@ end
 function format_julia_input(
         sourcetext::String, inputfile_pretty::String;
         quiet::Bool, verbose::Bool, debug::Bool, diff::Bool, check::Bool,
-        docstrings::Bool, line_ranges::Vector{UnitRange{Int}},
+        docstrings::Bool, languages::Vector{String}, line_ranges::Vector{UnitRange{Int}},
     )
     ctx = Context(
-        sourcetext; quiet, verbose, debug, diff, check, docstrings, line_ranges,
+        sourcetext; quiet, verbose, debug, diff, check, docstrings, languages, line_ranges,
         filename = inputfile_pretty,
     )
     format_tree!(ctx)
@@ -427,6 +436,7 @@ function main(argv)
     input_is_stdin = true
     multiple_inputs = false
     extensions = [".jl"]
+    languages = copy(DEFAULT_MARKDOWN_LANGUAGES)
 
     # Parse the arguments
     while length(argv) > 0
@@ -475,6 +485,17 @@ function main(argv)
             end
             if isempty(extensions)
                 return panic("`--extensions` requires at least one extension")
+            end
+        elseif (m = match(r"^--languages=(.*)$", x); m !== nothing)
+            raw = String(m.captures[1]::SubString)
+            empty!(languages)
+            for part in split(raw, ',')
+                s = strip(part)
+                isempty(s) && continue
+                push!(languages, String(s))
+            end
+            if isempty(languages)
+                return panic("`--languages` requires at least one language")
             end
         elseif x == "-o"
             if length(argv) < 1
@@ -647,11 +668,11 @@ function main(argv)
         # handles them uniformly.
         changed, fmt_iob, src_str_for_diff = try
             if is_md
-                format_markdown_input(sourcetext; line_ranges)
+                format_markdown_input(sourcetext; line_ranges, languages)
             else
                 format_julia_input(
                     sourcetext, inputfile_pretty;
-                    quiet, verbose, debug, diff, check, docstrings, line_ranges,
+                    quiet, verbose, debug, diff, check, docstrings, languages, line_ranges,
                 )
             end
         catch err

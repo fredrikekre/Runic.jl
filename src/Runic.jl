@@ -138,6 +138,7 @@ mutable struct Context
     diff::Bool
     filemode::Bool
     docstrings::Bool
+    languages::Vector{String}
     filename::String
     line_ranges::Vector{UnitRange{Int}}
     range_formatting_begin::String
@@ -322,7 +323,7 @@ end
 function Context(
         src_str::String; assert::Bool = true, debug::Bool = false, verbose::Bool = debug,
         diff::Bool = false, check::Bool = false, quiet::Bool = false, filemode::Bool = true,
-        docstrings::Bool = false,
+        docstrings::Bool = false, languages::Vector{String} = DEFAULT_MARKDOWN_LANGUAGES,
         line_ranges::Vector{UnitRange{Int}} = UnitRange{Int}[], filename::String = "-",
     )
     src_str = normalize_line_endings(src_str)
@@ -371,7 +372,7 @@ function Context(
     format_on = true
     return Context(
         src_str, src_tree, src_io, fmt_io, fmt_tree, quiet, verbose, assert, debug, check,
-        diff, filemode, docstrings, filename, line_ranges, range_formatting_begin,
+        diff, filemode, docstrings, languages, filename, line_ranges, range_formatting_begin,
         range_formatting_end, indent_level, call_depth, format_on, prev_sibling, next_sibling,
         lineage_kinds, lineage_macros
     )
@@ -780,8 +781,14 @@ end
 
 Format string `str` and return the formatted string.
 """
-function format_string(str::AbstractString; filemode::Bool = false, docstrings::Bool = false)
-    ctx = Context(String(str); filemode = filemode, docstrings = docstrings, filename = "string")
+function format_string(
+        str::AbstractString; filemode::Bool = false, docstrings::Bool = false,
+        languages::Vector{String} = DEFAULT_MARKDOWN_LANGUAGES,
+    )
+    ctx = Context(
+        String(str); filemode = filemode, docstrings = docstrings, languages = languages,
+        filename = "string",
+    )
     format_tree!(ctx)
     return String(take!(ctx.fmt_io))
 end
@@ -798,7 +805,11 @@ Format file `inputfile` and write the formatted text to `outputfile`.
 Setting the keyword argument `inplace = true` is required if `inputfile` and `outputfile`
 are the same file.
 """
-function format_file(inputfile::AbstractString, outputfile::AbstractString = inputfile; inplace::Bool = false, docstrings::Bool = false)
+function format_file(
+        inputfile::AbstractString, outputfile::AbstractString = inputfile;
+        inplace::Bool = false, docstrings::Bool = false,
+        languages::Vector{String} = DEFAULT_MARKDOWN_LANGUAGES,
+    )
     # Argument handling
     inputfile = normpath(abspath(String(inputfile)))
     outputfile = normpath(abspath(String(outputfile)))
@@ -809,10 +820,10 @@ function format_file(inputfile::AbstractString, outputfile::AbstractString = inp
     # Format it!
     # Dispatch on extension: `.md` and `.qmd` go through the Markdown formatter.
     if is_markdown_file(inputfile)
-        format_markdown_file(str, outputfile; inplace = inplace)
+        format_markdown_file(str, outputfile; inplace = inplace, languages = languages)
         return
     end
-    ctx = Context(str; filename = inputfile, docstrings = docstrings)
+    ctx = Context(str; filename = inputfile, docstrings = docstrings, languages = languages)
     format_tree!(ctx)
     # Write the output but skip if it text didn't change
     formatted = String(take!(ctx.fmt_io))
@@ -827,8 +838,11 @@ end
 # an output path — argument handling (normalization, samefile check) lives in
 # `format_file`. Not part of the public API; call `format_file` instead, which
 # dispatches on extension.
-function format_markdown_file(str::AbstractString, outputfile::AbstractString; inplace::Bool = false)
-    formatted = format_markdown(String(str))
+function format_markdown_file(
+        str::AbstractString, outputfile::AbstractString; inplace::Bool = false,
+        languages::Vector{String} = DEFAULT_MARKDOWN_LANGUAGES,
+    )
+    formatted = format_markdown(String(str); languages = languages)
     if formatted != str || !inplace
         write(outputfile, formatted)
     end
