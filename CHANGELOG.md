@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+ - New command line option `--languages=<lang>[,<lang>...]` for customizing which fenced
+   code block languages are treated as Julia code when formatting Markdown files and
+   docstrings (default: `julia,julia-repl,jldoctest`). This makes it possible to opt in to
+   formatting Documenter code blocks, e.g. with
+   `--languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`. The corresponding
+   `languages` keyword argument is also accepted by `Runic.format_string` and
+   `Runic.format_file`.
+
 ## [v1.11.1] - 2026-09-23
 ### Fixed
  - Formatting a parenthesized macro call followed by a `do` block (e.g.

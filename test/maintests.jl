@@ -841,6 +841,35 @@ function maintests(f::R, real_home::String) where {R}
         @test rc != 0
     end
 
+    # --languages: opt in to formatting Documenter blocks
+    let src = "```@example\nx=1\n```\n\n```julia\ny=2\n```\n"
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md"], src)
+        @test rc == 0
+        @test fd1 == "```@example\nx=1\n```\n\n```julia\ny = 2\n```\n"
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md", "--languages=julia,@example"], src)
+        @test rc == 0
+        @test fd1 == "```@example\nx = 1\n```\n\n```julia\ny = 2\n```\n"
+        # Spaces around the separators are ignored
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md", "--languages= @example , julia "], src)
+        @test rc == 0
+        @test fd1 == "```@example\nx = 1\n```\n\n```julia\ny = 2\n```\n"
+        # The list replaces the default
+        rc, fd1, fd2 = runic(["--stdin-filename=foo.md", "--languages=@example"], src)
+        @test rc == 0
+        @test fd1 == "```@example\nx = 1\n```\n\n```julia\ny=2\n```\n"
+    end
+    # --languages also applies to docstrings
+    let src = "\"\"\"\n```@example\nx=1\n```\n\"\"\"\nf(x) = x\n"
+        rc, fd1, fd2 = runic(["--docstrings", "--languages=@example"], src)
+        @test rc == 0
+        @test fd1 == "\"\"\"\n```@example\nx = 1\n```\n\"\"\"\nf(x) = x\n"
+    end
+    # --languages with invalid (empty) input
+    let (rc, fd1, fd2) = runic(["--languages=", "--stdin-filename=foo.md"], "")
+        @test rc != 0
+        @test occursin("`--languages` requires at least one language", fd2)
+    end
+
     # Safety checks for directory recursion (see #200)
 
     # Temporarily point `homedir()` to `home` and, if given, replace `DEPOT_PATH` with
