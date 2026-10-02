@@ -8,7 +8,8 @@
 
 module GitRunic
 
-import ..Context, ..format_tree!, ..format_markdown, ..is_markdown_file, ..MainError
+import ..Context, ..format_tree!, ..format_markdown, ..is_markdown_file, ..MainError,
+    ..DEFAULT_MARKDOWN_LANGUAGES
 import ..JuliaSyntax
 
 const USAGE = "git runic [OPTIONS] [<commit>] [<commit>|--staged] [--] [<file>...]"
@@ -33,7 +34,9 @@ second <commit> that differ from the first <commit>.
 
 The following git-config settings set the default of the corresponding option:
   runic.commit
+  runic.docstrings
   runic.extensions
+  runic.languages
 """
 
 const TEMP_INDEX_BASENAME = "runic-index"
@@ -337,7 +340,10 @@ end
 # Format a file using Runic in-process and store the result as a git blob.
 # revision is nothing (workdir), "" (index/staged), or a commit SHA.
 # Returns the blob SHA.
-function runic_to_blob(filename, line_ranges::Vector{UnitRange{Int}}; revision = nothing)
+function runic_to_blob(
+        filename, line_ranges::Vector{UnitRange{Int}}; revision = nothing,
+        docstrings::Bool = false, languages::Vector{String} = DEFAULT_MARKDOWN_LANGUAGES,
+    )
     # Get source content from the working directory or a git object
     if revision !== nothing
         show_args = String["git", "cat-file", "blob", "$(revision):$(filename)"]
@@ -355,9 +361,14 @@ function runic_to_blob(filename, line_ranges::Vector{UnitRange{Int}}; revision =
     local fmt_io::IO
     try
         if is_markdown_file(filename)
-            fmt_io = IOBuffer(format_markdown(src_str; line_ranges = line_ranges))
+            fmt_io = IOBuffer(
+                format_markdown(src_str; line_ranges = line_ranges, languages = languages)
+            )
         else
-            ctx = Context(src_str; line_ranges = line_ranges, filename = filename)
+            ctx = Context(
+                src_str; line_ranges = line_ranges, filename = filename,
+                docstrings = docstrings, languages = languages,
+            )
             format_tree!(ctx)
             fmt_io = seekstart(ctx.fmt_io)
         end
@@ -380,12 +391,17 @@ function runic_to_blob(filename, line_ranges::Vector{UnitRange{Int}}; revision =
 end
 
 # Format all changed files in-process and save results to a new git tree.
-function run_runic_and_save_to_tree(changed_lines, revision)
+function run_runic_and_save_to_tree(
+        changed_lines, revision; docstrings::Bool, languages::Vector{String},
+    )
     index_info_lines = String[]
     modes = file_modes(keys(changed_lines), revision)
     for (filename, line_ranges) in changed_lines
         mode = modes[filename]
-        blob_id = runic_to_blob(filename, line_ranges; revision = revision)
+        blob_id = runic_to_blob(
+            filename, line_ranges; revision = revision, docstrings = docstrings,
+            languages = languages,
+        )
         push!(index_info_lines, "$(mode) $(blob_id)\t$(filename)")
     end
     return create_tree(index_info_lines, "--index-info")
@@ -531,14 +547,38 @@ function print_help()
     println(io, "  --commit COMMIT       default commit if none is specified (default: HEAD)")
     println(io, "  --diff                print a diff instead of applying the changes")
     println(io, "  --diffstat            print a diffstat instead of applying the changes")
+    println(io, "  --docstrings          format code blocks in docstrings")
     println(io, "  --extensions LIST     comma-separated list of file extensions (default: jl)")
     println(io, "  -f, --force           allow changes to unstaged files")
+    println(io, "  --languages LIST      comma-separated list of code block languages treated")
+    println(io, "                        as Julia code in Markdown files and docstrings")
+    println(io, "                        (default: $(join(DEFAULT_MARKDOWN_LANGUAGES, ",")))")
     println(io, "  -p, --patch           select hunks interactively")
     println(io, "  -q, --quiet           print less information")
     println(io, "  --staged, --cached    format lines in the stage instead of the working dir")
     println(io, "  -v, --verbose         print extra information")
     println(io, "  --diff-from-common-commit")
     return println(io, "                        diff from last common commit (requires two commits)")
+end
+
+# Parse a git-config style boolean (see `git help config`, "boolean").
+function parse_config_bool(key::String, value::String)
+    v = lowercase(strip(value))
+    v in ("true", "yes", "on", "1") && return true
+    v in ("false", "no", "off", "0", "") && return false
+    return die("invalid boolean value for `$key`: $value")
+end
+
+# Parse a comma-separated list of languages, mirroring `--languages` in `Runic.main`.
+function parse_languages(value::AbstractString)
+    languages = String[]
+    for part in split(value, ',')
+        s = strip(part)
+        isempty(s) && continue
+        push!(languages, String(s))
+    end
+    isempty(languages) && die("`--languages` requires at least one language")
+    return languages
 end
 
 function main(argv)
@@ -567,6 +607,8 @@ function _main(argv)
     # Defaults, overridden by git config or command-line flags
     default_commit = get(config, "runic.commit", "HEAD")
     extensions = get(config, "runic.extensions", "jl")
+    docstrings = parse_config_bool("runic.docstrings", get(config, "runic.docstrings", "false"))
+    languages = get(config, "runic.languages", join(DEFAULT_MARKDOWN_LANGUAGES, ","))
 
     diff_mode = false
     diffstat_mode = false
@@ -609,6 +651,13 @@ function _main(argv)
         elseif arg == "--extensions"
             i += 1; i > length(argv) && die("expected argument after --extensions")
             extensions = argv[i]
+        elseif arg == "--docstrings"
+            docstrings = true
+        elseif (m = match(r"^--languages=(.*)$", arg); m !== nothing)
+            languages = String(m.captures[1]::SubString)
+        elseif arg == "--languages"
+            i += 1; i > length(argv) && die("expected argument after --languages")
+            languages = argv[i]
         elseif startswith(arg, '-')
             die("unknown option: $arg")
         else
@@ -616,6 +665,8 @@ function _main(argv)
         end
         i += 1
     end
+
+    language_list = parse_languages(languages)
 
     commits, files = interpret_args(positional, dash_dash, default_commit)
 
@@ -677,7 +728,9 @@ function _main(argv)
         revision = nothing
     end
 
-    new_tree = run_runic_and_save_to_tree(changed_lines, revision)
+    new_tree = run_runic_and_save_to_tree(
+        changed_lines, revision; docstrings = docstrings, languages = language_list,
+    )
 
     if verbose >= 1
         println("old tree: $old_tree")
