@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v1.12.0] - 2026-10-02
 ### Added
  - New command line option `--languages=<lang>[,<lang>...]` for customizing which fenced
    code block languages are treated as Julia code when formatting Markdown files and
@@ -292,8 +292,9 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.8.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.8.0
 [v1.9.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.9.0
 [v1.10.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.10.0
-[v1.11.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.1
 [v1.11.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.0
+[v1.11.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.1
+[v1.12.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
