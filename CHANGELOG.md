@@ -51,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Extra whitespace around the `for` and `if` keywords in generators and comprehensions is
    now normalized to a single space, just like for `for` loops, e.g. `[x  for  x in X  if  y]`
    is formatted as `[x for x in X if y]` ([#240]).
+ - Documenter blocks with code (```` ```@example ````,
+   ```` ```@repl ````, ```` ```@setup ````, and ```` ```@eval ````) are now formatted by
+   default in Markdown files and docstrings, in addition to the ```` ```julia ````,
+   ```` ```julia-repl ````, ```` ```jldoctest ````, and Quarto ```` ```{julia} ```` fences.
+   Trailing semicolons (used to suppress output) and `# hide` comments are preserved, and
+   blocks that do not parse on their own (e.g. `continued = true` blocks) are left as is.
+   This will result in diffs in Documenter sources that were previously not formatted. Use
+   `--languages=julia,julia-repl,jldoctest` to restore the previous behavior ([#235]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -408,6 +416,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#228]: https://github.com/fredrikekre/Runic.jl/issues/228
 [#229]: https://github.com/fredrikekre/Runic.jl/issues/229
 [#230]: https://github.com/fredrikekre/Runic.jl/issues/230
+[#235]: https://github.com/fredrikekre/Runic.jl/issues/235
 [#236]: https://github.com/fredrikekre/Runic.jl/issues/236
 [#237]: https://github.com/fredrikekre/Runic.jl/issues/237
 [#239]: https://github.com/fredrikekre/Runic.jl/issues/239
