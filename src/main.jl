@@ -281,9 +281,9 @@ function print_help()
                --languages=<lang>[,<lang>...]
                    Comma-separated list of fenced code block languages that are treated
                    as Julia code when formatting Markdown files and docstrings. Defaults
-                   to `julia,julia-repl,jldoctest`. Use e.g.
-                   `--languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`
-                   to also format Documenter code blocks.
+                   to `julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`, which
+                   includes the Documenter blocks that contain Julia code. Use e.g.
+                   `--languages=julia,julia-repl,jldoctest` to skip Documenter blocks.
 
                --lines=<start line>:<end line>
                    Limit formatting to the line range <start line> to <end line>. Multiple

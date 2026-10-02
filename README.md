@@ -118,7 +118,11 @@ Format Julia code blocks inside Markdown files. Dispatch is by file extension â€
 file whose name ends in `.md` or `.qmd` (Quarto) is routed through the Markdown
 formatter, which only rewrites the embedded Julia code blocks and leaves the prose
 alone. In addition to the fences listed above, Quarto executable code cells
-(```` ```{julia} ````) are recognized as Julia code blocks:
+(```` ```{julia} ````) and the [Documenter](https://github.com/JuliaDocs/Documenter.jl)
+blocks that contain Julia code (```` ```@example ````, ```` ```@repl ````,
+```` ```@setup ````, and ```` ```@eval ````; block names and options such as
+```` ```@example name; continued = true ```` are ignored) are recognized as Julia code
+blocks:
 ```sh
 runic --inplace README.md                # explicit path â€” extension handles it
 runic --extensions=jl,md,qmd --inplace . # directory walk picks up all three kinds
@@ -127,12 +131,10 @@ cat foo.md | runic --stdin-filename=foo.md   # stdin dispatch via virtual filena
 ```
 
 The set of fence languages that are treated as Julia code can be customized with
-`--languages`. For example, to also format
-[Documenter](https://github.com/JuliaDocs/Documenter.jl) code blocks
-(```` ```@example ````, ```` ```@repl ````, ```` ```@setup ````, and ```` ```@eval ````;
-block names and options such as ```` ```@example name; continued = true ```` are ignored):
+`--languages`. For example, to skip the Documenter blocks and only format the plain
+```` ```julia ```` fences:
 ```sh
-runic --languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval --inplace docs/src/
+runic --languages=julia --inplace docs/src/
 ```
 
 Output of `runic --help` for a complete list of options:
@@ -186,9 +188,9 @@ OPTIONS
        --languages=<lang>[,<lang>...]
            Comma-separated list of fenced code block languages that are treated
            as Julia code when formatting Markdown files and docstrings. Defaults
-           to `julia,julia-repl,jldoctest`. Use e.g.
-           `--languages=julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`
-           to also format Documenter code blocks.
+           to `julia,julia-repl,jldoctest,@example,@repl,@setup,@eval`, which
+           includes the Documenter blocks that contain Julia code. Use e.g.
+           `--languages=julia,julia-repl,jldoctest` to skip Documenter blocks.
 
        --lines=<start line>:<end line>
            Limit formatting to the line range <start line> to <end line>. Multiple
