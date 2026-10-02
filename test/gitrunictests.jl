@@ -7,19 +7,31 @@ using Test
 
 const GitRunic = Runic.GitRunic
 
+# Run `f` with a fresh temporary git repository as the working directory. The global and
+# system git configuration files are replaced with an empty file so that the tests do not
+# depend on the configuration of the host machine (e.g. `commit.gpgsign`, `init.templateDir`
+# or `core.autocrlf`).
 function with_repository(f; commit::Bool = true)
     return mktempdir() do dir
-        cd(dir) do
-            GitRunic.git(["init", "-q"])
-            GitRunic.git(["config", "user.email", "runic@example.com"])
-            GitRunic.git(["config", "user.name", "Runic Tests"])
-            GitRunic.git(["config", "core.autocrlf", "false"])
-            if commit
-                write("base.jl", "base = 1\n")
-                GitRunic.git(["add", "base.jl"])
-                GitRunic.git(["commit", "-qm", "initial"])
+        config = joinpath(dir, "gitconfig")
+        touch(config)
+        withenv(
+            "GIT_CONFIG_GLOBAL" => config, "GIT_CONFIG_SYSTEM" => config,
+            "GIT_CONFIG_NOSYSTEM" => "1",
+        ) do
+            repo = mkdir(joinpath(dir, "repo"))
+            cd(repo) do
+                GitRunic.git(["init", "-q"])
+                GitRunic.git(["config", "user.email", "runic@example.com"])
+                GitRunic.git(["config", "user.name", "Runic Tests"])
+                GitRunic.git(["config", "core.autocrlf", "false"])
+                if commit
+                    write("base.jl", "base = 1\n")
+                    GitRunic.git(["add", "base.jl"])
+                    GitRunic.git(["commit", "-qm", "initial"])
+                end
+                return f()
             end
-            return f()
         end
     end
 end
