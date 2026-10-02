@@ -2898,7 +2898,13 @@ end
 const re_fence_open = r"^(\h*)(`{3,})\h*(\{[A-Za-z0-9_-]*\}|@?[A-Za-z0-9_-]*)"
 
 # Fence languages (info string first word) that are treated as Julia code by default.
-const DEFAULT_MARKDOWN_LANGUAGES = ["julia", "julia-repl", "jldoctest"]
+# Documenter blocks are included for the ones that contain code which is evaluated when
+# building the documentation. The configuration blocks (e.g. `@meta`, `@docs`, `@autodocs`
+# and `@contents`) are also parsed as Julia code by Documenter but are left out since they
+# are mostly lists of names and options, and `@raw` blocks contain e.g. HTML.
+const DEFAULT_MARKDOWN_LANGUAGES = [
+    "julia", "julia-repl", "jldoctest", "@example", "@repl", "@setup", "@eval",
+]
 
 is_julia_lang(lang::AbstractString, languages::Vector{String}) = lang in languages
 
