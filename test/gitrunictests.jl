@@ -146,8 +146,13 @@ end
         with_repository() do
             write("doc.md", src)
             GitRunic.git(["add", "doc.md"])
-            # Only the default languages are formatted
+            # Documenter blocks are formatted by default
             @test GitRunic._main(["--staged", "--quiet", "--extensions=md"]) == 1
+            @test GitRunic.git(["show", ":doc.md"]) == "```@example\nx = 1\n```\n\n```julia\ny = 2\n```"
+            # ... and can be opted out of
+            write("doc.md", src)
+            GitRunic.git(["add", "doc.md"])
+            @test GitRunic._main(["--staged", "--quiet", "--extensions=md", "--languages=julia"]) == 1
             @test GitRunic.git(["show", ":doc.md"]) == "```@example\nx=1\n```\n\n```julia\ny = 2\n```"
             write("doc.md", src)
             GitRunic.git(["add", "doc.md"])

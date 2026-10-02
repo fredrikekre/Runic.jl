@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+ - Documenter code blocks that contain Julia code (```` ```@example ````,
+   ```` ```@repl ````, ```` ```@setup ````, and ```` ```@eval ````) are now formatted by
+   default in Markdown files and docstrings, in addition to the ```` ```julia ````,
+   ```` ```julia-repl ````, ```` ```jldoctest ````, and Quarto ```` ```{julia} ```` fences.
+   Trailing semicolons (used to suppress output) and `# hide` comments are preserved, and
+   blocks that do not parse on their own (e.g. `continued = true` blocks) are left as is.
+   This will result in diffs in Documenter sources that were previously not formatted. Use
+   `--languages=julia,julia-repl,jldoctest` to restore the previous behavior.
+
 ## [v1.12.0] - 2026-10-02
 ### Added
  - New command line option `--languages=<lang>[,<lang>...]` for customizing which fenced
