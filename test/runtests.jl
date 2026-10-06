@@ -527,6 +527,37 @@ end
     @test format_string("[ # a\n]") == "[ # a\n]"
     # https://github.com/fredrikekre/Runic.jl/issues/151
     @test format_string("(\n    a, b for b in B\n)") == "(\n    a, b for b in B\n)"
+    # Iteration specifications in for loops and generators
+    # https://github.com/fredrikekre/Runic.jl/issues/236
+    for sp in ("", " ", "  "), op in ("in", "=", "∈")
+        csp = sp == "" ? " " : sp # at least one space before comment (but more allowed)
+        @test format_string("for i $(op) I$(sp),$(sp)j $(op) J\nend") ==
+            "for i in I, j in J\nend"
+        @test format_string("for i $(op) I$(sp),$(sp)j $(op) J$(sp),$(sp)k $(op) K\nend") ==
+            "for i in I, j in J, k in K\nend"
+        @test format_string("for (i, j) $(op) I$(sp),$(sp)k $(op) K\nend") ==
+            "for (i, j) in I, k in K\nend"
+        for (l, r) in (("[", "]"), ("(", ")"), ("T[", "]"))
+            @test format_string("$(l)i for i $(op) I$(sp),$(sp)j $(op) J$(r)") ==
+                "$(l)i for i in I, j in J$(r)"
+            @test format_string("$(l)i for i $(op) I$(sp),$(sp)j $(op) J$(sp),$(sp)k $(op) K$(r)") ==
+                "$(l)i for i in I, j in J, k in K$(r)"
+            @test format_string("$(l)i for i $(op) I for j $(op) J$(sp),$(sp)k $(op) K$(r)") ==
+                "$(l)i for i in I for j in J, k in K$(r)"
+            @test format_string("$(l)i for i $(op) I$(sp),$(sp)j $(op) J if i < j$(r)") ==
+                "$(l)i for i in I, j in J if i < j$(r)"
+        end
+        # multiline
+        @test format_string("for i $(op) I$(sp),\n    j $(op) J\n    x\nend") ==
+            "for i in I,\n        j in J\n    x\nend"
+        @test format_string("[\n    i for i $(op) I$(sp),\n    j $(op) J\n]") ==
+            "[\n    i for i in I,\n        j in J\n]"
+        # comments
+        @test format_string("for i $(op) I$(sp),$(sp)# c\n    j $(op) J\n    x\nend") ==
+            "for i in I,$(csp)# c\n        j in J\n    x\nend"
+        @test format_string("for i $(op) I$(sp),$(sp)j $(op) J # c\nend") ==
+            "for i in I, j in J # c\nend"
+    end
 end
 
 @testset "whitespace in let" begin

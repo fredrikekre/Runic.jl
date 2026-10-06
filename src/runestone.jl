@@ -332,6 +332,11 @@ function trailing_comma_policy(
         # Exception: `((a, b),) -> body` — when the single item is itself a tuple the outer
         # trailing comma must be kept, otherwise `((a, b))` is parsed as `(a, b)` (2 args).
         require_trailing_comma = false
+    elseif kind(node) === K"iteration"
+        # Trailing commas are not allowed in iteration specifications
+        # (`for i in I, end` is a parse error)
+        require_trailing_comma = false
+        allow_trailing_comma = false
     elseif n_items > 0 && kind(kids[last_item_idx::Int]) === K"generator"
         # https://github.com/fredrikekre/Runic.jl/issues/151
         require_trailing_comma = false
@@ -423,7 +428,7 @@ end
 
 function spaces_in_listlike(ctx::Context, node::Node)
     if !(
-            kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens" ||
+            kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens iteration" ||
                 (kind(node) in KSet"call dotcall" && !is_any_op_call(node)) ||
                 (kind(node) === K"macrocall" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)) ||
                 is_paren_block(node)
@@ -474,6 +479,12 @@ function spaces_in_listlike(ctx::Context, node::Node)
         opening_leaf_idx = findfirst(x -> kind(x) === K"[", kids)::Int
         closing_leaf_idx = findnext(x -> kind(x) === K"]", kids, opening_leaf_idx + 1)::Int
         closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
+    elseif kind(node) === K"iteration"
+        # Iteration specifications in for loops and generators (`for i in I, j in J`) have
+        # no opening/closing delimiters so the first and last non-whitespace kids are used
+        # as the boundaries instead (same as for implicit tuples above).
+        opening_leaf_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int - 1
+        closing_leaf_idx = findlast(!JuliaSyntax.is_whitespace, kids)::Int + 1
     else
         @assert kind(node) === K"parameters"
         opening_leaf_idx = findfirst(x -> kind(x) === K";", kids)::Int
