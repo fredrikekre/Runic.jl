@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.13.0] - 2026-10-07
+### Fixed
+ - Commas in iteration specifications of `for` loops and generators (e.g.
+   `for i in I, j in J` and `[i for i in I, j in J]`) now follow the same spacing rule as
+   other listlike expressions: no space before the comma and a single space after
+   ([#236], [#237]).
+
 ## [v1.12.0] - 2026-10-02
 ### Added
  - New command line option `--languages=<lang>[,<lang>...]` for customizing which fenced
@@ -294,7 +301,8 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [v1.10.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.10.0
 [v1.11.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.0
 [v1.11.1]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.1
-[v1.12.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.11.0
+[v1.12.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.12.0
+[v1.13.0]: https://github.com/fredrikekre/Runic.jl/releases/tag/v1.13.0
 [#97]: https://github.com/fredrikekre/Runic.jl/issues/97
 [#108]: https://github.com/fredrikekre/Runic.jl/issues/108
 [#109]: https://github.com/fredrikekre/Runic.jl/issues/109
@@ -351,3 +359,5 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#227]: https://github.com/fredrikekre/Runic.jl/issues/227
 [#229]: https://github.com/fredrikekre/Runic.jl/issues/229
 [#230]: https://github.com/fredrikekre/Runic.jl/issues/230
+[#236]: https://github.com/fredrikekre/Runic.jl/issues/236
+[#237]: https://github.com/fredrikekre/Runic.jl/issues/237
