@@ -1235,11 +1235,12 @@ function no_spaces_around_colon_etc(ctx::Context, node::Node)
     if !(
             (is_infix_op_call(node) && infix_op_call_op(ctx, node) in KSet": ^") ||
                 (kind(node) === K"::" && !is_leaf(node)) ||
-                (kind(node) in KSet"<: >:" && meta_nargs(node) == 2)
+                (kind(node) in KSet"<: >:" && meta_nargs(node) == 2) ||
+                (kind(node) === K"..." && !is_leaf(node))
         )
         return nothing
     end
-    @assert kind(node) in KSet"call :: <: >:"
+    @assert kind(node) in KSet"call :: <: >: ..."
     return no_spaces_around_x(ctx, node)
 end
 
