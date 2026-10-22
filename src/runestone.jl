@@ -727,17 +727,18 @@ function spaces_in_listlike(ctx::Context, node::Node)
 end
 
 # This pass handles spaces around infix operator calls, comparison chains, and
-# <: and >: operators.
+# <:, >:, and --> operators.
 function spaces_around_operators(ctx::Context, node::Node)
     if !(
             (is_infix_op_call(node) && !(infix_op_call_op(ctx, node) in KSet": ^")) ||
                 (kind(node) in KSet"<: >:" && meta_nargs(node) == 3) ||
                 (kind(node) === K"comparison" && !JuliaSyntax.is_trivia(node)) ||
-                kind(node) === K"in" && !is_leaf(node)
+                kind(node) === K"in" && !is_leaf(node) ||
+                (kind(node) === K"-->" && !is_leaf(node))
         )
         return nothing
     end
-    @assert kind(node) in KSet"call dotcall comparison <: >: in"
+    @assert kind(node) in KSet"call dotcall comparison <: >: in -->"
     n_leaves_per_x = kind(node) === K"dotcall" ? 2 : 1
     return spaces_around_x(ctx, node, n_leaves_per_x)
 end
@@ -2607,6 +2608,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_braces(ctx, node)
     elseif kind(node) in KSet"|| &&"
         return indent_short_circuit(ctx, node)
+    elseif kind(node) === K"-->"
+        return indent_op_call(ctx, node)
     elseif kind(node) in KSet"using import export public" || is_global_local_list(node)
         return indent_using_import_export_public(ctx, node)
     elseif kind(node) in KSet"local global"

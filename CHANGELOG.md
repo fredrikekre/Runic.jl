@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Leading and trailing spaces inside the brackets of comprehensions are now removed, e.g.
    `[ x for x in X ]` is formatted as `[x for x in X]`, consistent with other listlike
    expressions.
+ - The `-->` operator is now formatted like other infix operators: spaces around it are
+   normalized (e.g. `a-->b` is formatted as `a --> b`) and continuation lines are indented.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
