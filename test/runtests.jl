@@ -301,6 +301,10 @@ end
             "$(sp)(1 + 2):(1 + 3):(1 + 4)$(sp)"
         # a^b
         @test format_string("$(sp)a$(sp)^$(sp)b$(sp)") == "$(sp)a^b$(sp)"
+        # Splat
+        @test format_string("$(sp)f(x$(sp)...)$(sp)") == "$(sp)f(x...)$(sp)"
+        @test format_string("$(sp)f(a, b$(sp)...; c$(sp)...)$(sp)") == "$(sp)f(a, b...; c...)$(sp)"
+        @test format_string("$(sp)[x$(sp)...]$(sp)") == "$(sp)[x...]$(sp)"
         # Edgecase when formatting whitespace in the next leaf, when the next leaf is a
         # grand child or even younger. Note that this test depends a bit on where
         # JuliaSyntax.jl decides to place the K"Whitespace" node.
@@ -447,9 +451,9 @@ end
     end
     # Splatting
     for sp in ("", " ", "  ")
-        @test format_string("($(sp)a$(sp)...,$(sp))") == "(a$(sp)...,)"
-        @test format_string("f($(sp)a$(sp)...,$(sp))") == "f(a$(sp)...)"
-        @test format_string("f($(sp)a$(sp)...;$(sp)b$(sp)...$(sp))") == "f(a$(sp)...; b$(sp)...)"
+        @test format_string("($(sp)a$(sp)...,$(sp))") == "(a...,)"
+        @test format_string("f($(sp)a$(sp)...,$(sp))") == "f(a...)"
+        @test format_string("f($(sp)a$(sp)...;$(sp)b$(sp)...$(sp))") == "f(a...; b...)"
     end
     # Named tuples
     for sp in ("", " ", "  "), a in ("a", "a = 1")

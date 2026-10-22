@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    ([#247]).
  - Extra whitespace after the `macro` keyword is now normalized to a single space (just
    like for `function`), e.g. `macro  m()` is formatted as `macro m()` ([#248]).
+ - Spaces before splat `...` are now removed, e.g. `f(x ...)` is formatted as `f(x...)`
+   ([#249]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -390,3 +392,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#246]: https://github.com/fredrikekre/Runic.jl/issues/246
 [#247]: https://github.com/fredrikekre/Runic.jl/issues/247
 [#248]: https://github.com/fredrikekre/Runic.jl/issues/248
+[#249]: https://github.com/fredrikekre/Runic.jl/issues/249
