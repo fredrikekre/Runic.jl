@@ -697,7 +697,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something spaces_around_anonymous_function(ctx, node)
     @return_something spaces_around_ternary(ctx, node)
     @return_something spaces_around_keywords(ctx, node)
-    @return_something spaces_in_oneline_type_definition(ctx, node)
+    @return_something space_before_end(ctx, node)
     @return_something spaces_in_import_using(ctx, node)
     @return_something spaces_in_export_public(ctx, node)
     @return_something spaces_in_let(ctx, node)

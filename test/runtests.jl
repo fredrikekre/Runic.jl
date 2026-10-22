@@ -714,19 +714,49 @@ end
     end
 end
 
-@testset "spaces in one-line type definitions" begin
+@testset "space before end" begin
     for sp in (" ", "  ")
+        # Type definitions
         @test format_string("struct A$(sp)end") == "struct A end"
         @test format_string("struct A{T} <: B$(sp)end") == "struct A{T} <: B end"
         @test format_string("mutable struct A$(sp)end") == "mutable struct A end"
         @test format_string("abstract type A$(sp)end") == "abstract type A end"
         @test format_string("abstract type A <: B$(sp)end") == "abstract type A <: B end"
-        @test format_string("primitive type A$(sp)8$(sp)end") == "primitive type A 8 end"
-        @test format_string("primitive type A <: B$(sp)8$(sp)end") == "primitive type A <: B 8 end"
+        @test format_string("primitive type A 8$(sp)end") == "primitive type A 8 end"
+        @test format_string("primitive type A <: B 8$(sp)end") == "primitive type A <: B 8 end"
+        @test format_string("@eval primitive type A \$(N)$(sp)end") ==
+            "@eval primitive type A \$(N) end"
+        @test format_string("primitive type A N * 8$(sp)end") == "primitive type A N * 8 end"
+        # Other blocks
+        @test format_string("function f()$(sp)end") == "function f() end"
+        @test format_string("function f$(sp)end") == "function f end"
+        @test format_string("macro m()$(sp)end") == "macro m() end"
+        @test format_string("begin$(sp)end") == "begin end"
+        @test format_string("quote$(sp)end") == "quote end"
+        @test format_string("let x = 1$(sp)end") == "let x = 1 end"
+        @test format_string("for x in y$(sp)end") == "for x in y end"
+        @test format_string("while c$(sp)end") == "while c end"
+        @test format_string("if c$(sp)end") == "if c end"
+        @test format_string("if c else$(sp)end") == "if c else end"
+        @test format_string("module M$(sp)end") == "module M end"
+        @test format_string("try catch$(sp)end") == "try catch end"
+        @test format_string("try catch e$(sp)end") == "try catch e end"
+        @test format_string("try finally$(sp)end") == "try finally end"
+        @test format_string("f() do x$(sp)end") == "f() do x end"
+        @test format_string("x -> begin$(sp)end") == "x -> begin end"
+        @test format_string("@m begin$(sp)end") == "@m begin end"
         # Comments
         @test format_string("abstract type A$(sp)# c\nend") == "abstract type A$(sp)# c\nend"
         @test format_string("struct A end$(sp)# c") == "struct A end$(sp)# c"
+        @test format_string("struct A #= c =#$(sp)end") == "struct A #= c =#$(sp)end"
     end
+    # Missing space
+    @test format_string("function f()end") == "function f() end"
+    @test format_string("macro m()end") == "macro m() end"
+    @test format_string("primitive type A 8end") == "primitive type A 8 end"
+    # `end` in indexing is not a keyword
+    @test format_string("a[1 +  end]") == "a[1 + end]"
+    @test format_string("a[2:end]") == "a[2:end]"
 end
 
 @testset "spaces around keywords" begin

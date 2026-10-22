@@ -1321,29 +1321,69 @@ function space_after_for(ctx::Context, node::Node)
     return make_node(node, kids′)
 end
 
-# Single space between the parts of one-line type definitions, e.g. `struct A  end` and
-# `primitive type A  8  end` are formatted as `struct A end` and `primitive type A 8 end`.
-function spaces_in_oneline_type_definition(ctx::Context, node::Node)
-    if !(kind(node) in KSet"struct abstract primitive" && !is_leaf(node))
+# Single space before the `end` keyword when it is on the same line as the code before it,
+# e.g. `struct A  end`, `begin  end` and `function f()end` are formatted as `struct A end`,
+# `begin end` and `function f() end`. Whitespace after a comment, and `end` directly after
+# `;` (see `spaces_around_semicolons`), are left alone.
+function space_before_end(ctx::Context, node::Node)
+    is_leaf(node) && return nothing
+    kids = verified_kids(node)
+    if !(length(kids) >= 2 && kind(kids[end]) === K"end" && is_leaf(kids[end]))
         return nothing
     end
-    kids = verified_kids(node)
-    b = NodeBuilder(ctx, node)
-    for (i, kid) in pairs(kids)
-        if kind(kid) === K"Whitespace" && span(kid) > 1 &&
-                kind(get(kids, i + 1, kid)) !== K"Comment" && kind(get(kids, i - 1, kid)) !== K"Comment"
-            # Whitespace not adjacent to a comment
-            emit!(b, ws_node(1), " ", span(kid))
-        elseif kind(kid) === K"block" && !is_leaf(kid) && length(verified_kids(kid)) == 1 &&
-                kind(verified_kids(kid)[1]) === K"Whitespace" && span(kid) > 1
-            # Empty struct body
-            replace_bytes!(ctx, " ", span(kid))
-            emit!(b, make_node(kid, [ws_node(1)]))
-        else
-            accept!(b, kid)
-        end
+    # The whitespace before `end` is either a kid of this node (e.g. `abstract type A  end`
+    # and `begin  end`) or the last leaf of the kid before `end` (e.g. the empty body block
+    # in `struct A  end` or the `catch` block in `try catch  end`).
+    leaves = Node[]
+    for i in reverse(1:(length(kids) - 1))
+        last_leaves!(leaves, kids[i], 2)
+        length(leaves) == 2 && break
     end
+    length(leaves) == 2 || return nothing
+    if kind(leaves[1]) === K"Whitespace"
+        ws, before = leaves[1], leaves[2]
+        span(ws) == 1 && return nothing
+    else
+        ws, before = nothing, leaves[1]
+    end
+    kind(before) in KSet"Comment NewlineWs ;" && return nothing
+    prev = kids[end - 1]
+    ws === nothing || last_leaf(prev) === ws || return nothing
+    b = NodeBuilder(ctx, node)
+    for i in 1:(length(kids) - 2)
+        accept!(b, kids[i])
+    end
+    if ws === nothing && kind(prev) === K"block" && last_leaf(prev) === nothing
+        # Empty body block without whitespace, e.g. `function f()end`: insert the space in
+        # the block to match the shape of `function f() end`
+        emit!(b, make_node(prev, [ws_node(1)]), " ", 0)
+    elseif ws === nothing
+        # No whitespace before `end`, e.g. `primitive type A 8end`
+        accept!(b, prev)
+        emit!(b, ws_node(1), " ", 0)
+    elseif is_leaf(prev)
+        emit!(b, ws_node(1), " ", span(prev))
+    else
+        bytes = read_bytes(ctx, prev)
+        resize!(bytes, span(prev) - span(ws))
+        push!(bytes, UInt8(' '))
+        emit!(b, replace_last_leaf(prev, ws_node(1)), bytes, span(prev))
+    end
+    accept!(b, kids[end])
     return finish!(b, node)
+end
+
+# Collect the last `n` leaves of `node`, in reverse order, into `leaves`
+function last_leaves!(leaves::Vector{Node}, node::Node, n::Int)
+    if is_leaf(node)
+        push!(leaves, node)
+        return leaves
+    end
+    for kid in reverse(verified_kids(node))
+        length(leaves) == n && break
+        last_leaves!(leaves, kid, n)
+    end
+    return leaves
 end
 
 # Single space around keywords:
