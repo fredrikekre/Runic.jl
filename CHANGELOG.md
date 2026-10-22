@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - The `-->` operator is now formatted like other infix operators: spaces around it are
    normalized (e.g. `a-->b` is formatted as `a --> b`) and continuation lines are indented
    ([#247]).
+ - Extra whitespace after the `macro` keyword is now normalized to a single space (just
+   like for `function`), e.g. `macro  m()` is formatted as `macro m()` ([#248]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -387,3 +389,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#245]: https://github.com/fredrikekre/Runic.jl/issues/245
 [#246]: https://github.com/fredrikekre/Runic.jl/issues/246
 [#247]: https://github.com/fredrikekre/Runic.jl/issues/247
+[#248]: https://github.com/fredrikekre/Runic.jl/issues/248
