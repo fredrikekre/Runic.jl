@@ -918,6 +918,9 @@ Consistently use single space around keywords. Examples:
 
 -struct Baz  end
 +struct Baz end
+
+-[x  for  x in X  if  y]
++[x for x in X if y]
 ```
 
 ### Multiline listlike expressions

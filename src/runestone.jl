@@ -1402,6 +1402,49 @@ function spaces_in_oneline_type_definition(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
+# Single space around `for` and `if` in generators and comprehensions. Newlines around the
+# keywords are left alone.
+function spaces_around_generator_keywords(ctx::Context, node::Node)
+    @assert kind(node) in KSet"generator filter" && !is_leaf(node)
+    kids = verified_kids(node)
+    b = NodeBuilder(ctx, node)
+    ws = ws_node(1)
+    for (i, kid) in pairs(kids)
+        prev_is_keyword = i > 1 && kind(kids[i - 1]) in KSet"for if" && is_leaf(kids[i - 1])
+        next_is_keyword = i < length(kids) && kind(kids[i + 1]) in KSet"for if" &&
+            is_leaf(kids[i + 1])
+        if (prev_is_keyword || next_is_keyword) && kind(kid) === K"Whitespace"
+            # Whitespace leaf before or after the keyword
+            if span(kid) == 1
+                accept!(b, kid)
+            else
+                emit!(b, ws, " ", span(kid))
+            end
+        elseif prev_is_keyword && !is_leaf(kid)
+            # In JuliaSyntax v1 the whitespace after the keyword is typically the first leaf
+            # of the next node (e.g. the first K"in" node of the K"iteration" node)
+            fl = first_leaf(kid)
+            if kind(fl) === K"Whitespace" && span(fl) != 1
+                replace_bytes!(ctx, " ", span(fl))
+                emit!(b, replace_first_leaf(kid, ws))
+            elseif !JuliaSyntax.is_whitespace(fl)
+                # e.g. `if(x)`: insert a space
+                emit!(b, ws, " ", 0)
+                accept!(b, kid)
+            else
+                accept!(b, kid)
+            end
+        elseif prev_is_keyword && !JuliaSyntax.is_whitespace(kid)
+            # Leaf directly after the keyword without whitespace in between
+            emit!(b, ws, " ", 0)
+            accept!(b, kid)
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 # Single space around keywords:
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
@@ -1411,6 +1454,9 @@ function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     if kind(node) === K"for"
         return space_after_for(ctx, node)
+    end
+    if kind(node) in KSet"generator filter"
+        return spaces_around_generator_keywords(ctx, node)
     end
     if kind(node) in KSet"call dotcall macrocall"
         return space_before_do(ctx, node)
