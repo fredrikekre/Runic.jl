@@ -1441,6 +1441,46 @@ function last_leaves!(leaves::Vector{Node}, node::Node, n::Int)
     return leaves
 end
 
+# Single space before the number of bits in `primitive type A  8 end`. The bits can be any
+# expression, e.g. `$(N)` in `@eval primitive type A $(N) end`. The space after it is
+# handled by `space_before_end`.
+function space_before_primitive_bits(ctx::Context, node::Node)
+    (kind(node) === K"primitive" && !is_leaf(node)) || return nothing
+    kids = verified_kids(node)
+    # The bits is the last kid before `end` that isn't whitespace or a comment
+    idx = findlast(x -> !(JuliaSyntax.is_whitespace(x) || kind(x) in KSet"Comment end"), kids)
+    (idx === nothing || idx < 3) && return nothing
+    bits = kids[idx]
+    b = NodeBuilder(ctx, node)
+    if kind(kids[idx - 1]) === K"Whitespace"
+        # The whitespace is a kid of this node, e.g. `primitive type A  8 end`
+        ws = kids[idx - 1]
+        (span(ws) > 1 && kind(kids[idx - 2]) !== K"Comment") || return nothing
+        for i in 1:(idx - 2)
+            accept!(b, kids[i])
+        end
+        emit!(b, ws_node(1), " ", span(ws))
+        accept!(b, bits)
+    elseif !is_leaf(bits) && kind(first_leaf(bits)) === K"Whitespace"
+        # The whitespace is the first leaf of the bits, e.g. the call in
+        # `primitive type A  N * 8 end`
+        ws = first_leaf(bits)
+        (span(ws) > 1 && kind(last_leaf(kids[idx - 1])) !== K"Comment") || return nothing
+        for i in 1:(idx - 1)
+            accept!(b, kids[i])
+        end
+        bytes = read_bytes(ctx, bits)
+        bytes′ = [UInt8(' '); @view(bytes[(span(ws) + 1):end])]
+        emit!(b, replace_first_leaf(bits, ws_node(1)), bytes′, span(bits))
+    else
+        return nothing
+    end
+    for i in (idx + 1):length(kids)
+        accept!(b, kids[i])
+    end
+    return finish!(b, node)
+end
+
 # Single space around `for` and `if` in generators and comprehensions. Newlines around the
 # keywords are left alone.
 function spaces_around_generator_keywords(ctx::Context, node::Node)
@@ -2662,6 +2702,44 @@ function indent_parens(ctx::Context, node::Node)
 end
 
 # TODO: This is not needed? NamedTuples?
+# Primitive type definitions have no body block, so the keywords are tagged directly to
+# indent the number of bits if it is on a separate line, e.g. `primitive type A\n8\nend`.
+# If the definition spans multiple lines the `end` keyword is put on a separate line.
+function indent_primitive(ctx::Context, node::Node)
+    @assert kind(node) === K"primitive"
+    kids = verified_kids(node)
+    primitive_idx = findfirst(x -> kind(x) === K"primitive", kids)::Int
+    @assert is_leaf(kids[primitive_idx])
+    end_idx = findlast(x -> kind(x) === K"end", kids)::Int
+    @assert is_leaf(kids[end_idx]) && end_idx == lastindex(kids)
+    is_multiline = any(
+        kid -> any_leaf(x -> kind(x) === K"NewlineWs", kid), @view(kids[1:(end_idx - 1)])
+    )
+    if is_multiline && kind(kids[end_idx - 1]) !== K"NewlineWs"
+        # Missing newline before `end`, e.g. `primitive type A\n8 end`. Replace the
+        # whitespace before `end`, if any, with a newline.
+        b = NodeBuilder(ctx, node)
+        for i in 1:(end_idx - 2)
+            accept!(b, kids[i])
+        end
+        if kind(kids[end_idx - 1]) === K"Whitespace"
+            emit!(b, nlws_node(1), "\n", span(kids[end_idx - 1]))
+        else
+            accept!(b, kids[end_idx - 1])
+            emit!(b, nlws_node(1), "\n", 0)
+        end
+        accept!(b, kids[end_idx])
+        return finish!(b, node)
+    end
+    any_kid_changed = tag_kid!(kids, primitive_idx, TAG_INDENT)
+    # Tag the newline just before the end keyword as pre-dedent
+    if kind(kids[end_idx - 1]) === K"NewlineWs"
+        any_kid_changed |= tag_kid!(kids, end_idx - 1, TAG_PRE_DEDENT)
+    end
+    any_kid_changed |= tag_kid!(kids, end_idx, TAG_DEDENT)
+    return any_kid_changed ? make_node(node, kids) : nothing
+end
+
 function indent_struct(ctx::Context, node::Node)
     @assert kind(node) === K"struct"
     kids = verified_kids(node)
@@ -2980,6 +3058,8 @@ function insert_delete_mark_newlines(ctx::Context, node::Node)
         return indent_tuple(ctx, node)
     elseif kind(node) === K"struct"
         return indent_struct(ctx, node)
+    elseif kind(node) === K"primitive"
+        return indent_primitive(ctx, node)
     elseif kind(node) === K"parens"
         return indent_parens(ctx, node)
     elseif kind(node) in KSet"curly braces bracescat"
