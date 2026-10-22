@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Leading and trailing spaces inside the brackets of comprehensions are now removed, e.g.
    `[ x for x in X ]` is formatted as `[x for x in X]`, consistent with other listlike
    expressions ([#246]).
+ - The `-->` operator is now formatted like other infix operators: spaces around it are
+   normalized (e.g. `a-->b` is formatted as `a --> b`) and continuation lines are indented
+   ([#247]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -383,3 +386,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#244]: https://github.com/fredrikekre/Runic.jl/issues/244
 [#245]: https://github.com/fredrikekre/Runic.jl/issues/245
 [#246]: https://github.com/fredrikekre/Runic.jl/issues/246
+[#247]: https://github.com/fredrikekre/Runic.jl/issues/247
