@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    expressions.
  - The `-->` operator is now formatted like other infix operators: spaces around it are
    normalized (e.g. `a-->b` is formatted as `a --> b`) and continuation lines are indented.
+ - Extra whitespace after the `macro` keyword is now normalized to a single space (just
+   like for `function`), e.g. `macro  m()` is formatted as `macro m()`.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
