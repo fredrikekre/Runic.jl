@@ -825,8 +825,9 @@ end
     @test format_string("A where{T}") == "A where {T}"
     @test format_string("A{T}where{T}") == "A{T} where {T}"
     # Some keywords can have a parenthesized expression directly after without the space...
-    @test format_string("if(a)\nelseif(b)\nend") == "if (a)\nelseif (b)\nend"
-    @test format_string("while(a)\nend") == "while (a)\nend"
+    # (the parentheses around just an identifier are removed, see `remove_redundant_parens`)
+    @test format_string("if(a == 1)\nelseif(b == 1)\nend") == "if (a == 1)\nelseif (b == 1)\nend"
+    @test format_string("while(a == 1)\nend") == "while (a == 1)\nend"
     @test format_string("function f()\n    return(1)\nend") == "function f()\n    return (1)\nend"
     @test format_string("local(a)") == "local a"
     @test format_string("global(a)") == "global a"
@@ -1544,9 +1545,23 @@ end
     @test format_string("local ((a))") == "local a"
     @test format_string("local (a) = 1") == "local (a) = 1"
     @test format_string("quote\nexport (\$a)\nend") == "quote\n    export (\$a)\nend"
-    # Parentheses around conditions are kept
-    @test format_string("if (a)\nelseif (b)\nend") == "if (a)\nelseif (b)\nend"
-    @test format_string("while (a)\nend") == "while (a)\nend"
+    # Conditions that are just an identifier
+    for (a, b) in (("(a)", "a"), ("( a )", "a"), ("((a))", "a"), ("(true)", "true"))
+        @test format_string("if $(a)\nend") == "if $(b)\nend"
+        @test format_string("if$(a)\nend") == "if $(b)\nend"
+        @test format_string("if x\nelseif $(a)\nend") == "if x\nelseif $(b)\nend"
+        @test format_string("while $(a)\nend") == "while $(b)\nend"
+        @test format_string("if $(a) # c\nend") == "if $(b) # c\nend"
+        @test format_string("if $(a); x; end") == "if $(b)\n    x\nend"
+    end
+    # Other conditions are kept
+    for a in (
+            "(a && b)", "(!a)", "(a.b)", "(f(a))", "(a == 1)", "(a = 1)", "((a + b))",
+            "(\na\n)", "(a #= c =#)", "(a)::Bool", "(a) && b",
+        )
+        @test startswith(format_string("if $(a)\nend"), "if (")
+        @test startswith(format_string("while $(a)\nend"), "while (")
+    end
 end
 
 @testset "spaces in macrocall" begin

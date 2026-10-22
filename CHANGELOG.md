@@ -39,12 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    ```
    ([#33], [#231])
  - New rule: redundant parentheses around identifiers and operators in `export`, `public`,
-   `global`, and `local` lists are removed (JuliaSyntax warns about these). This is a new
-   formatting rule (not a [spec-bug] fix) and will result in diffs like the following in
-   already formatted code:
+   `global`, and `local` lists are removed (JuliaSyntax warns about these), and so are
+   parentheses around `if`, `elseif`, and `while` conditions that are just an identifier
+   (or `true`/`false`). Other parenthesized conditions, e.g. `if (a && b)`, are left as is.
+   This is a new formatting rule (not a [spec-bug] fix) and will result in diffs like the
+   following in already formatted code:
    ```diff
    -export (a), (+)
    +export a, +
+
+   -if (a)
+   +if a
+
+   -while (true)
+   +while true
    ```
 
 ### Changed

@@ -1016,10 +1016,14 @@ function spaces_in_export_public(ctx::Context, node::Node)
 end
 
 # Remove redundant parentheses around identifiers and operators in `export`, `public`,
-# `global` and `local` lists, e.g. `export (a), (+)` -> `export a, +`. JuliaSyntax warns
-# about these parentheses.
+# `global` and `local` lists, e.g. `export (a), (+)` -> `export a, +` (JuliaSyntax warns
+# about these parentheses), and around conditions in `if`, `elseif`, and `while` that are
+# just an identifier, e.g. `if (a)` -> `if a` and `while (true)` -> `while true`.
 function remove_redundant_parens(ctx::Context, node::Node)
     is_leaf(node) && return nothing
+    if kind(node) in KSet"if elseif while"
+        return remove_parens_around_identifier_condition(ctx, node)
+    end
     if !(
             kind(node) in KSet"export public" ||
                 (kind(node) in KSet"global local" && !any(is_assignment, verified_kids(node)))
@@ -1038,6 +1042,45 @@ function remove_redundant_parens(ctx::Context, node::Node)
         end
     end
     return finish!(b, node)
+end
+
+function remove_parens_around_identifier_condition(ctx::Context, node::Node)
+    kids = verified_kids(node)
+    @assert kind(kids[1]) in KSet"if elseif while"
+    cond_idx = findnext(!JuliaSyntax.is_whitespace, kids, 2)::Int
+    cond = kids[cond_idx]
+    # The space after the keyword is inserted in `spaces_around_keywords`
+    kind(kids[cond_idx - 1]) === K"Whitespace" || return nothing
+    is_parens_around_naked_identifier(cond) || return nothing
+    # The condition must be followed by a newline or a `;`, possibly with spaces and
+    # comments in between, since e.g. `if (a) -b end` would otherwise become `if a -b end`
+    next_leaf = nothing
+    for i in (cond_idx + 1):length(kids)
+        next_leaf = first_leaf_predicate(kids[i], x -> !(kind(x) in KSet"Whitespace Comment"))
+        next_leaf === nothing || break
+    end
+    if !(next_leaf !== nothing && kind(next_leaf) in KSet"NewlineWs ;")
+        return nothing
+    end
+    b = NodeBuilder(ctx, node)
+    for (i, kid) in pairs(kids)
+        if i == cond_idx
+            emit_without_parens!(b, cond, parens_around_identifier_idx(cond)::Int)
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
+# Whether `node` is (possibly nested) parentheses around an identifier or `true`/`false`,
+# e.g. `(a)` or `((true))`
+function is_parens_around_naked_identifier(node::Node)
+    inner_idx = parens_around_identifier_idx(node)
+    inner_idx === nothing && return false
+    inner = verified_kids(node)[inner_idx]
+    return kind(inner) in KSet"Identifier Bool" ||
+        (kind(inner) === K"parens" && is_parens_around_naked_identifier(inner))
 end
 
 # If `node` is a K"parens" node wrapping a single leaf, or another K"parens" node (e.g.

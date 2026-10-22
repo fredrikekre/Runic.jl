@@ -1086,13 +1086,25 @@ precedence of `:`. Examples:
 ### Redundant parentheses
 
 Parentheses around identifiers and operators in `export`, `public`, `global`, and `local`
-lists are removed. Examples:
+lists are removed. Parentheses around conditions in `if`, `elseif`, and `while` are also
+removed when the condition is just an identifier (or `true`/`false`). Other parenthesized
+conditions, e.g. `if (a && b)`, are left as is. Examples:
 ```diff
 -export (a), (+)
 +export a, +
 
 -global (a)
 +global a
+
+-if (a)
++if a
+     # ...
+ end
+
+-while (true)
++while true
+     # ...
+ end
 ```
 
 ### `in` instead of `∈` and `=`
