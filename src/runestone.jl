@@ -1319,6 +1319,31 @@ function space_after_for(ctx::Context, node::Node)
     return make_node(node, kids′)
 end
 
+# Single space between the parts of one-line type definitions, e.g. `struct A  end` and
+# `primitive type A  8  end` are formatted as `struct A end` and `primitive type A 8 end`.
+function spaces_in_oneline_type_definition(ctx::Context, node::Node)
+    if !(kind(node) in KSet"struct abstract primitive" && !is_leaf(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    b = NodeBuilder(ctx, node)
+    for (i, kid) in pairs(kids)
+        if kind(kid) === K"Whitespace" && span(kid) > 1 &&
+                kind(get(kids, i + 1, kid)) !== K"Comment" && kind(get(kids, i - 1, kid)) !== K"Comment"
+            # Whitespace not adjacent to a comment
+            emit!(b, ws_node(1), " ", span(kid))
+        elseif kind(kid) === K"block" && !is_leaf(kid) && length(verified_kids(kid)) == 1 &&
+                kind(verified_kids(kid)[1]) === K"Whitespace" && span(kid) > 1
+            # Empty struct body
+            replace_bytes!(ctx, " ", span(kid))
+            emit!(b, make_node(kid, [ws_node(1)]))
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 # Single space around keywords:
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if

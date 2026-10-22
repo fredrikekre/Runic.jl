@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `[1 2; 3 4]` and `[a ;; b]` as `[a;; b]`.
  - Multiple spaces after prefix operators are now collapsed to a single space, e.g. `-  x`
    is formatted as `- x` and `!  x` as `! x`.
+ - Extra whitespace in one-line type definitions is now normalized to a single space, e.g.
+   `struct A  end` is formatted as `struct A end` and `primitive type A  8  end` as
+   `primitive type A 8 end`.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed

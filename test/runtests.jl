@@ -714,6 +714,21 @@ end
     end
 end
 
+@testset "spaces in one-line type definitions" begin
+    for sp in (" ", "  ")
+        @test format_string("struct A$(sp)end") == "struct A end"
+        @test format_string("struct A{T} <: B$(sp)end") == "struct A{T} <: B end"
+        @test format_string("mutable struct A$(sp)end") == "mutable struct A end"
+        @test format_string("abstract type A$(sp)end") == "abstract type A end"
+        @test format_string("abstract type A <: B$(sp)end") == "abstract type A <: B end"
+        @test format_string("primitive type A$(sp)8$(sp)end") == "primitive type A 8 end"
+        @test format_string("primitive type A <: B$(sp)8$(sp)end") == "primitive type A <: B 8 end"
+        # Comments
+        @test format_string("abstract type A$(sp)# c\nend") == "abstract type A$(sp)# c\nend"
+        @test format_string("struct A end$(sp)# c") == "struct A end$(sp)# c"
+    end
+end
+
 @testset "spaces around keywords" begin
     for sp in (" ", "  ")
         @test format_string("struct$(sp)A end") == "struct A end"
