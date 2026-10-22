@@ -909,6 +909,40 @@ function spaces_around_semicolons(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
+# No spaces directly inside the brackets of comprehensions, e.g. `[  x for x in X  ]` is
+# formatted as `[x for x in X]` (same as for other listlike expressions). Newlines are left
+# alone.
+function spaces_in_comprehension(ctx::Context, node::Node)
+    if !(kind(node) in KSet"comprehension typed_comprehension" && !is_leaf(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    open_idx = findfirst(x -> kind(x) === K"[", kids)::Int
+    close_idx = findlast(x -> kind(x) === K"]", kids)::Int
+    # Keep the space after `[` if it is followed by a comment
+    function space_before_comment(i)
+        kid = kids[i]
+        if kind(kid) === K"Whitespace"
+            return kind(kids[i + 1]) === K"Comment"
+        else
+            return !is_leaf(kid) && kind(first_leaf(kid)) === K"Whitespace" &&
+                kind(nth_leaf(kid, 2)) === K"Comment"
+        end
+    end
+    b = NodeBuilder(ctx, node)
+    for (i, kid) in pairs(kids)
+        if i == open_idx + 1 && i < close_idx && !space_before_comment(i)
+            emit_with_leading_ws!(b, kid, 0)
+        elseif i == close_idx - 1 && i > open_idx + 1 && kind(kid) === K"Whitespace" &&
+                !(kind(kids[i - 1]) in KSet"NewlineWs Comment")
+            skip_kid!(b, kid)
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 function spaces_in_export_public(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     if !(kind(node) in KSet"export public" || is_global_local_list(node))

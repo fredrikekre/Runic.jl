@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Extra whitespace in one-line type definitions is now normalized to a single space, e.g.
    `struct A  end` is formatted as `struct A end` and `primitive type A  8  end` as
    `primitive type A 8 end` ([#245]).
+ - Leading and trailing spaces inside the brackets of comprehensions are now removed, e.g.
+   `[ x for x in X ]` is formatted as `[x for x in X]`, consistent with other listlike
+   expressions ([#246]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -379,3 +382,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#243]: https://github.com/fredrikekre/Runic.jl/issues/243
 [#244]: https://github.com/fredrikekre/Runic.jl/issues/244
 [#245]: https://github.com/fredrikekre/Runic.jl/issues/245
+[#246]: https://github.com/fredrikekre/Runic.jl/issues/246
