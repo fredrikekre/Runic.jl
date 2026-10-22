@@ -811,8 +811,9 @@ Examples:
 
 ### Spaces around operators, assignment, etc
 
-Runic formats spaces around infix operators, assignments, comparison chains, and type
-comparisons (binary `<:` and `>:`), and some other operator-like things. If the space is
+Runic formats spaces around infix operators, assignments, comparison chains, type
+comparisons (binary `<:` and `>:`), short-circuiting operators (`&&` and `||`), and some
+other operator-like things. If the space is
 missing it will be inserted, if there are multiple spaces it will be reduced to one.
 Examples:
 ```diff
@@ -833,6 +834,9 @@ Examples:
 -1  <  2  >  3
 +1 < 2 > 3
 +1 < 2 > 3
+
+-a&&b||c
++a && b || c
 
 -T<:Integer
 -T  >:  Integer
