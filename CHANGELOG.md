@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Spaces and newlines after `.` in field access and import paths are now removed, e.g.
    `a. b` is formatted as `a.b` and `import A.\n    B` as `import A.B`. If there is a
    comment after the `.` it is left as is ([#250]).
+ - Spaces around the short-circuiting operators `&&` and `||` (and the dotted versions
+   `.&&` and `.||`) are now normalized just like other infix operators, e.g. `a&&b||c` is
+   formatted as `a && b || c` ([#239]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -388,6 +391,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#230]: https://github.com/fredrikekre/Runic.jl/issues/230
 [#236]: https://github.com/fredrikekre/Runic.jl/issues/236
 [#237]: https://github.com/fredrikekre/Runic.jl/issues/237
+[#239]: https://github.com/fredrikekre/Runic.jl/issues/239
 [#242]: https://github.com/fredrikekre/Runic.jl/issues/242
 [#243]: https://github.com/fredrikekre/Runic.jl/issues/243
 [#244]: https://github.com/fredrikekre/Runic.jl/issues/244
