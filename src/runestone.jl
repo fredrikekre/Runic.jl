@@ -830,13 +830,21 @@ function emit_with_leading_ws!(b::NodeBuilder, kid::Node, n::Int)
 end
 
 # No space before and a single space after `;` separating statements, e.g. `a  ;b` is
-# formatted as `a; b`. Newlines and comments after `;` are left alone.
+# formatted as `a; b`, and after `;`, `;;`, etc. in concatenation syntax, e.g. `[a  ;;b]` is
+# formatted as `[a;; b]`. Newlines and comments after `;` are left alone.
 function spaces_around_semicolons(ctx::Context, node::Node)
-    if !(kind(node) in KSet"toplevel block" && !is_leaf(node) && !is_paren_block(node))
+    if !(
+            (kind(node) in KSet"toplevel block" && !is_paren_block(node)) ||
+                kind(node) in KSet"vcat typed_vcat ncat typed_ncat row nrow"
+        ) || is_leaf(node)
         return nothing
     end
     kids = verified_kids(node)
-    any(x -> kind(x) === K";", kids) || return nothing
+    is_concat = kind(node) in KSet"vcat typed_vcat ncat typed_ncat row nrow"
+    # In concatenation syntax a `;` can also be the last leaf of a row
+    ends_with_semicolon(x) = kind(x) === K";" ||
+        (is_concat && !is_leaf(x) && kind(last_leaf(x)) === K";")
+    any(ends_with_semicolon, kids) || return nothing
     b = NodeBuilder(ctx, node)
     # Kind of the first non-whitespace token after kids[i], looking at the next sibling of
     # the node if there are no more kids
@@ -854,7 +862,7 @@ function spaces_around_semicolons(ctx::Context, node::Node)
                 i > 1 && !(kind(kids[i - 1]) in KSet"NewlineWs [ (")
             # Whitespace before `;`
             skip_kid!(b, kid)
-        elseif i > 1 && kind(kids[i - 1]) === K";" && kind(kid) !== K";"
+        elseif i > 1 && ends_with_semicolon(kids[i - 1]) && kind(kid) !== K";"
             # First kid after a run of `;`
             nk = kind_after(i - 1)
             if nk === nothing || nk in no_space_kinds
@@ -868,6 +876,15 @@ function spaces_around_semicolons(ctx::Context, node::Node)
             end
         else
             accept!(b, kid)
+        end
+    end
+    if kind(node) in KSet"row nrow" && kind(kids[end]) === K";"
+        # Trailing `;` of a row (e.g. the first row in `[a b;c d]`): insert a space if
+        # followed directly by the next row. Whitespace after the row is handled by the
+        # parent node.
+        nk = next_sibling_kind(ctx)
+        if !(nk === nothing || nk in no_space_kinds || nk === K"Whitespace")
+            emit!(b, ws_node(1), " ", 0)
         end
     end
     return finish!(b, node)

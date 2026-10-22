@@ -988,6 +988,17 @@ after. Examples:
 +a = 1; b = 2
 ```
 
+The same rule applies to the semicolons in concatenation syntax for arrays. Examples:
+```diff
+-[1 2;3 4]
+-[1 2 ; 3 4]
++[1 2; 3 4]
++[1 2; 3 4]
+
+-[a ;; b]
++[a;; b]
+```
+
 ### Literal floating point numbers
 
 Floating point literals are normalized so that they:

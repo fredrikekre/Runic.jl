@@ -684,6 +684,26 @@ end
     end
     # Leading `;` on a line
     @test format_string("begin\n    a\n    ;b\nend") == "begin\n    a\n    ; b\nend"
+    # Concatenation syntax
+    for sp in ("", " ", "  "), (l, r) in (("[", "]"), ("T[", "]"))
+        for semi in (";", ";;", ";;;")
+            @test format_string("$(l)a$(sp)$(semi)$(sp)b$(r)") == "$(l)a$(semi) b$(r)"
+            @test format_string("$(l)a$(sp)$(semi)$(sp)$(r)") == "$(l)a$(semi)$(r)"
+        end
+        # Space separated rows (can not be mixed with `;;`)
+        for semi in (";", ";;;")
+            @test format_string("$(l)a b$(sp)$(semi)$(sp)c d$(r)") == "$(l)a b$(semi) c d$(r)"
+            @test format_string("$(l)a b$(sp)$(semi)$(sp)$(r)") == "$(l)a b$(semi)$(r)"
+        end
+        # Multiline
+        @test format_string("$(l)a b$(sp);$(sp)\nc d$(r)") == "$(l)\n    a b;\n    c d\n$(r)"
+        @test format_string("$(l)a b$(sp); # c\nc d$(r)") == "$(l)\n    a b; # c\n    c d\n$(r)"
+        @test format_string("$(l)1$(sp);$(sp)2$(sp);;$(sp)3$(sp);$(sp)4$(r)") == "$(l)1; 2;; 3; 4$(r)"
+        @test format_string("$(l)1 2$(sp);$(sp)3 4$(sp);;;$(sp)5 6$(sp);$(sp)7 8$(r)") ==
+            "$(l)1 2; 3 4;;; 5 6; 7 8$(r)"
+        @test format_string("$(l);$(r)") == "$(l);$(r)"
+        @test format_string("$(l);;$(r)") == "$(l);;$(r)"
+    end
 end
 
 @testset "spaces around keywords" begin
