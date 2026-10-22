@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Semicolons in concatenation syntax for arrays are now formatted without space before and
    with a single space after, e.g. `[1 2;3 4]` and `[1 2 ; 3 4]` are formatted as
    `[1 2; 3 4]` and `[a ;; b]` as `[a;; b]`.
+ - Multiple spaces after prefix operators are now collapsed to a single space, e.g. `-  x`
+   is formatted as `- x` and `!  x` as `! x`.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed

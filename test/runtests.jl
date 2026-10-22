@@ -315,6 +315,14 @@ end
         # Edgecase with call-call-newline as a leading sequence
         @test format_string("(\na$(sp)*$(sp)b$(sp)=>$(sp)c,\n)") == "(\n    a * b => c,\n)"
     end
+    # Prefix operators: multiple spaces are collapsed to one (but not removed)
+    for op in ("-", "+", "!", "√", ".-"), sp in ("", " ", "  ")
+        @test format_string("$(op)$(sp)x") == "$(op)$(sp == "" ? "" : " ")x"
+        @test format_string("y = $(op)$(sp)x") == "y = $(op)$(sp == "" ? "" : " ")x"
+        @test format_string("f($(op)$(sp)x)") == "f($(op)$(sp == "" ? "" : " ")x)"
+    end
+    @test format_string("-  (a + b)") == "- (a + b)"
+    @test format_string("-  1") == "- 1"
 end
 
 @testset "spaces in listlike" begin

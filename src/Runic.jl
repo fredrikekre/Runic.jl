@@ -692,6 +692,7 @@ function format_node!(ctx::Context, node::Node)::Union{Node, Nothing, NullNode}
     @return_something format_hex_literals(ctx, node)
     @return_something format_float_literals(ctx, node)
     @return_something spaces_around_operators(ctx, node)
+    @return_something spaces_after_prefix_operator(ctx, node)
     @return_something spaces_around_assignments(ctx, node)
     @return_something spaces_around_anonymous_function(ctx, node)
     @return_something spaces_around_ternary(ctx, node)
