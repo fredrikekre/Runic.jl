@@ -1528,7 +1528,7 @@ end
 # Both sides of: `where`, `do` (if followed by arguments)
 # Right hand side of: `mutable`, `struct`, `abstract`, `primitive`, `type`, `function` (if
 # named function), `macro`, `if`, `elseif`, `catch` and `return` (if followed by something),
-# local, global, const
+# local, global, const, outer
 function spaces_around_keywords(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     if kind(node) === K"for"
@@ -1542,7 +1542,7 @@ function spaces_around_keywords(ctx::Context, node::Node)
     end
     keyword_set = KSet"""
     where do mutable struct abstract primitive type function macro if elseif catch while
-    return local global const module baremodule
+    return local global const module baremodule outer
     """
     if !(kind(node) in keyword_set)
         return nothing

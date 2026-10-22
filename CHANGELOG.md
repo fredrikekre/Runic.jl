@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `primitive type A\n    8\nend`. Extra whitespace before the number of bits in one-line
    primitive type definitions is normalized to a single space, e.g.
    `primitive type A  8 end` is formatted as `primitive type A 8 end` ([#254]).
+ - Extra whitespace after the `outer` keyword in `for` loops and generators is now
+   normalized to a single space, e.g. `for outer  i in I` is formatted as
+   `for outer i in I` ([#255]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -460,3 +463,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#249]: https://github.com/fredrikekre/Runic.jl/issues/249
 [#250]: https://github.com/fredrikekre/Runic.jl/issues/250
 [#254]: https://github.com/fredrikekre/Runic.jl/issues/254
+[#255]: https://github.com/fredrikekre/Runic.jl/issues/255
