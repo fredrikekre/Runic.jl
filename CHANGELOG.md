@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `primitive type A\n    8\nend`. Extra whitespace before the number of bits in one-line
    primitive type definitions is normalized to a single space, e.g.
    `primitive type A  8 end` is formatted as `primitive type A 8 end`.
+ - Extra whitespace after the `outer` keyword in `for` loops and generators is now
+   normalized to a single space, e.g. `for outer  i in I` is formatted as
+   `for outer i in I`.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
