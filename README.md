@@ -972,6 +972,9 @@ function/macro calls/definitions. Leading/trailing spaces are removed. Examples:
 
 -( a, b )
 +(a, b)
+
+-[ x for x in X ]
++[x for x in X]
 ```
 
 #### Potential changes
