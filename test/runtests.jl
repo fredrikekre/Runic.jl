@@ -729,6 +729,20 @@ end
     end
 end
 
+@testset "spaces in comprehensions" begin
+    for sp in ("", " ", "  "), (l, r) in (("[", "]"), ("T[", "]"))
+        @test format_string("$(l)$(sp)x for x in X$(sp)$(r)") == "$(l)x for x in X$(r)"
+        @test format_string("$(l)$(sp)x for x in X if x$(sp)$(r)") == "$(l)x for x in X if x$(r)"
+        @test format_string("$(l)$(sp)(a, b) for (a, b) in X$(sp)$(r)") ==
+            "$(l)(a, b) for (a, b) in X$(r)"
+        # Newlines and comments are left alone
+        @test format_string("$(l)$(sp)\n    x for x in X\n$(r)") == "$(l)\n    x for x in X\n$(r)"
+        csp = sp == "" ? " " : sp
+        @test format_string("$(l)$(csp)# c\n    x for x in X\n$(r)") ==
+            "$(l)$(csp)# c\n    x for x in X\n$(r)"
+    end
+end
+
 @testset "spaces around keywords" begin
     for sp in (" ", "  ")
         @test format_string("struct$(sp)A end") == "struct A end"

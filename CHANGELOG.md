@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Extra whitespace in one-line type definitions is now normalized to a single space, e.g.
    `struct A  end` is formatted as `struct A end` and `primitive type A  8  end` as
    `primitive type A 8 end`.
+ - Leading and trailing spaces inside the brackets of comprehensions are now removed, e.g.
+   `[ x for x in X ]` is formatted as `[x for x in X]`, consistent with other listlike
+   expressions.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
