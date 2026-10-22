@@ -572,6 +572,7 @@ This is a list of things that Runic currently is doing:
  - [Multiline listlike expressions](#multiline-listlike-expressions)
  - [Spacing in listlike expressions](#spacing-in-listlike-expressions)
  - [Trailing semicolons](#trailing-semicolons)
+ - [Spaces around semicolons](#spaces-around-semicolons)
  - [Literal floating point numbers](#literal-floating-point-numbers)
  - [Literal hex and oct numbers](#literal-hex-and-oct-numbers)
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
@@ -975,6 +976,17 @@ Trailing semicolons are removed in the body of blocklike expressions. Examples
 Trailing semicolons at top level and module level are kept since they are sometimes used
 there for output suppression (e.g. Documenter examples or scripts that are
 copy-pasted/included in the REPL).
+
+### Spaces around semicolons
+
+Semicolons separating statements are formatted without space before and with a single space
+after. Examples:
+```diff
+-a = 1;b = 2
+-a = 1  ;  b = 2
++a = 1; b = 2
++a = 1; b = 2
+```
 
 ### Literal floating point numbers
 
