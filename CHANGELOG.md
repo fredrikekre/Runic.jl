@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `[1 2; 3 4]` and `[a ;; b]` as `[a;; b]` ([#243]).
  - Multiple spaces after prefix operators are now collapsed to a single space, e.g. `-  x`
    is formatted as `- x` and `!  x` as `! x` ([#244]).
+ - Extra whitespace in one-line type definitions is now normalized to a single space, e.g.
+   `struct A  end` is formatted as `struct A end` and `primitive type A  8  end` as
+   `primitive type A 8 end` ([#245]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -375,3 +378,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#242]: https://github.com/fredrikekre/Runic.jl/issues/242
 [#243]: https://github.com/fredrikekre/Runic.jl/issues/243
 [#244]: https://github.com/fredrikekre/Runic.jl/issues/244
+[#245]: https://github.com/fredrikekre/Runic.jl/issues/245

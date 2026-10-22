@@ -901,6 +901,9 @@ Consistently use single space around keywords. Examples:
 
 -function  foo(x::T)  where  {T}
 +function foo(x::T) where {T}
+
+-struct Baz  end
++struct Baz end
 ```
 
 ### Multiline listlike expressions
