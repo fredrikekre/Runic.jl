@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    like for `function`), e.g. `macro  m()` is formatted as `macro m()` ([#248]).
  - Spaces before splat `...` are now removed, e.g. `f(x ...)` is formatted as `f(x...)`
    ([#249]).
+ - Spaces and newlines after `.` in field access and import paths are now removed, e.g.
+   `a. b` is formatted as `a.b` and `import A.\n    B` as `import A.B`. If there is a
+   comment after the `.` it is left as is ([#250]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -393,3 +396,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#247]: https://github.com/fredrikekre/Runic.jl/issues/247
 [#248]: https://github.com/fredrikekre/Runic.jl/issues/248
 [#249]: https://github.com/fredrikekre/Runic.jl/issues/249
+[#250]: https://github.com/fredrikekre/Runic.jl/issues/250

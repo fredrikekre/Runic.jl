@@ -1244,6 +1244,26 @@ function no_spaces_around_colon_etc(ctx::Context, node::Node)
     return no_spaces_around_x(ctx, node)
 end
 
+# No whitespace or newlines after `.` in field access and import paths, e.g. `a. b` and
+# `import A.\nB` are formatted as `a.b` and `import A.B`. If there is a comment after the `.`
+# everything is left as is.
+function no_spaces_after_dot(ctx::Context, node::Node)
+    if !(kind(node) in KSet". importpath" && !is_leaf(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    any(x -> kind(x) === K"Comment", kids) && return nothing
+    b = NodeBuilder(ctx, node)
+    for (i, kid) in pairs(kids)
+        if kind(kid) in KSet"Whitespace NewlineWs" && i > 1 && kind(kids[i - 1]) === K"."
+            skip_kid!(b, kid)
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 function space_before_do(ctx::Context, node::Node)
     @assert kind(node) in KSet"call dotcall macrocall" && !is_leaf(node)
     kids = verified_kids(node)
