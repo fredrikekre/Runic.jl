@@ -812,15 +812,6 @@ Examples:
  end
 ```
 
-#### Potential changes
- - If the last expression is a `if` or `try` block it might be better to
-   recurse into the branches and add `return` there. Looking at real code, if a
-   function ends with an `if` block, it seems about 50/50 whether adding return
-   *after* the block or adding return inside the branches is the best choice.
-   Quite often `return if` is not the best but at least Runic's current
-   formatting will force to think about the return value.
-   See issue [#52](https://github.com/fredrikekre/Runic.jl/issues/52).
-
 ### Spaces around operators, assignment, etc
 
 Runic formats spaces around infix operators, assignments, comparison chains, type
@@ -909,11 +900,6 @@ code (e.g. `- 1` is a call while `-1` is a literal). Examples:
 --   1
 +- 1
 ```
-
-#### Potential changes
- - Perhaps the rule for some of these should be "at least one space" instead. This could
-   help with alignment issues. Discussed in issue
-   [#12](https://github.com/fredrikekre/Runic.jl/issues/12).
 
 ### Spaces around keywords
 
@@ -1020,11 +1006,6 @@ arguments, and between the arguments. Examples:
 +@test a == b
 ```
 
-#### Potential changes
- - Perhaps the rule for some of these should be "at least one space" instead. This could
-   help with alignment issues. Discussed in issue
-   [#12](https://github.com/fredrikekre/Runic.jl/issues/12).
-
 ### Trailing semicolons
 
 Trailing semicolons are removed in the body of blocklike expressions. Examples
@@ -1091,13 +1072,6 @@ Examples:
 -1.2E5
 +1.2e5
 ```
-
-#### Potential changes
- - Always add the implicit `+` for the exponent part, i.e. `1.0e+1` instead of `1.0e1`.
-   Discussed in issue [#13](https://github.com/fredrikekre/Runic.jl/issues/13).
- - Allow multiple trailing zeros in the fractional part, i.e. don't change `1.00` to `1.0`.
-   Such trailing zeros are sometimes used to align numbers in literal array expressions.
-   Discussed in issue [#14](https://github.com/fredrikekre/Runic.jl/issues/14).
 
 ### Literal hex and oct numbers
 
