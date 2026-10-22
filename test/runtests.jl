@@ -780,6 +780,8 @@ end
         @test format_string("abstract$(sp)type$(sp)A end") == "abstract type A end"
         @test format_string("primitive$(sp)type$(sp)A 64 end") == "primitive type A 64 end"
         @test format_string("function$(sp)A() end") == "function A() end"
+        @test format_string("macro$(sp)A() end") == "macro A() end"
+        @test format_string("macro$(sp)A(x)\n    return x\nend") == "macro A(x)\n    return x\nend"
         @test format_string("if$(sp)a\nelseif$(sp)b\nend") == "if a\nelseif b\nend"
         @test format_string("if$(sp)a && b\nelseif$(sp)c || d\nend") == "if a && b\nelseif c || d\nend"
         @test format_string("try\nerror()\ncatch$(sp)e\nend") == "try\n    error()\ncatch e\nend"
