@@ -9,6 +9,11 @@ on:
       - '*'
   pull_request:
 
+concurrency:
+  # Cancel in progress builds for PRs with new commits
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ startsWith(github.ref, 'refs/pull/') && 'pr' || github.sha }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
 jobs:
   compile:
     name: juliac - Julia ${{ matrix.version }} - ${{ matrix.os }}
