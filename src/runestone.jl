@@ -1015,68 +1015,65 @@ function spaces_in_export_public(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
-# Remove redundant parentheses around single line conditions in `if`, `elseif` and `while`,
-# e.g. `if (a && b)` -> `if a && b`, and around identifiers and operators in `export`,
-# `public`, `global` and `local` lists, e.g. `export (a), (+)` -> `export a, +`.
+# Remove redundant parentheses around identifiers and operators in `export`, `public`,
+# `global` and `local` lists, e.g. `export (a), (+)` -> `export a, +`. JuliaSyntax warns
+# about these parentheses.
 function remove_redundant_parens(ctx::Context, node::Node)
     is_leaf(node) && return nothing
-    if kind(node) in KSet"if elseif while"
-        return remove_parens_around_condition(ctx, node)
-    elseif kind(node) in KSet"export public" ||
-            (kind(node) in KSet"global local" && !any(is_assignment, verified_kids(node)))
-        return remove_parens_in_export_public(ctx, node)
+    if !(
+            kind(node) in KSet"export public" ||
+                (kind(node) in KSet"global local" && !any(is_assignment, verified_kids(node)))
+        )
+        return nothing
     end
-    return nothing
+    kids = verified_kids(node)
+    @assert kind(kids[1]) in KSet"export public global local"
+    b = NodeBuilder(ctx, node)
+    for (i, kid) in pairs(kids)
+        inner_idx = i == 1 ? nothing : parens_around_identifier_idx(kid)
+        if inner_idx !== nothing && kind(kids[i - 1]) in KSet"Whitespace NewlineWs"
+            emit_without_parens!(b, kid, inner_idx)
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
 end
 
-# If `node` is a single line K"parens" node wrapping a single expression, return the index
-# of the expression in the kids of `node`, otherwise return `nothing`.
-function single_line_parens_inner_idx(node::Node)
+# If `node` is a K"parens" node wrapping a single leaf, or another K"parens" node (e.g.
+# `global ((a))`, removed one level at a time), return the index of the wrapped node in the
+# kids of `node`, otherwise return `nothing`.
+function parens_around_identifier_idx(node::Node)
     if !(kind(node) === K"parens" && !is_leaf(node))
         return nothing
     end
     kids = verified_kids(node)
     @assert kind(kids[1]) === K"(" && kind(kids[end]) === K")"
-    inner_idx = nothing
-    for i in 2:(length(kids) - 1)
-        kid = kids[i]
-        if kind(kid) === K"Whitespace"
-            continue
-        elseif inner_idx !== nothing || JuliaSyntax.is_whitespace(kid)
-            # Multiple expressions (not possible?), a newline, or a comment
-            return nothing
-        end
-        inner_idx = i
-    end
+    inner_idx = findfirst(x -> kind(x) !== K"Whitespace", kids[2:(end - 1)])
     inner_idx === nothing && return nothing
-    if any_leaf(x -> kind(x) in KSet"NewlineWs Comment", kids[inner_idx])
+    inner_idx += 1
+    if any(x -> kind(x) !== K"Whitespace", kids[(inner_idx + 1):(end - 1)])
+        return nothing
+    end
+    inner = kids[inner_idx]
+    if !((is_leaf(inner) && !JuliaSyntax.is_whitespace(inner)) || kind(inner) === K"parens")
         return nothing
     end
     return inner_idx
 end
 
-# Emit the inner expression of the parens node `parens` without the parentheses and without
-# any whitespace inside them, e.g. `( a && b )` -> `a && b`.
+# Emit the wrapped node of the parens node `parens` without the parentheses and without
+# any whitespace inside them, e.g. `( a )` -> `a`.
 function emit_without_parens!(b::NodeBuilder, parens::Node, inner_idx::Int)
     ctx = b.ctx
     pos = position(ctx.fmt_io)
     kids = verified_kids(parens)
     inner = kids[inner_idx]
-    # Delete `(` and whitespace before the inner expression
+    # Delete `(` and whitespace before the wrapped node
     for i in 1:(inner_idx - 1)
         replace_bytes!(ctx, "", span(kids[i]))
     end
-    # Whitespace can also be the first or last leaf of the inner expression
-    if !is_leaf(inner) && kind(first_leaf(inner)) === K"Whitespace"
-        replace_bytes!(ctx, "", span(first_leaf(inner)))
-        inner = replace_first_leaf(inner, nullnode)
-    end
-    if !is_leaf(inner) && kind(last_leaf(inner)) === K"Whitespace"
-        seek(ctx.fmt_io, pos + span(inner) - span(last_leaf(inner)))
-        replace_bytes!(ctx, "", span(last_leaf(inner)))
-        inner = replace_last_leaf(inner, nullnode)
-    end
-    # Delete whitespace after the inner expression and `)`
+    # Delete whitespace after the wrapped node and `)`
     seek(ctx.fmt_io, pos + span(inner))
     for i in (inner_idx + 1):length(kids)
         replace_bytes!(ctx, "", span(kids[i]))
@@ -1084,93 +1081,6 @@ function emit_without_parens!(b::NodeBuilder, parens::Node, inner_idx::Int)
     seek(ctx.fmt_io, pos)
     emit!(b, inner)
     return
-end
-
-# Operator kind of an infix operator call, e.g. K"+" for both `a + b` and `a .+ b`.
-# Note: ctx.fmt_io must be positioned at the start of node when this is called.
-function infix_op_call_op_undotted(ctx::Context, node::Node)
-    kids = verified_kids(node)
-    op_idx = findfirst(!JuliaSyntax.is_whitespace, kids)::Int
-    op_idx = findnext(!JuliaSyntax.is_whitespace, kids, op_idx + 1)::Int
-    if kind(kids[op_idx]) === K"."
-        op_idx += 1
-    end
-    pos = position(ctx.fmt_io)
-    seek(ctx.fmt_io, pos + mapreduce(span, +, kids[1:(op_idx - 1)]; init = 0))
-    str = String(read(ctx.fmt_io, span(kids[op_idx])))
-    seek(ctx.fmt_io, pos)
-    str = startswith(str, ".") ? str[2:end] : str
-    i = get(JuliaSyntax._kind_str_to_int, str, nothing)
-    return i === nothing ? K"Identifier" : JuliaSyntax.Kind(i)
-end
-
-function remove_parens_around_condition(ctx::Context, node::Node)
-    kids = verified_kids(node)
-    @assert kind(kids[1]) in KSet"if elseif while"
-    cond_idx = findnext(!JuliaSyntax.is_whitespace, kids, 2)::Int
-    cond = kids[cond_idx]
-    # The space after the keyword is inserted in `spaces_around_keywords`
-    kind(kids[cond_idx - 1]) === K"Whitespace" || return nothing
-    inner_idx = single_line_parens_inner_idx(cond)
-    inner_idx === nothing && return nothing
-    cond_kids = verified_kids(cond)
-    inner = cond_kids[inner_idx]
-    # Conditions are parsed without assignments and pairs (`if a = 1` doesn't parse and
-    # `if a ~ b` is parsed as `if a; ~b`) and generators require the parentheses
-    if kind(inner) === K"generator" || JuliaSyntax.is_prec_assignment(inner)
-        return nothing
-    end
-    pos = position(ctx.fmt_io)
-    seek(ctx.fmt_io, pos + mapreduce(span, +, kids[1:(cond_idx - 1)]))
-    # Multiline triple-quoted strings
-    multiline = is_multiline_between_idxs(ctx, cond, 1, length(cond_kids))
-    opkind = K"None"
-    if is_infix_op_call(inner)
-        seek(ctx.fmt_io, position(ctx.fmt_io) + mapreduce(span, +, cond_kids[1:(inner_idx - 1)]))
-        opkind = infix_op_call_op_undotted(ctx, inner)
-    end
-    seek(ctx.fmt_io, pos)
-    if multiline || JuliaSyntax.is_prec_assignment(opkind) || JuliaSyntax.is_prec_pair(opkind)
-        return nothing
-    end
-    # The condition must be followed by a newline or a `;`, possibly with spaces and
-    # comments in between, since e.g. `if (a) -b end` would otherwise become `if a -b end`
-    next_leaf = nothing
-    for i in (cond_idx + 1):length(kids)
-        next_leaf = first_leaf_predicate(kids[i], x -> !(kind(x) in KSet"Whitespace Comment"))
-        next_leaf === nothing || break
-    end
-    if !(next_leaf !== nothing && kind(next_leaf) in KSet"NewlineWs ;")
-        return nothing
-    end
-    b = NodeBuilder(ctx, node)
-    for (i, kid) in pairs(kids)
-        if i == cond_idx
-            emit_without_parens!(b, cond, inner_idx)
-        else
-            accept!(b, kid)
-        end
-    end
-    return finish!(b, node)
-end
-
-function remove_parens_in_export_public(ctx::Context, node::Node)
-    kids = verified_kids(node)
-    @assert kind(kids[1]) in KSet"export public global local"
-    b = NodeBuilder(ctx, node)
-    for (i, kid) in pairs(kids)
-        inner_idx = i == 1 ? nothing : single_line_parens_inner_idx(kid)
-        # Nested parens are allowed for global/local, e.g. `global ((a))`, and are removed
-        # one at a time
-        if inner_idx !== nothing &&
-                (is_leaf(verified_kids(kid)[inner_idx]) || kind(verified_kids(kid)[inner_idx]) === K"parens") &&
-                kind(kids[i - 1]) in KSet"Whitespace NewlineWs"
-            emit_without_parens!(b, kid, inner_idx)
-        else
-            accept!(b, kid)
-        end
-    end
-    return finish!(b, node)
 end
 
 # Single space between the macro name and the arguments, and between the arguments, in

@@ -825,9 +825,8 @@ end
     @test format_string("A where{T}") == "A where {T}"
     @test format_string("A{T}where{T}") == "A{T} where {T}"
     # Some keywords can have a parenthesized expression directly after without the space...
-    # (the parentheses are kept for assignments, see `remove_redundant_parens`)
-    @test format_string("if(a = 1)\nelseif(b = 1)\nend") == "if (a = 1)\nelseif (b = 1)\nend"
-    @test format_string("while(a = 1)\nend") == "while (a = 1)\nend"
+    @test format_string("if(a)\nelseif(b)\nend") == "if (a)\nelseif (b)\nend"
+    @test format_string("while(a)\nend") == "while (a)\nend"
     @test format_string("function f()\n    return(1)\nend") == "function f()\n    return (1)\nend"
     @test format_string("local(a)") == "local a"
     @test format_string("global(a)") == "global a"
@@ -1545,34 +1544,9 @@ end
     @test format_string("local ((a))") == "local a"
     @test format_string("local (a) = 1") == "local (a) = 1"
     @test format_string("quote\nexport (\$a)\nend") == "quote\n    export (\$a)\nend"
-    # if/elseif/while conditions
-    for (a, b) in (
-            ("a", "a"), ("a && b", "a && b"), ("( a || b )", "a || b"), ("(a)", "a"),
-            ("!a", "!a"), ("f(a; b = 1)", "f(a; b = 1)"), ("a ? b : c", "a ? b : c"),
-            ("@m a b", "@m a b"), ("a .< b", "a .< b"), ("a < b < c", "a < b < c"),
-            ("a -> b", "a -> b"), ("a --> b", "a --> b"),
-        )
-        @test format_string("if ($(a))\nend") == "if $(b)\nend"
-        @test format_string("if($(a))\nend") == "if $(b)\nend"
-        @test format_string("if x\nelseif ($(a))\nend") == "if x\nelseif $(b)\nend"
-        @test format_string("while ($(a))\nend") == "while $(b)\nend"
-        @test format_string("if ($(a)) # c\nend") == "if $(b) # c\nend"
-        @test format_string("if ($(a)); x; end") == "if $(b)\n    x\nend"
-    end
-    for a in (
-            # Not parenthesized expression
-            "(a) && b", "(a)::Bool", "(a; b)", "(a, b)",
-            # Multiline and comments
-            "(a\n&& b)", "(\na)", "(a #= c =#)", "(\"\"\"\na\n\"\"\" == b)",
-            # Assignments, pairs, and generators can't be used in conditions without parens
-            "(a = 1)", "(a += 1)", "(a .= 1)", "(a := 1)", "(a ~ b)", "(a .~ b)", "(a => b)",
-            "(a .=> b)", "(a for a in b)",
-        )
-        @test startswith(format_string("if $(a)\nend"), "if (")
-    end
-    # The condition must be followed by a newline or `;`
-    # (`if (a) x end` is first split over multiple lines so this is fine)
-    @test format_string("if (a) #= c =# x end") == "if a #= c =#\n    x\nend"
+    # Parentheses around conditions are kept
+    @test format_string("if (a)\nelseif (b)\nend") == "if (a)\nelseif (b)\nend"
+    @test format_string("while (a)\nend") == "while (a)\nend"
 end
 
 @testset "spaces in macrocall" begin

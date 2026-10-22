@@ -1085,30 +1085,15 @@ precedence of `:`. Examples:
 
 ### Redundant parentheses
 
-Parentheses around single line conditions in `if`, `elseif`, and `while` are removed.
 Parentheses around identifiers and operators in `export`, `public`, `global`, and `local`
-lists are also removed. Examples:
+lists are removed. Examples:
 ```diff
--if (a && b)
-+if a && b
-     # ...
--elseif (c)
-+elseif c
-     # ...
- end
-
--while(x < 3)
-+while x < 3
-     # ...
- end
-
 -export (a), (+)
 +export a, +
-```
 
-The parentheses are kept if the condition is a multiline expression, contains a comment, or
-is an assignment, a pair, or a generator, since these require the parentheses, e.g.
-`if (a = f())`, `if (a ~ b)`, and `if (a => b)` are left as is.
+-global (a)
++global a
+```
 
 ### `in` instead of `∈` and `=`
 
