@@ -305,6 +305,21 @@ end
         @test format_string("$(sp)f(x$(sp)...)$(sp)") == "$(sp)f(x...)$(sp)"
         @test format_string("$(sp)f(a, b$(sp)...; c$(sp)...)$(sp)") == "$(sp)f(a, b...; c...)$(sp)"
         @test format_string("$(sp)[x$(sp)...]$(sp)") == "$(sp)[x...]$(sp)"
+        # Field access and import paths
+        for nl in (sp, "\n", "\n    ")
+            nl == "" && continue
+            @test format_string("$(sp)a.$(nl)b$(sp)") == "$(sp)a.b$(sp)"
+            @test format_string("$(sp)a.b.$(nl)c$(sp)") == "$(sp)a.b.c$(sp)"
+            @test format_string("$(sp)a.$(nl)f()$(sp)") == "$(sp)a.f()$(sp)"
+            @test format_string("$(sp)Base.$(nl):+$(sp)") == "$(sp)Base.:+$(sp)"
+            @test format_string("function A.$(nl)f()\nend") == "function A.f()\nend"
+            @test format_string("import A.$(nl)B") == "import A.B"
+            @test format_string("using A.$(nl)B, C.$(nl)D") == "using A.B, C.D"
+            @test format_string("using ..$(nl)A") == "using ..A"
+        end
+        # Comments after `.` are left alone
+        @test format_string("a. # c\nb") == "a. # c\nb"
+        @test format_string("a. #= c =# b") == "a. #= c =# b"
         # Edgecase when formatting whitespace in the next leaf, when the next leaf is a
         # grand child or even younger. Note that this test depends a bit on where
         # JuliaSyntax.jl decides to place the K"Whitespace" node.
