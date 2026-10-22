@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Extra whitespace after the `macro` keyword is now normalized to a single space (just
    like for `function`), e.g. `macro  m()` is formatted as `macro m()`.
  - Spaces before splat `...` are now removed, e.g. `f(x ...)` is formatted as `f(x...)`.
+ - Spaces and newlines after `.` in field access and import paths are now removed, e.g.
+   `a. b` is formatted as `a.b` and `import A.\n    B` as `import A.B`. If there is a
+   comment after the `.` it is left as is.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
