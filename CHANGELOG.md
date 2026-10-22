@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Semicolons separating statements are now formatted without space before and with a
    single space after, e.g. `a = 1;b = 2` and `a = 1  ;  b = 2` are formatted as
    `a = 1; b = 2`.
+ - Semicolons in concatenation syntax for arrays are now formatted without space before and
+   with a single space after, e.g. `[1 2;3 4]` and `[1 2 ; 3 4]` are formatted as
+   `[1 2; 3 4]` and `[a ;; b]` as `[a;; b]`.
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
