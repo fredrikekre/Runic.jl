@@ -578,6 +578,7 @@ This is a list of things that Runic currently is doing:
  - [Literal floating point numbers](#literal-floating-point-numbers)
  - [Literal hex and oct numbers](#literal-hex-and-oct-numbers)
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
+ - [Redundant parentheses](#redundant-parentheses)
  - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [`@` after module path in macro calls](#-after-module-path-in-macro-calls)
@@ -1081,6 +1082,33 @@ precedence of `:`. Examples:
 +(1 + 2):3
 +1:(3 * 4)
 ```
+
+### Redundant parentheses
+
+Parentheses around single line conditions in `if`, `elseif`, and `while` are removed.
+Parentheses around identifiers and operators in `export`, `public`, `global`, and `local`
+lists are also removed. Examples:
+```diff
+-if (a && b)
++if a && b
+     # ...
+-elseif (c)
++elseif c
+     # ...
+ end
+
+-while(x < 3)
++while x < 3
+     # ...
+ end
+
+-export (a), (+)
++export a, +
+```
+
+The parentheses are kept if the condition is a multiline expression, contains a comment, or
+is an assignment, a pair, or a generator, since these require the parentheses, e.g.
+`if (a = f())`, `if (a ~ b)`, and `if (a => b)` are left as is.
 
 ### `in` instead of `∈` and `=`
 

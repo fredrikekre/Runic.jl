@@ -38,6 +38,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    +f(x; a = 1, b = 2)
    ```
    ([#33], [#231])
+ - New rule: redundant parentheses around single line conditions in `if`, `elseif`, and
+   `while`, and around identifiers and operators in `export`, `public`, `global`, and
+   `local` lists, are removed. Parentheses are kept for multiline conditions, conditions
+   with comments, and for assignments, pairs, and generators which require them. This is a
+   new formatting rule (not a [spec-bug] fix) and will result in diffs like the following
+   in already formatted code:
+   ```diff
+   -if (a && b)
+   +if a && b
+
+   -while (x < 3)
+   +while x < 3
+
+   -export (a), (+)
+   +export a, +
+   ```
 
 ### Changed
  - Semicolons separating statements are now formatted without space before and with a
