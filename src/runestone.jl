@@ -773,6 +773,25 @@ function spaces_around_ternary(ctx::Context, node::Node)
     return spaces_around_x(ctx, node)
 end
 
+# Collapse multiple spaces after prefix operators to a single space, e.g. `-  x` is
+# formatted as `- x`. Note that the space is not removed completely since that can change
+# the meaning of the code (e.g. `- 1` is a call but `-1` is a literal).
+function spaces_after_prefix_operator(ctx::Context, node::Node)
+    if !(kind(node) in KSet"call dotcall" && JuliaSyntax.is_prefix_op_call(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    b = NodeBuilder(ctx, node)
+    for kid in kids
+        if kind(kid) === K"Whitespace" && span(kid) > 1
+            emit!(b, ws_node(1), " ", span(kid))
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 # Opposite of `spaces_around_x`: remove spaces around `x`
 function no_spaces_around_x(ctx::Context, node::Node)
     @assert !is_leaf(node)

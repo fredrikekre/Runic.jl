@@ -873,6 +873,17 @@ formatted *without* spaces around them. Examples:
 +>:Integer
 ```
 
+Multiple spaces after other prefix operators (e.g. unary `-` and `!`) are collapsed to a
+single space. The space is not removed completely since that can change the meaning of the
+code (e.g. `- 1` is a call while `-1` is a literal). Examples:
+```diff
+-!  x
++! x
+
+--   1
++- 1
+```
+
 #### Potential changes
  - Perhaps the rule for some of these should be "at least one space" instead. This could
    help with alignment issues. Discussed in issue
