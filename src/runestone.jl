@@ -429,6 +429,7 @@ end
 function spaces_in_listlike(ctx::Context, node::Node)
     if !(
             kind(node) in KSet"tuple parameters curly braces bracescat vect ref parens iteration" ||
+                kind(node) in KSet"comprehension typed_comprehension" ||
                 (kind(node) in KSet"call dotcall" && !is_any_op_call(node)) ||
                 (kind(node) === K"macrocall" && JuliaSyntax.has_flags(node, JuliaSyntax.PARENS_FLAG)) ||
                 is_paren_block(node)
@@ -475,7 +476,7 @@ function spaces_in_listlike(ctx::Context, node::Node)
         opening_leaf_idx = findfirst(x -> kind(x) === K"{", kids)::Int
         closing_leaf_idx = findnext(x -> kind(x) === K"}", kids, opening_leaf_idx + 1)::Int
         closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
-    elseif kind(node) in KSet"vect ref"
+    elseif kind(node) in KSet"vect ref comprehension typed_comprehension"
         opening_leaf_idx = findfirst(x -> kind(x) === K"[", kids)::Int
         closing_leaf_idx = findnext(x -> kind(x) === K"]", kids, opening_leaf_idx + 1)::Int
         closing_leaf_idx == opening_leaf_idx + 1 && return nothing # empty
