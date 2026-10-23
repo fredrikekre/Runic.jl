@@ -924,6 +924,9 @@ Consistently use single space around keywords. Examples:
 
 -primitive type Qux 8  end
 +primitive type Qux 8 end
+
+-[x  for  x in X  if  y]
++[x for x in X if y]
 ```
 
 ### Multiline listlike expressions

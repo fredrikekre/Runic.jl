@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Spaces around the short-circuiting operators `&&` and `||` (and the dotted versions
    `.&&` and `.||`) are now normalized just like other infix operators, e.g. `a&&b||c` is
    formatted as `a && b || c` ([#239]).
+ - Extra whitespace around the `for` and `if` keywords in generators and comprehensions is
+   now normalized to a single space, just like for `for` loops, e.g. `[x  for  x in X  if  y]`
+   is formatted as `[x for x in X if y]` ([#240]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -392,6 +395,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#236]: https://github.com/fredrikekre/Runic.jl/issues/236
 [#237]: https://github.com/fredrikekre/Runic.jl/issues/237
 [#239]: https://github.com/fredrikekre/Runic.jl/issues/239
+[#240]: https://github.com/fredrikekre/Runic.jl/issues/240
 [#242]: https://github.com/fredrikekre/Runic.jl/issues/242
 [#243]: https://github.com/fredrikekre/Runic.jl/issues/243
 [#244]: https://github.com/fredrikekre/Runic.jl/issues/244

@@ -588,6 +588,20 @@ end
         @test format_string("for i $(op) I$(sp),$(sp)j $(op) J # c\nend") ==
             "for i in I, j in J # c\nend"
     end
+    # Spaces around `for` and `if` in generators and comprehensions
+    for sp in (" ", "  "), (l, r) in (("[", "]"), ("(", ")"), ("T[", "]"), ("f(", ")"))
+        @test format_string("$(l)i$(sp)for$(sp)i in I$(r)") == "$(l)i for i in I$(r)"
+        @test format_string("$(l)i$(sp)for$(sp)i in I$(sp)if$(sp)i$(r)") ==
+            "$(l)i for i in I if i$(r)"
+        @test format_string("$(l)i$(sp)for$(sp)i in I$(sp)for$(sp)j in J$(sp)if$(sp)j$(r)") ==
+            "$(l)i for i in I for j in J if j$(r)"
+        @test format_string("$(l)i$(sp)for$(sp)(i, j) in I$(r)") == "$(l)i for (i, j) in I$(r)"
+        @test format_string("$(l)i for i in I$(sp)if$(sp)(i)$(r)") == "$(l)i for i in I if (i)$(r)"
+        # Newlines are kept
+        @test format_string("[\n    i\n    for i in I\n    if i\n]") ==
+            "[\n    i\n        for i in I\n        if i\n]"
+    end
+    @test format_string("[i for i in I if(i)]") == "[i for i in I if (i)]"
 end
 
 @testset "whitespace in let" begin
