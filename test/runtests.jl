@@ -1372,8 +1372,8 @@ end
                 "println(\n    io, $(trip)\n    a\n\n    b\n    $(trip)\n)"
             # Triple string on same line
             for b in ("", "\$b", "\$(b)", "\$(b)c")
-                @test format_string("println(io, $(trip)a$b$(trip))") ==
-                    "println(io, $(trip)a$b$(trip))"
+                @test format_string("println(io, $(trip)a$(b)$(trip))") ==
+                    "println(io, $(trip)a$(b)$(trip))"
             end
         end
     end
@@ -1899,7 +1899,7 @@ end
             "if cond", "macro f()", "function f()", "f() do", "f() do x",
         )
         rx = prefix in ("function f()", "macro f()") ? "    return x\n" : ""
-        @test format_string("$(prefix)\n$(body)$(rx)\nend") == "$prefix\n$(bodyfmt)$(rx)\nend"
+        @test format_string("$(prefix)\n$(body)$(rx)\nend") == "$(prefix)\n$(bodyfmt)$(rx)\nend"
     end
     @test format_string(
         "if cond1\n$(body)\nelseif cond2\n$(body)\nelseif cond3\n$(body)\nelse\n$(body)\nend"
@@ -1962,17 +1962,17 @@ end
                 "try\n        x\n    catch\n        y\n    finally\n        z\n    end",
                 "try\n        x\n    catch\n        y\n    else\n        z\n    finally\n        z\n    end",
             )
-            @test format_string("$f\n    $r\nend") == "$f\n    return $r\nend"
-            @test format_string("$f\n    x;$r\nend") == "$f\n    x\n    return $r\nend"
-            @test format_string("$f\n    x; $r\nend") == "$f\n    x\n    return $r\nend"
+            @test format_string("$(f)\n    $(r)\nend") == "$(f)\n    return $(r)\nend"
+            @test format_string("$(f)\n    x;$(r)\nend") == "$(f)\n    x\n    return $(r)\nend"
+            @test format_string("$(f)\n    x; $(r)\nend") == "$(f)\n    x\n    return $(r)\nend"
             # Nesting
-            @test format_string("$f\n    $f\n        $r\n    end\nend") ==
-                format_string("$f\n    return $f\n        return $r\n    end\nend")
+            @test format_string("$(f)\n    $(f)\n        $(r)\n    end\nend") ==
+                format_string("$(f)\n    return $(f)\n        return $(r)\n    end\nend")
         end
         # If the last expression is a call and the function name contains throw or error
         # there should be no return
         for r in ("throw(ArgumentError())", "error(\"foo\")", "rethrow()", "throw_error()")
-            @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
+            @test format_string("$(f)\n    $(r)\nend") == "$(f)\n    $(r)\nend"
         end
         # If the last expression is an if/let/begin/? where all branches end in a call to
         # throw/error there should be no return (issue #202)
@@ -1986,7 +1986,7 @@ end
                 "begin\n        throw(A())\n    end",
                 "if c\n        c ? throw(A()) : error(\"foo\")\n    else\n        let\n            error(\"foo\")\n        end\n    end",
             )
-            @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
+            @test format_string("$(f)\n    $(r)\nend") == "$(f)\n    $(r)\nend"
         end
         # ... but if there is a fall-through path or a branch that doesn't throw the
         # return should still be added
@@ -1999,7 +1999,7 @@ end
                 "c ? throw(A()) : y",
                 "c ? y : error(\"foo\")",
             )
-            @test format_string("$f\n    $r\nend") == "$f\n    return $r\nend"
+            @test format_string("$(f)\n    $(r)\nend") == "$(f)\n    return $(r)\nend"
         end
         # If the last expression is a macro call with return inside there should be no
         # return on the outside
@@ -2007,25 +2007,25 @@ end
                 "@inbounds return x[i]", "@inbounds @inline return x[i]",
                 "@inbounds begin\n        return x[i]\n    end",
             )
-            @test format_string("$f\n    $r\nend") == "$f\n    $r\nend"
+            @test format_string("$(f)\n    $(r)\nend") == "$(f)\n    $(r)\nend"
         end
         # Safe/known macros
-        @test format_string("@inline $f\n    x\nend") ==
-            "@inline $f\n    return x\nend"
-        @test format_string("Base.@noinline $f\n    x\nend") ==
-            "Base.@noinline $f\n    return x\nend"
+        @test format_string("@inline $(f)\n    x\nend") ==
+            "@inline $(f)\n    return x\nend"
+        @test format_string("Base.@noinline $(f)\n    x\nend") ==
+            "Base.@noinline $(f)\n    return x\nend"
         # Unsafe/unknown macros
-        @test format_string("@kernel $f\n    x\nend") == "@kernel $f\n    x\nend"
+        @test format_string("@kernel $(f)\n    x\nend") == "@kernel $(f)\n    x\nend"
         # `for` and `while` append `return` to the end
         for r in ("for i in I\n    end", "while i in I\n    end")
-            @test format_string("$f\n    $r\nend") == "$f\n    $r\n    return\nend"
-            @test format_string("$f\n    $r\n    # comment\nend") ==
-                "$f\n    $r\n    # comment\n    return\nend"
+            @test format_string("$(f)\n    $(r)\nend") == "$(f)\n    $(r)\n    return\nend"
+            @test format_string("$(f)\n    $(r)\n    # comment\nend") ==
+                "$(f)\n    $(r)\n    # comment\n    return\nend"
         end
         # If there already is a `return` anywhere (not necessarily the last expression)
         # there will be no additional `return` added on the last expression.
         # `for` and `while` append `return` to the end
-        let str = "$f\n    return 42\n    1337\nend"
+        let str = "$(f)\n    return 42\n    1337\nend"
             @test format_string(str) == str
         end
         # if/let/begin/try with a `return` inside should be left alone
@@ -2044,7 +2044,7 @@ end
                 "try\n        x\n    catch\n        y\n    finally\n        return z\n    end",
                 "try\n        x\n    catch\n        y\n    else\n        return z\n    finally\n        z\n    end",
             )
-            str = "$f\n    $r\nend"
+            str = "$(f)\n    $(r)\nend"
             @test format_string(str) == str
         end
     end
@@ -2056,26 +2056,26 @@ end
         off = "#$(exc) $(word): off"
         bon = "#$(exc == "" ? "!" : "") $(word): on"
         # Disable rest of the file from top level comment
-        @test format_string("$off\n1+1") == "$off\n1+1"
-        @test format_string("1+1\n$off\n1+1") == "1 + 1\n$off\n1+1"
-        @test format_string("1+1\n$off\n1+1\n$on\n1+1") == "1 + 1\n$off\n1+1\n$on\n1 + 1"
-        @test format_string("1+1\n$off\n1+1\n$bon\n1+1") == "1 + 1\n$off\n1+1\n$bon\n1+1"
+        @test format_string("$(off)\n1+1") == "$(off)\n1+1"
+        @test format_string("1+1\n$(off)\n1+1") == "1 + 1\n$(off)\n1+1"
+        @test format_string("1+1\n$(off)\n1+1\n$(on)\n1+1") == "1 + 1\n$(off)\n1+1\n$(on)\n1 + 1"
+        @test format_string("1+1\n$(off)\n1+1\n$(bon)\n1+1") == "1 + 1\n$(off)\n1+1\n$(bon)\n1+1"
         # Toggle inside a function
         @test format_string(
             """
             function f()
-                $off
+                $(off)
                 1+1
-                $on
+                $(on)
                 1+1
                 return
             end
             """
         ) == """
             function f()
-                $off
+                $(off)
                 1+1
-                $on
+                $(on)
                 1 + 1
                 return
             end
@@ -2083,18 +2083,18 @@ end
         @test format_string(
             """
             function f()
-                $off
+                $(off)
                 1+1
-                $bon
+                $(bon)
                 1+1
                 return
             end
             """
         ) == """
             function f()
-                $off
+                $(off)
                 1 + 1
-                $bon
+                $(bon)
                 1 + 1
                 return
             end
@@ -2102,7 +2102,7 @@ end
         @test format_string(
             """
             function f()
-                $off
+                $(off)
                 1+1
                 1+1
                 return
@@ -2110,25 +2110,25 @@ end
             """
         ) == """
             function f()
-                $off
+                $(off)
                 1 + 1
                 1 + 1
                 return
             end
             """
         # Extra stuff in the toggle comments
-        @test format_string("1+1\n$off #src\n1+1\n$on #src\n1+1") ==
-            "1 + 1\n$off #src\n1+1\n$on #src\n1 + 1"
-        @test format_string("1+1\n#src $off\n1+1\n#src $on\n1+1") ==
-            "1 + 1\n#src $off\n1+1\n#src $on\n1 + 1"
+        @test format_string("1+1\n$(off) #src\n1+1\n$(on) #src\n1+1") ==
+            "1 + 1\n$(off) #src\n1+1\n$(on) #src\n1 + 1"
+        @test format_string("1+1\n#src $(off)\n1+1\n#src $(on)\n1+1") ==
+            "1 + 1\n#src $(off)\n1+1\n#src $(on)\n1 + 1"
         # Toggles inside literal array expression (fixed by normalization, PR #101)
         let str = """
             [
-                $off
+                $(off)
                  1.10  1.20  1.30
                 -2.10 -1.20 +1.30
                 f( a+b )
-                $on
+                $(on)
             ]"""
             @test format_string(str) == str
         end
@@ -2137,40 +2137,40 @@ end
         # comments span the full body (matches mwe.jl).
         let str = """
             (
-                $off
+                $(off)
                    1,    1,    1,
                 1000, 1000, 1000,
-                $on
+                $(on)
             )
             """
             @test format_string(str) == str
         end
         let str = """
             [
-                $off
+                $(off)
                    1,    1,    1,
                 1000, 1000, 1000,
-                $on
+                $(on)
             ]
             """
             @test format_string(str) == str
         end
         let str = """
             f(
-                $off
+                $(off)
                 a   ,   b,
                 c,d,
-                $on
+                $(on)
             )
             """
             @test format_string(str) == str
         end
         let str = """
             {
-                $off
+                $(off)
                 a   ,   b,
                 c,d,
-                $on
+                $(on)
             }
             """
             @test format_string(str) == str
@@ -2181,18 +2181,18 @@ end
             """
             (
                 a,b,
-                $off
+                $(off)
                 c   ,    d,
-                $on
+                $(on)
                 e,f,
             )
             """
         ) == """
             (
                 a, b,
-                $off
+                $(off)
                 c   ,    d,
-                $on
+                $(on)
                 e, f,
             )
             """
@@ -2200,18 +2200,18 @@ end
             """
             [
                 a,b,
-                $off
+                $(off)
                 c   ,    d,
-                $on
+                $(on)
                 e,f,
             ]
             """
         ) == """
             [
                 a, b,
-                $off
+                $(off)
                 c   ,    d,
-                $on
+                $(on)
                 e, f,
             ]
             """
@@ -2219,24 +2219,24 @@ end
         @test format_string(
             """
             (
-                $off
+                $(off)
                 a   ,    b,
-                $on
+                $(on)
                 c,d,
-                $off
+                $(off)
                 e   ,    f,
-                $on
+                $(on)
             )
             """
         ) == """
             (
-                $off
+                $(off)
                 a   ,    b,
-                $on
+                $(on)
                 c, d,
-                $off
+                $(off)
                 e   ,    f,
-                $on
+                $(on)
             )
             """
         # The trailing comma that Runic requires for multiline listlikes is given up
@@ -2244,9 +2244,9 @@ end
         # touch the region or (worse) end up inside the `on` comment.
         let str = """
             [
-                $off
+                $(off)
                 a
-                $on
+                $(on)
             ]
             """
             @test format_string(str) == str
@@ -2254,9 +2254,9 @@ end
         let str = """
             [
                 a,
-                $off
+                $(off)
                 b
-                $on
+                $(on)
             ]
             """
             @test format_string(str) == str
@@ -2267,34 +2267,34 @@ end
             """
             [
                 a
-                $off
-                $on
+                $(off)
+                $(on)
             ]
             """
         ) == """
             [
                 a,
-                $off
-                $on
+                $(off)
+                $(on)
             ]
             """
         # Keyword arguments (K"parameters" kids) inside the off region.
         let str = """
             f(
-                $off
+                $(off)
                 a,   b;
                 c   =   1,
-                $on
+                $(on)
             )
             """
             @test format_string(str) == str
         end
         let str = """
             f(
-                $off
+                $(off)
                 a;
                 b
-                $on
+                $(on)
             )
             """
             @test format_string(str) == str
@@ -2795,10 +2795,10 @@ if Sys.isunix() && isdir(share_julia)
                         @test true
                     catch err
                         if err isa JuliaSyntax.ParseError
-                            @warn "JuliaSyntax.ParseError for $path" err
+                            @warn "JuliaSyntax.ParseError for $(path)" err
                             @test_broken false
                         else
-                            @error "Error when formatting file $path" err
+                            @error "Error when formatting file $(path)" err
                             @test false
                         end
                     end
