@@ -855,8 +855,8 @@ arguments in function definitions and calls. Examples:
 +foo(a = 1)
 ```
 
-Exceptions to the rule above are `:`, `^`, `::`, and unary `<:` and `>:`. These are
-formatted *without* spaces around them. Examples:
+Exceptions to the rule above are `:`, `^`, `::`, unary `<:` and `>:`, and splat `...`.
+These are formatted *without* spaces around them. Examples:
 ```diff
 -a : b
 +a:b
@@ -871,6 +871,9 @@ formatted *without* spaces around them. Examples:
 ->:  Integer
 +<:Integer
 +>:Integer
+
+-f(x ...)
++f(x...)
 ```
 
 Multiple spaces after other prefix operators (e.g. unary `-` and `!`) are collapsed to a
