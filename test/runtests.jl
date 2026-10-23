@@ -1371,7 +1371,7 @@ end
             @test format_string("println(io, $(trip)\n$(sp)a\n$(sp)\n$(sp)b\n$(sp)$(trip))") ==
                 "println(\n    io, $(trip)\n    a\n\n    b\n    $(trip)\n)"
             # Triple string on same line
-            for b in ("", "\$b", "\$(b)", "\$(b)c")
+            for b in ("", "\$(b)", "\$(b)c")
                 @test format_string("println(io, $(trip)a$(b)$(trip))") ==
                     "println(io, $(trip)a$(b)$(trip))"
             end
@@ -1471,6 +1471,49 @@ end
     # Edgecase: leading whitespace so that the paren have to be inserted in the middle of
     # the node
     Runic.format_string("i in a + b:c") == "i in (a + b):c"
+end
+
+@testset "parens around interpolated identifiers" begin
+    # Strings
+    for q in ("\"", "\"\"\"")
+        @test format_string("$(q)\$a$(q)") == "$(q)\$(a)$(q)"
+        @test format_string("$(q)x \$a y \$b$(q)") == "$(q)x \$(a) y \$(b)$(q)"
+        @test format_string("$(q)\$a\$b$(q)") == "$(q)\$(a)\$(b)$(q)"
+        @test format_string("$(q)\$a.b\$c_d$(q)") == "$(q)\$(a).b\$(c_d)$(q)"
+        @test format_string("$(q)\$α₁\$x!$(q)") == "$(q)\$(α₁)\$(x!)$(q)"
+        @test format_string("$(q)\\\$a$(q)") == "$(q)\\\$a$(q)"
+        for x in ("\$(a)", "\$(a.b)", "\$(f(a))", "\$(a)b", "a\$(b)")
+            @test format_string("$(q)$(x)$(q)") == "$(q)$(x)$(q)"
+        end
+    end
+    @test format_string("\"\"\"\n\$a\n\"\"\"") == "\"\"\"\n\$(a)\n\"\"\""
+    @test format_string("f(\"\$a\")") == "f(\"\$(a)\")"
+    @test format_string(":(f(\"\$a\"))") == ":(f(\"\$(a)\"))"
+    # Docstrings
+    @test format_string("\"\"\"\n    f(\$a)\n\"\"\"\nf(a) = a") ==
+        "\"\"\"\n    f(\$(a))\n\"\"\"\nf(a) = a"
+    # Command strings
+    for q in ("`", "```")
+        @test format_string("$(q)ls \$a$(q)") == "$(q)ls \$(a)$(q)"
+        @test format_string("$(q)ls \$a.jl \$b_c$(q)") == "$(q)ls \$(a).jl \$(b_c)$(q)"
+        @test format_string("$(q)ls \"\$a\" '\$b'$(q)") == "$(q)ls \"\$(a)\" '\$b'$(q)"
+        @test format_string("$(q)ls \\\$a \"\\\$b\"$(q)") == "$(q)ls \\\$a \"\\\$b\"$(q)"
+        @test format_string("$(q)ls \"'\" \$a$(q)") == "$(q)ls \"'\" \$(a)$(q)"
+        @test format_string("$(q)ls '\"' \$a$(q)") == "$(q)ls '\"' \$(a)$(q)"
+        @test format_string("$(q)ls \$α₁$(q)") == "$(q)ls \$(α₁)$(q)"
+        for x in ("\$(a)", "\$(f(a))", "\$[a, b]", "\$1")
+            @test format_string("$(q)ls $(x)$(q)") == "$(q)ls $(x)$(q)"
+        end
+    end
+    @test format_string("@f `ls \$a`") == "@f `ls \$(a)`"
+    # Quote state is kept across lines in triple-backtick command strings
+    @test format_string("```\nls '\n\$a'\n\$b\n```") == "```\nls '\n\$a'\n\$(b)\n```"
+    # No-ops: non-standard string literals and expression interpolation
+    for x in ("r\"\$a\"", "raw\"\$a\"", "L\"\$a\"", "M.f\"\$a\"", "f`\$a`", "M.f`\$a`")
+        @test format_string(x) == x
+    end
+    @test format_string(":(\$a)") == ":(\$a)"
+    @test format_string("quote\n    \$a\nend") == "quote\n    \$a\nend"
 end
 
 @testset "leading and trailing newline in multiline listlike" begin
@@ -2521,17 +2564,18 @@ end
     src_raw = "raw\"\"\"\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
     @test ds(src_raw) == src_raw
 
-    # Interpolated docstrings are left untouched (K"$"/K"Identifier" kids would otherwise
-    # be silently dropped from the string on writeback).
+    # The content of interpolated docstrings is left untouched (K"$"/K"Identifier" kids
+    # would otherwise be silently dropped from the string on writeback). Only the
+    # interpolated identifiers get parenthesized.
     # Prose interpolation + formattable code block
     src_interp_prose = "\"\"\"\nHello \$name world.\n```julia\nx=1\n```\n\"\"\"\nfunction foo()\nend\n"
-    @test ds(src_interp_prose) == src_interp_prose
+    @test ds(src_interp_prose) == replace(src_interp_prose, "\$name" => "\$(name)")
     # Interpolation inside code block that parses after stripping (corruption would be silent)
     src_interp_block = "\"\"\"\n```julia\nfoo( \$arg )\n```\n\"\"\"\nfunction foo()\nend\n"
-    @test ds(src_interp_block) == src_interp_block
+    @test ds(src_interp_block) == replace(src_interp_block, "\$arg" => "\$(arg)")
     # Prose interpolation + formattable signature
     src_interp_sig = "\"\"\"\n    foo( x,y )\n\nHello \$name.\n\"\"\"\nfunction foo(x, y)\nend\n"
-    @test ds(src_interp_sig) == src_interp_sig
+    @test ds(src_interp_sig) == replace(src_interp_sig, "\$name" => "\$(name)")
 
     # Multi-line REPL with continuation
     src_repl_multi = "\"\"\"\n```julia-repl\njulia> function f()\n           x=1\n       end\nnothing\n```\n\"\"\"\nfunction foo()\nend\n"

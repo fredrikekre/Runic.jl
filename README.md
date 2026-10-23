@@ -578,6 +578,7 @@ This is a list of things that Runic currently is doing:
  - [Literal floating point numbers](#literal-floating-point-numbers)
  - [Literal hex and oct numbers](#literal-hex-and-oct-numbers)
  - [Parentheses around operator calls in colon](#parentheses-around-operator-calls-in-colon)
+ - [Parentheses around interpolated identifiers](#parentheses-around-interpolated-identifiers)
  - [`in` instead of `∈` and `=`](#in-instead-of--and-)
  - [Braces around right hand side of `where`](#braces-around-right-hand-side-of-where)
  - [`@` after module path in macro calls](#-after-module-path-in-macro-calls)
@@ -1124,6 +1125,21 @@ precedence of `:`. Examples:
 +(1 + 2):3
 +1:(3 * 4)
 ```
+
+### Parentheses around interpolated identifiers
+
+Interpolated identifiers in strings, docstrings, and command strings are wrapped in
+parentheses so that interpolation always uses the same form and the end of the interpolated
+expression is always explicit. Examples:
+```diff
+-"got $n items from $src"
+-`ls $dir`
++"got $(n) items from $(src)"
++`ls $(dir)`
+```
+Non-standard string literals (e.g. `raw"$a"` and `r"$a"`) are left as is since their
+contents are not interpolated. Likewise, expression interpolation in quoted code (e.g.
+`:($a)`) is not affected.
 
 ### `in` instead of `∈` and `=`
 
