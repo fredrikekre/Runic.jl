@@ -665,6 +665,27 @@ end
     @test format_string("a >:  T   >:    S") == "a >: T >: S"
 end
 
+@testset "spaces around semicolons" begin
+    for sp in ("", " ", "  ")
+        # Statements separated by `;`
+        @test format_string("a$(sp);$(sp)b") == "a; b"
+        @test format_string("a = 1$(sp);$(sp)b = 2") == "a = 1; b = 2"
+        @test format_string("a$(sp);$(sp)b$(sp);$(sp)c") == "a; b; c"
+        @test format_string("a$(sp);$(sp)@m b") == "a; @m b"
+        @test format_string("begin\n    a$(sp);$(sp)b\nend") == "begin\n    a; b\nend"
+        @test format_string("quote\n    a$(sp);$(sp)b\nend") == "quote\n    a; b\nend"
+        # Trailing `;`
+        @test format_string("a$(sp);") == "a;"
+        @test format_string("a$(sp);\nb") == "a;\nb"
+        # Comments after `;`
+        csp = sp == "" ? " " : sp
+        @test format_string("a$(sp);$(csp)# c\nb") == "a;$(csp)# c\nb"
+        @test format_string("a$(sp);$(sp)b # c") == "a; b # c"
+    end
+    # Leading `;` on a line
+    @test format_string("begin\n    a\n    ;b\nend") == "begin\n    a\n    ; b\nend"
+end
+
 @testset "spaces around keywords" begin
     for sp in (" ", "  ")
         @test format_string("struct$(sp)A end") == "struct A end"

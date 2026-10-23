@@ -797,6 +797,82 @@ function no_spaces_around_x(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
+# Emit `kid` with its leading whitespace normalized to `n` spaces (`n` is 0 or 1). The
+# leading whitespace is either `kid` itself or, in JuliaSyntax v1, often the first leaf of
+# `kid`. If there is no leading whitespace and `n > 0` the spaces are inserted. Newlines and
+# comments are left alone.
+function emit_with_leading_ws!(b::NodeBuilder, kid::Node, n::Int)
+    @assert n in (0, 1)
+    spaces = n == 0 ? "" : " " # Note: `repeat` is not supported by juliac
+    fl = is_leaf(kid) ? kid : first_leaf(kid)
+    if kind(fl) in KSet"NewlineWs Comment"
+        accept!(b, kid)
+    elseif kind(fl) === K"Whitespace"
+        if span(fl) == n
+            accept!(b, kid)
+        elseif is_leaf(kid)
+            if n == 0
+                skip_kid!(b, kid)
+            else
+                emit!(b, ws_node(n), spaces, span(kid))
+            end
+        else
+            replace_bytes!(b.ctx, spaces, span(fl))
+            emit!(b, replace_first_leaf(kid, n == 0 ? nullnode : ws_node(n)))
+        end
+    else
+        if n > 0
+            emit!(b, ws_node(n), spaces, 0)
+        end
+        accept!(b, kid)
+    end
+    return
+end
+
+# No space before and a single space after `;` separating statements, e.g. `a  ;b` is
+# formatted as `a; b`. Newlines and comments after `;` are left alone.
+function spaces_around_semicolons(ctx::Context, node::Node)
+    if !(kind(node) in KSet"toplevel block" && !is_leaf(node) && !is_paren_block(node))
+        return nothing
+    end
+    kids = verified_kids(node)
+    any(x -> kind(x) === K";", kids) || return nothing
+    b = NodeBuilder(ctx, node)
+    # Kind of the first non-whitespace token after kids[i], looking at the next sibling of
+    # the node if there are no more kids
+    function kind_after(i)
+        j = findnext(x -> kind(x) !== K"Whitespace", kids, i + 1)
+        if j === nothing
+            return next_sibling_kind(ctx)
+        else
+            return kind(is_leaf(kids[j]) ? kids[j] : first_leaf(kids[j]))
+        end
+    end
+    no_space_kinds = KSet"NewlineWs Comment ] ) end"
+    for (i, kid) in pairs(kids)
+        if kind(kid) === K"Whitespace" && i < length(kids) && kind(kids[i + 1]) === K";" &&
+                i > 1 && !(kind(kids[i - 1]) in KSet"NewlineWs [ (")
+            # Whitespace before `;`
+            skip_kid!(b, kid)
+        elseif i > 1 && kind(kids[i - 1]) === K";" && kind(kid) !== K";"
+            # First kid after a run of `;`
+            nk = kind_after(i - 1)
+            if nk === nothing || nk in no_space_kinds
+                if kind(kid) === K"Whitespace" && nk !== K"Comment"
+                    skip_kid!(b, kid)
+                else
+                    accept!(b, kid)
+                end
+            else
+                emit_with_leading_ws!(b, kid, 1)
+            end
+        else
+            accept!(b, kid)
+        end
+    end
+    return finish!(b, node)
+end
+
 function spaces_in_export_public(ctx::Context, node::Node)
     is_leaf(node) && return nothing
     if !(kind(node) in KSet"export public" || is_global_local_list(node))
