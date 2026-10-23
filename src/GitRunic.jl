@@ -104,11 +104,11 @@ function disambiguate_revision(value::AbstractString)
             stdout = devnull, stderr = devnull
         )
     )
-    proc.exitcode != 0 && die("'$value' is neither a commit nor a file path")
+    proc.exitcode != 0 && die("'$(value)' is neither a commit nor a file path")
     object_type = get_object_type(value)
     object_type === nothing && return false
     object_type in ("commit", "tag") && return true
-    return die("`$value` is a $object_type, but a commit or filename was expected")
+    return die("`$(value)` is a $(object_type), but a commit or filename was expected")
 end
 
 # Interpret positional args as "[commits] [--] [files]", return (commits, files).
@@ -119,9 +119,9 @@ function interpret_args(args::Vector{String}, dash_dash::Vector{String}, default
             object_type = get_object_type(commit)
             if !(object_type in ("commit", "tag"))
                 if object_type === nothing
-                    die("'$commit' is not a commit")
+                    die("'$(commit)' is not a commit")
                 else
-                    die("'$commit' is a $object_type, but a commit was expected")
+                    die("'$(commit)' is a $(object_type), but a commit was expected")
                 end
             end
         end
@@ -374,7 +374,7 @@ function runic_to_blob(
         end
     catch err
         err isa JuliaSyntax.ParseError || rethrow()
-        die("failed to parse input from $filename: $(sprint(showerror, err))")
+        die("failed to parse input from $(filename): $(sprint(showerror, err))")
     end
 
     # Store formatted output as a git blob and return its SHA
@@ -566,7 +566,7 @@ function parse_config_bool(key::String, value::String)
     v = lowercase(strip(value))
     v in ("true", "yes", "on", "1") && return true
     v in ("false", "no", "off", "0", "") && return false
-    return die("invalid boolean value for `$key`: $value")
+    return die("invalid boolean value for `$(key)`: $(value)")
 end
 
 # Parse a comma-separated list of languages, mirroring `--languages` in `Runic.main`.
@@ -659,7 +659,7 @@ function _main(argv)
             i += 1; i > length(argv) && die("expected argument after --languages")
             languages = argv[i]
         elseif startswith(arg, '-')
-            die("unknown option: $arg")
+            die("unknown option: $(arg)")
         else
             push!(positional, arg)
         end
@@ -701,13 +701,13 @@ function _main(argv)
                     "ignored by runic):"
             )
             for f in sort!(collect(ignored_files))
-                println("    $f")
+                println("    $(f)")
             end
         end
         if !isempty(changed_lines)
             println("Running runic on the following files:")
             for f in sort!(collect(keys(changed_lines)))
-                println("    $f")
+                println("    $(f)")
             end
         end
     end
@@ -733,8 +733,8 @@ function _main(argv)
     )
 
     if verbose >= 1
-        println("old tree: $old_tree")
-        println("new tree: $new_tree")
+        println("old tree: $(old_tree)")
+        println("new tree: $(new_tree)")
     end
 
     if old_tree == new_tree
@@ -753,7 +753,7 @@ function _main(argv)
     if (verbose >= 0 && !patch_mode) || verbose >= 1
         println("changed files:")
         for f in changed_files
-            println("    $f")
+            println("    $(f)")
         end
     end
 

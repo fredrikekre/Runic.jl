@@ -2003,6 +2003,88 @@ function parens_around_op_calls_in_colon(ctx::Context, node::Node)
     return finish!(b, node)
 end
 
+# Use explicit parentheses for interpolated identifiers in strings and command strings, i.e.
+# `"$a"` -> `"$(a)"`.
+function parens_around_interpolated_identifiers(ctx::Context, node::Node)
+    kind(node) in KSet"string cmdstring" || return nothing
+    # Non-standard string and command literals (e.g. `r"$a"` and `foo`$a``) are not
+    # interpolated.
+    if !isempty(ctx.lineage_kinds) && last(ctx.lineage_kinds) === K"macrocall" &&
+            ctx.prev_sibling !== nothing &&
+            kind(ctx.prev_sibling) in KSet"StringMacroName CmdMacroName ."
+        return nothing
+    end
+    kids = verified_kids(node)
+    b = NodeBuilder(ctx, node)
+    if kind(node) === K"string"
+        for (i, kid) in pairs(kids)
+            if kind(kid) === K"Identifier" && i > 1 && kind(kids[i - 1]) === K"$"
+                @assert is_leaf(kid)
+                opening_paren = Node(JuliaSyntax.SyntaxHead(K"(", 0), 1)
+                closing_paren = Node(JuliaSyntax.SyntaxHead(K")", 0), 1)
+                parens = Node(JuliaSyntax.SyntaxHead(K"parens", 0), [opening_paren, kid, closing_paren])
+                bytes = read_bytes(ctx, kid)
+                emit!(b, parens, "(" * String(bytes) * ")", span(kid))
+            else
+                accept!(b, kid)
+            end
+        end
+    else
+        # Command strings are not parsed so we need to find the interpolations manually
+        # following the rules of `Base.shell_parse`. The quote state is kept across the
+        # CmdString kids since a triple-backtick command string is split up into one kid
+        # per line.
+        in_single_quotes = false
+        in_double_quotes = false
+        for kid in kids
+            if kind(kid) !== K"CmdString"
+                accept!(b, kid)
+                continue
+            end
+            str = String(read_bytes(ctx, kid))
+            io = IOBuffer()
+            changed = false
+            i = firstindex(str)
+            while i <= lastindex(str)
+                c = str[i]
+                j = nextind(str, i)
+                if !in_double_quotes && c == '\''
+                    in_single_quotes = !in_single_quotes
+                elseif !in_single_quotes && c == '"'
+                    in_double_quotes = !in_double_quotes
+                elseif !in_single_quotes && c == '\\'
+                    # Skip the escaped character
+                    j = j <= lastindex(str) ? nextind(str, j) : j
+                elseif !in_single_quotes && c == '$' && j <= lastindex(str) &&
+                        Base.is_id_start_char(str[j])
+                    k = j
+                    while k <= lastindex(str) && Base.is_id_char(str[k])
+                        k = nextind(str, k)
+                    end
+                    id = SubString(str, j, prevind(str, k))
+                    if Base.isidentifier(id)
+                        write(io, "\$(")
+                        write(io, id)
+                        write(io, ')')
+                        changed = true
+                        i = k
+                        continue
+                    end
+                end
+                write(io, SubString(str, i, prevind(str, j)))
+                i = j
+            end
+            if changed
+                bytes′ = take!(io)
+                emit!(b, Node(head(kid), length(bytes′)), bytes′, span(kid))
+            else
+                accept!(b, kid)
+            end
+        end
+    end
+    return finish!(b, node)
+end
+
 # No newline at the beginning and single newline at the end of the file
 function no_leading_and_single_trailing_newline(ctx::Context, node::Node)
     if !(ctx.filemode && length(ctx.lineage_kinds) == 0)

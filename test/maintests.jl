@@ -119,8 +119,8 @@ function maintests(f::R, real_home::String) where {R}
     cdtmp() do
         f_out = "out.jl"
         for argv in [
-                ["--output=$f_out"], ["-o", f_out],
-                ["--output=$f_out", "-"], ["-o", f_out, "-"],
+                ["--output=$(f_out)"], ["-o", f_out],
+                ["--output=$(f_out)", "-"], ["-o", f_out, "-"],
             ]
             rm(f_out; force = true)
             rc, fd1, fd2 = runic(argv, bad)
@@ -149,7 +149,7 @@ function maintests(f::R, real_home::String) where {R}
         f_in = "in.jl"
         write(f_in, bad)
         f_out = "out.jl"
-        for argv in [["--output=$f_out", f_in], ["-o", f_out, f_in]]
+        for argv in [["--output=$(f_out)", f_in], ["-o", f_out, f_in]]
             rm(f_out; force = true)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
@@ -158,7 +158,7 @@ function maintests(f::R, real_home::String) where {R}
             @test read(f_in, String) == bad
         end
         # --verbose
-        let argv = ["--verbose", "--output=$f_out", f_in]
+        let argv = ["--verbose", "--output=$(f_out)", f_in]
             rm(f_out; force = true)
             rc, fd1, fd2 = runic(argv)
             @test rc == 0
@@ -557,16 +557,16 @@ function maintests(f::R, real_home::String) where {R}
             @test rc == 1
             @test isempty(fd1)
             @test !occursin("Formatting", fd2)
-            @test occursin("input path is not a file or directory: `$nofile`", fd2)
-            @test occursin("input path is not a file or directory: `$nodir`", fd2)
+            @test occursin("input path is not a file or directory: `$(nofile)`", fd2)
+            @test occursin("input path is not a file or directory: `$(nodir)`", fd2)
         end
         let (rc, fd1, fd2) = runic(["-v", "-c", nofile, nodir])
             @test rc == 1
             @test isempty(fd1)
-            @test occursin("[1/2] Checking `$nofile` ...", fd2)
-            @test occursin("input path is not a file or directory: `$nofile`", fd2)
-            @test occursin("[2/2] Checking `$nodir` ...", fd2)
-            @test occursin("input path is not a file or directory: `$nodir`", fd2)
+            @test occursin("[1/2] Checking `$(nofile)` ...", fd2)
+            @test occursin("input path is not a file or directory: `$(nofile)`", fd2)
+            @test occursin("[2/2] Checking `$(nodir)` ...", fd2)
+            @test occursin("input path is not a file or directory: `$(nodir)`", fd2)
         end
     end
 
@@ -813,7 +813,7 @@ function maintests(f::R, real_home::String) where {R}
     let src = "```julia\nx=1\n```\n"
         for range in ("0:1", "5:5")
             rc, fd1, fd2 =
-                runic(["--lines=$range", "--stdin-filename=foo.md"], src)
+                runic(["--lines=$(range)", "--stdin-filename=foo.md"], src)
             @test rc == 1 && isempty(fd1)
             @test occursin("`--lines` range out of bounds", fd2)
         end

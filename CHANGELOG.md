@@ -38,6 +38,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    +f(x; a = 1, b = 2)
    ```
    ([#33], [#231])
+ - Interpolated identifiers in strings, docstrings, and command strings are now wrapped in
+   parentheses, i.e. `"$a"` is formatted as `"$(a)"`. Non-standard string literals (e.g.
+   `r"$a"`) and expression interpolation (e.g. `:($a)`) are not affected. This is a new
+   formatting rule (not a [spec-bug] fix) and will result in diffs like the following in
+   already formatted code that uses the bare form:
+   ```diff
+   -println("got $n items from $src")
+   -run(`ls $dir`)
+   +println("got $(n) items from $(src)")
+   +run(`ls $(dir)`)
+   ```
+   ([#253], [#256])
 
 ### Changed
  - Semicolons separating statements are now formatted without space before and with a
@@ -462,5 +474,7 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#248]: https://github.com/fredrikekre/Runic.jl/issues/248
 [#249]: https://github.com/fredrikekre/Runic.jl/issues/249
 [#250]: https://github.com/fredrikekre/Runic.jl/issues/250
+[#253]: https://github.com/fredrikekre/Runic.jl/issues/253
 [#254]: https://github.com/fredrikekre/Runic.jl/issues/254
 [#255]: https://github.com/fredrikekre/Runic.jl/issues/255
+[#256]: https://github.com/fredrikekre/Runic.jl/issues/256

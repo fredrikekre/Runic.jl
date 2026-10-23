@@ -903,7 +903,7 @@ const MACROS_SAFE_TO_INSERT_RETURN = let set = Set{String}()
             "inline", "noinline", "propagate_inbounds", "generated", "eval",
             "assume_effects", "doc",
         )
-        push!(set, "@$m", "Base.@$m")
+        push!(set, "@$(m)", "Base.@$(m)")
     end
     push!(set, "Core.@doc")
     set
