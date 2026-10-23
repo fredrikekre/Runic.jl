@@ -928,6 +928,9 @@ Consistently use single space around keywords. Examples:
 -function  foo(x::T)  where  {T}
 +function foo(x::T) where {T}
 
+-for  outer  i in I
++for outer i in I
+
 -struct Baz  end
 +struct Baz end
 

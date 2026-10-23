@@ -858,6 +858,12 @@ end
         @test format_string("if$(sp)a\nelseif$(sp)b\nend") == "if a\nelseif b\nend"
         @test format_string("if$(sp)a && b\nelseif$(sp)c || d\nend") == "if a && b\nelseif c || d\nend"
         @test format_string("try\nerror()\ncatch$(sp)e\nend") == "try\n    error()\ncatch e\nend"
+        @test format_string("for$(sp)outer$(sp)i in I\nend") == "for outer i in I\nend"
+        @test format_string("for outer$(sp)i in I, outer$(sp)j in J\nend") ==
+            "for outer i in I, outer j in J\nend"
+        @test format_string("[x for$(sp)outer$(sp)x in X]") == "[x for outer x in X]"
+        @test format_string("(x for outer$(sp)x in X if c)") == "(x for outer x in X if c)"
+        @test format_string("for outer #= c =#$(sp)i in I\nend") == "for outer #= c =#$(sp)i in I\nend"
         @test format_string("A$(sp)where$(sp){T}") == "A where {T}"
         @test format_string("A$(sp)where$(sp){T}$(sp)where$(sp){S}") == "A where {T} where {S}"
         @test format_string("f()$(sp)do$(sp)x\ny\nend") == "f() do x\n    y\nend"
