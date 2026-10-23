@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    blocks that do not parse on their own (e.g. `continued = true` blocks) are left as is.
    This will result in diffs in Documenter sources that were previously not formatted. Use
    `--languages=julia,julia-repl,jldoctest` to restore the previous behavior ([#235]).
+ - Multiline primitive type definitions are now indented, i.e. the number of bits on a
+   separate line is indented one level and the `end` keyword is put on a separate line,
+   e.g. `primitive type A\n8\nend` and `primitive type A\n8 end` are formatted as
+   `primitive type A\n    8\nend`. Extra whitespace before the number of bits in one-line
+   primitive type definitions is normalized to a single space, e.g.
+   `primitive type A  8 end` is formatted as `primitive type A 8 end` ([#254]).
 
 ## [v1.13.0] - 2026-10-07
 ### Fixed
@@ -453,3 +459,4 @@ First stable release of Runic.jl. See [README.md](README.md) for details and doc
 [#248]: https://github.com/fredrikekre/Runic.jl/issues/248
 [#249]: https://github.com/fredrikekre/Runic.jl/issues/249
 [#250]: https://github.com/fredrikekre/Runic.jl/issues/250
+[#254]: https://github.com/fredrikekre/Runic.jl/issues/254

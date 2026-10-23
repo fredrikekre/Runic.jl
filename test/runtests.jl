@@ -797,6 +797,41 @@ end
     @test format_string("a[2:end]") == "a[2:end]"
 end
 
+@testset "primitive type" begin
+    # Space before the number of bits
+    for sp in (" ", "  ")
+        @test format_string("primitive type A$(sp)8 end") == "primitive type A 8 end"
+        @test format_string("primitive type A <: B$(sp)8 end") == "primitive type A <: B 8 end"
+        @test format_string("@eval primitive type A$(sp)\$(N) end") ==
+            "@eval primitive type A \$(N) end"
+        @test format_string("primitive type A$(sp)N * 8 end") == "primitive type A N * 8 end"
+        @test format_string("primitive type A #= c =#$(sp)8 end") ==
+            "primitive type A #= c =#$(sp)8 end"
+    end
+    # Indentation of the number of bits on a separate line
+    for sp in ("", "  ", "        ")
+        @test format_string("primitive type A\n$(sp)8\nend") == "primitive type A\n    8\nend"
+        @test format_string("primitive type A <: B\n$(sp)8\nend") ==
+            "primitive type A <: B\n    8\nend"
+        @test format_string("primitive type A\n$(sp)N * 8\nend") ==
+            "primitive type A\n    N * 8\nend"
+        @test format_string("@eval primitive type A\n$(sp)\$(N)\nend") ==
+            "@eval primitive type A\n    \$(N)\nend"
+        @test format_string("primitive type A # c\n$(sp)8 # c\nend") ==
+            "primitive type A # c\n    8 # c\nend"
+        # Newline before `end` in multiline definitions
+        @test format_string("primitive type A\n$(sp)8$(sp)end") == "primitive type A\n    8\nend"
+        @test format_string("primitive type A\n$(sp)8 end") == "primitive type A\n    8\nend"
+        @test format_string("primitive type A\n$(sp)N * 8 end") ==
+            "primitive type A\n    N * 8\nend"
+        @test format_string("primitive type A\n$(sp)8 #= c =# end") ==
+            "primitive type A\n    8 #= c =#\nend"
+        @test format_string("begin\n$(sp)primitive type A\n$(sp)8\n$(sp)end\nend") ==
+            "begin\n    primitive type A\n        8\n    end\nend"
+    end
+    @test format_string("primitive type A 8\nend") == "primitive type A 8\nend"
+end
+
 @testset "spaces in comprehensions" begin
     for sp in ("", " ", "  "), (l, r) in (("[", "]"), ("T[", "]"))
         @test format_string("$(l)$(sp)x for x in X$(sp)$(r)") == "$(l)x for x in X$(r)"

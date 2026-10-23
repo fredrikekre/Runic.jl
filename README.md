@@ -699,6 +699,14 @@ one until the closing `end`. Examples:
  end
 ```
 
+The number of bits in a multiline `primitive type` definition is also indented one level:
+```diff
+ primitive type Qux
+-8
++    8
+ end
+```
+
 Listlike expressions like e.g. tuples, function calls, array literals, etc. also increase
 the indentation level by one until the closing token. This only has an effect if the list
 span multiple lines. Examples:
@@ -926,7 +934,7 @@ Consistently use single space around keywords. Examples:
 -function f()  end
 +function f() end
 
--primitive type Qux 8  end
+-primitive type Qux  8  end
 +primitive type Qux 8 end
 
 -[x  for  x in X  if  y]
