@@ -80,6 +80,12 @@ chmod +x ~/.local/bin/git-runic
 
 </details>
 
+<details>
+<summary>Transitioning from a legacy install</summary>
+
+If you used to call Runic with the legacy install (involving the shared `@runic` environment), you will need to delete the file `~/.local/bin/runic` for the app-based install to work properly.
+</details>
+
 ## Usage
 
 ### CLI
