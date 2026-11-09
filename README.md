@@ -436,9 +436,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # - uses: julia-actions/setup-julia@v2
-      #   with:
-      #     version: '1'
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
       # - uses: julia-actions/cache@v2
       - uses: fredrikekre/runic-action@v1
         with:
